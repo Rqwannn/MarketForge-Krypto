@@ -1,0 +1,5354 @@
+[
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "LUMIAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 8.32,
+  "in_tok": 1406,
+  "out_tok": 330,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.0010, \"last_high\": 0.00117, \"window_high\": 0.00138, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 7.26,
+  "in_tok": 1406,
+  "out_tok": 317,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.093, \"last_high\": 0.094, \"window_high\": 0.113, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 5.97,
+  "in_tok": 1406,
+  "out_tok": 243,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.608, \"last_high\": 0.615, \"window_high\": 0.63, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 6.83,
+  "in_tok": 1406,
+  "out_tok": 276,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.064, \"last_high\": 0.0655, \"window_high\": 0.0705, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "AEROUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 7.95,
+  "in_tok": 1406,
+  "out_tok": 266,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0161, \"last_high\": 0.0162, \"window_high\": 0.0162, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 7.41,
+  "in_tok": 1406,
+  "out_tok": 310,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0475, \"last_high\": 0.0495, \"window_high\": 0.0495, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "INJUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 9.28,
+  "in_tok": 1406,
+  "out_tok": 446,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\",\n \"last_close\": 0.038, \"last_high\": 0.045,\n \"window_high\": 0.045,\n \"green_count_last5\": 2,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 13.56,
+  "in_tok": 1432,
+  "out_tok": 820,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.123, \"window_high\": 0.123, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 10.35,
+  "in_tok": 1432,
+  "out_tok": 581,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.165, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 10.57,
+  "in_tok": 1432,
+  "out_tok": 555,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0691, \"last_high\": 0.0703, \"window_high\": 0.0703, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 9.77,
+  "in_tok": 1432,
+  "out_tok": 634,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00099, \"last_high\": 0.00116, \"window_high\": 0.00138, \"green_count_last5\": 1, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 9.32,
+  "in_tok": 1432,
+  "out_tok": 605,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.086, \"last_high\": 0.0935, \"window_high\": 0.1135, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 15.75,
+  "in_tok": 1432,
+  "out_tok": 863,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.607, \"last_high\": 0.614, \"window_high\": 0.631, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 9.62,
+  "in_tok": 1432,
+  "out_tok": 588,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0646, \"last_high\": 0.0655, \"window_high\": 0.0715, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 13.91,
+  "in_tok": 1432,
+  "out_tok": 794,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.964, \"last_high\": 0.968, \"window_high\": 0.968, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 12.01,
+  "in_tok": 1432,
+  "out_tok": 677,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0161, \"last_high\": 0.0163, \"window_high\": 0.0163, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 16.76,
+  "in_tok": 1432,
+  "out_tok": 1040,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0481, \"last_high\": 0.0497, \"window_high\": 0.0497, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 13.47,
+  "in_tok": 1432,
+  "out_tok": 744,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.7, \"last_high\": 8.0, \"window_high\": 8.7, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 12.19,
+  "in_tok": 1432,
+  "out_tok": 689,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0388, \"last_high\": 0.0447, \"window_high\": 0.0447, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 7.54,
+  "in_tok": 1406,
+  "out_tok": 321,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.165, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 8.8,
+  "in_tok": 1406,
+  "out_tok": 430,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0690, \"last_high\": 0.0705, \"window_high\": 0.0705, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 7.93,
+  "in_tok": 1406,
+  "out_tok": 331,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00101, \"last_high\": 0.00116, \"window_high\": 0.00138, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 10.59,
+  "in_tok": 1406,
+  "out_tok": 487,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.087, \"last_high\": 0.092, \"window_high\": 0.113, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 8.36,
+  "in_tok": 1406,
+  "out_tok": 313,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.608, \"last_high\": 0.613, \"window_high\": 0.634, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 13.03,
+  "in_tok": 1406,
+  "out_tok": 580,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0645, \"last_high\": 0.0652, \"window_high\": 0.0715, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 9.9,
+  "in_tok": 1406,
+  "out_tok": 327,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.961, \"last_high\": 0.968, \"window_high\": 0.968, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 8.15,
+  "in_tok": 1406,
+  "out_tok": 349,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0161, \"last_high\": 0.01625, \"window_high\": 0.01635, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 11.53,
+  "in_tok": 1406,
+  "out_tok": 624,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0483, \"last_high\": 0.0492, \"window_high\": 0.0496, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 13.04,
+  "in_tok": 1406,
+  "out_tok": 687,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.55, \"last_high\": 7.8, \"window_high\": 8.3, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 9.89,
+  "in_tok": 1406,
+  "out_tok": 501,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0385, \"last_high\": 0.0445, \"window_high\": 0.0445, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 5.45,
+  "in_tok": 1432,
+  "out_tok": 348,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 7.53,
+  "in_tok": 1432,
+  "out_tok": 429,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.165, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 6.07,
+  "in_tok": 1432,
+  "out_tok": 262,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0692, \"last_high\": 0.0704, \"window_high\": 0.0704, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 7.61,
+  "in_tok": 1432,
+  "out_tok": 497,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00101, \"last_high\": 0.00117, \"window_high\": 0.00138, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 7.02,
+  "in_tok": 1432,
+  "out_tok": 456,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0858, \"last_high\": 0.0938, \"window_high\": 0.1138, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 9.97,
+  "in_tok": 1432,
+  "out_tok": 646,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.607, \"last_high\": 0.612, \"window_high\": 0.633, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 6.79,
+  "in_tok": 1432,
+  "out_tok": 290,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0646, \"last_high\": 0.0654, \"window_high\": 0.0718, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 6.25,
+  "in_tok": 1432,
+  "out_tok": 295,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.962, \"last_high\": 0.969, \"window_high\": 0.969, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 7.3,
+  "in_tok": 1432,
+  "out_tok": 420,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.01611, \"last_high\": 0.01632, \"window_high\": 0.01632, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 8.76,
+  "in_tok": 1432,
+  "out_tok": 552,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0478, \"last_high\": 0.0495, \"window_high\": 0.0495, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 7.66,
+  "in_tok": 1432,
+  "out_tok": 369,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.65, \"last_high\": 7.68, \"window_high\": 8.68, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 7.37,
+  "in_tok": 1432,
+  "out_tok": 414,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0385, \"last_high\": 0.0445, \"window_high\": 0.0448, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 3.7,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\",\n \"last_close\": 0.108, \"last_high\": 0.124,\n \"window_high\": 0.124,\n \"green_count_last5\": 3,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 4.2,
+  "in_tok": 1430,
+  "out_tok": 89,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.164, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 3.32,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.069, \"last_high\": 0.070,\n \"window_high\": 0.070,\n \"green_count_last5\": 4,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": true}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 3.13,
+  "in_tok": 1430,
+  "out_tok": 102,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\",\n \"last_close\": 0.00096, \"last_high\": 0.00118,\n \"window_high\": 0.00135,\n \"green_count_last5\": 2,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 2.99,
+  "in_tok": 1430,
+  "out_tok": 89,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.069, \"last_high\": 0.071, \"window_high\": 0.112, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 3.69,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.608, \"last_high\": 0.613,\n \"window_high\": 0.627,\n \"green_count_last5\": 4,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 3.5,
+  "in_tok": 1430,
+  "out_tok": 100,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.0655, \"last_high\": 0.070,\n \"window_high\": 0.070,\n \"green_count_last5\": 3,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 4.05,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.962, \"last_high\": 0.967,\n \"window_high\": 0.967,\n \"green_count_last5\": 4,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 3.16,
+  "in_tok": 1430,
+  "out_tok": 102,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.0162, \"last_high\": 0.0163,\n \"window_high\": 0.0163,\n \"green_count_last5\": 4,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 4.3,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.048, \"last_high\": 0.049,\n \"window_high\": 0.049,\n \"green_count_last5\": 4,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 5.44,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\",\n \"last_close\": 7.7, \"last_high\": 7.9,\n \"window_high\": 8.5,\n \"green_count_last5\": 2,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 4.83,
+  "in_tok": 1430,
+  "out_tok": 102,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\",\n \"last_close\": 0.0385, \"last_high\": 0.0445,\n \"window_high\": 0.0445,\n \"green_count_last5\": 3,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 5.58,
+  "in_tok": 1432,
+  "out_tok": 317,
+  "text": "Dari grafik, candle terakhir hijau dengan body sekitar 0.103–0.112 dan sumbu atas mencapai sekitar 0.124. Candle sebelumnya juga hijau (0.073–0.103). Lima candle terakhir: merah (0.052 area), hijau (0.055), hijau (0.073), hijau (0.103), hijau (0.112), sehingga 4 hijau. Candle terakhir ditutup jauh di atas MA25 (sekitar 0.051). Volume candle terakhir sekitar 390, sedangkan yang tertinggi sekitar 850 (candle sebelumnya), sehingga bukan maksimum.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 5.42,
+  "in_tok": 1432,
+  "out_tok": 422,
+  "text": "Estimasi dari posisi piksel pada sumbu harga: 0.18 berada di y≈109 dan 0.16 di y≈165, jadi sekitar 56 px per 0.02.\n\n- Candle terakhir: hijau, body dari ~0.101 sampai ~0.165, sumbu atas sampai ~0.183.\n- Candle sebelumnya: hijau, body sekitar 0.082–0.101.\n- Lima candle terakhir: hijau (candle terakhir), hijau (sebelumnya), hijau kecil (~0.08), merah (~0.087 ke 0.076), merah (~0.095 ke 0.085). Jadi 3 hijau.\n- MA25 (magenta) di akhir sekitar 0.085, sedangkan penutupan 0.165, jadi di atas.\n- Volume: candle terakhir sekitar 100, sedangkan candle sebelumnya sekitar 205 (tertinggi). Jadi bukan maksimum.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.165, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 6.02,
+  "in_tok": 1432,
+  "out_tok": 490,
+  "text": "Estimasi dari grafik: candle terakhir hijau, dengan body dari sekitar 0.0617 sampai 0.0692 dan sumbu atas sekitar 0.0704. Candle sebelumnya juga hijau, dengan body dari sekitar 0.0507 sampai 0.0617.\n\nLima candle terakhir:\n1. Merah (sekitar 0.0517 ke 0.0497)\n2. Hijau kecil (0.0507 ke 0.0500)\n3. Hijau besar\n4. Hijau (terakhir)\n\nCandle ke-5 dari belakang adalah merah (sekitar 0.0543 ke 0.0517). Urutannya: merah (0.0543), merah (0.0517), hijau kecil, hijau besar, hijau terakhir. Jadi 3 hijau.\n\nGaris magenta (MA25) di ujung berada sekitar 0.0542, dan close terakhir 0.0692 berada di atasnya.\n\nVolume candle terakhir sekitar 170, sedangkan candle sebelumnya sekitar 450 dan itu yang tertinggi. Jadi volume terakhir bukan yang tertinggi.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0692, \"last_high\": 0.0704, \"window_high\": 0.0704, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 8.19,
+  "in_tok": 1432,
+  "out_tok": 509,
+  "text": "Pembacaan dari grafik:\n\n- Candle terakhir berwarna merah, dengan body sekitar 0.00102 sampai 0.00099. Sumbu atasnya mencapai sekitar 0.00117.\n- Candle sebelumnya berwarna hijau, dengan sumbu atas sekitar 0.00138.\n- Lima candle terakhir, dari kiri ke kanan: merah (sekitar x=977), merah (x=990), hijau (x=1003), hijau (x=1015), merah (x=1028). Dua candle sebelum itu adalah merah di x=963 dan 977. Dengan begitu 5 candle terakhir adalah x=990 merah, x=1003 hijau, x=1015 hijau, x=1028 merah, ditambah x=977 merah. Hijau ada 2.\n- Penutupan candle terakhir sekitar 0.00099 (bagian bawah body merah). Garis magenta (MA25) di ujung kanan sekitar 0.00082, jadi close berada di atasnya.\n- Volume candle terakhir sekitar 1100, sedangkan volume tertinggi adalah candle sebelumnya (sekitar 3650), jadi bukan yang tertinggi.\n\n```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00100, \"last_high\": 0.00117, \"window_high\": 0.00138, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 2.99,
+  "in_tok": 1432,
+  "out_tok": 85,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.086, \"last_high\": 0.094, \"window_high\": 0.1135, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 6.23,
+  "in_tok": 1432,
+  "out_tok": 485,
+  "text": "Pembacaan dari gambar:\n\n- Candle terakhir (paling kanan, sekitar x=1028) berwarna merah, dengan badan di sekitar 0,606–0,610 dan sumbu atas sekitar 0,612.\n- Candle sebelumnya (x=1016) berwarna hijau, dengan badan sekitar 0,607–0,610 dan sumbu atas sekitar 0,622.\n- Harga tertinggi di seluruh grafik adalah sumbu atas candle hijau di sekitar x=950, yaitu sekitar 0,633.\n- Lima candle terakhir adalah x=1028 (merah), 1016 (hijau), 1003 (hijau), 990 (hijau), dan 977 (merah), sehingga ada 3 candle hijau.\n- Garis magenta (MA25) di ujung kanan berada sekitar 0,551, jauh di bawah harga penutupan 0,608, sehingga close berada di atas MA25.\n- Volume candle terakhir sangat kecil (sekitar 0,3 juta), jauh dari puncak sekitar 5,5 juta, sehingga bukan yang tertinggi.\n\n```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.606, \"last_high\": 0.612, \"window_high\": 0.633, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 4.98,
+  "in_tok": 1432,
+  "out_tok": 128,
+  "text": "Perkiraan nilai dibaca dari posisi candle terhadap sumbu harga di kanan.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0645, \"last_high\": 0.0650, \"window_high\": 0.0718, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 7.68,
+  "in_tok": 1432,
+  "out_tok": 525,
+  "text": "Pembacaan dari grafik (perkiraan berdasarkan posisi candle terhadap sumbu harga):\n\n- Candle terakhir hijau, dengan badan sekitar 0.955–0.963.\n- Candle sebelumnya hijau, dengan badan sekitar 0.939–0.958.\n- Penutupan terakhir sekitar 0.963.\n- High candle terakhir (ujung sumbu atas) sekitar 0.969.\n- Harga tertinggi di seluruh grafik adalah sumbu atas candle terakhir, yaitu sekitar 0.969. Candle kedua dari kanan memiliki sumbu sampai sekitar 0.967, sedikit lebih rendah.\n- Lima candle terakhir, dari kiri ke kanan: merah (sekitar 0.945), merah (sekitar 0.940, sumbu atas 0.963), hijau, hijau, hijau. Jadi ada 3 hijau.\n- Garis magenta (MA25) di sisi kanan berada sekitar 0.912, sedangkan penutupan 0.963, jadi di atasnya.\n- Volume candle terakhir kecil (sekitar 0.2), jauh dari batang tertinggi (sekitar 2.1), jadi bukan maksimum.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.963, \"last_high\": 0.969, \"window_high\": 0.969, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 4.84,
+  "in_tok": 1432,
+  "out_tok": 335,
+  "text": "Berikut hasil pembacaan dari grafik:\n\n- Candle terakhir berwarna hijau, dengan close sekitar 0.0161 dan sumbu atas sekitar 0.0163.\n- Candle sebelumnya (kedua dari kanan) berwarna hijau.\n- Harga tertinggi di seluruh grafik sekitar 0.0163.\n- Dari 5 candle terakhir, hijau ada 4 (hijau, merah, hijau, hijau, hijau).\n- Candle terakhir ditutup di atas garis magenta (MA25, sekitar 0.0150).\n- Volume candle terakhir jauh lebih kecil dari volume maksimum (sekitar 215 juta).\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0161, \"last_high\": 0.0163, \"window_high\": 0.0163, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 6.25,
+  "in_tok": 1432,
+  "out_tok": 475,
+  "text": "Berdasarkan pembacaan grafik:\n\n- Candle terakhir: hijau, close sekitar 0.0477, high sekitar 0.0495.\n- Candle sebelumnya: hijau (body besar dari ~0.0439 ke ~0.0473).\n- Window high: sumbu atas tertinggi di candle terakhir ≈ 0.0495 (lebih tinggi dari sumbu ~0.048 pada sekitar Sep 22).\n- 5 candle terakhir: merah (~0.0385-0.0435 area), hijau (0.0385–0.044), hijau, hijau, hijau. Candle ke-5 dari belakang tampak merah pada ~0.0410, lalu hijau besar (0.0385–0.044), hijau (0.0439–0.0473), hijau kecil terakhir. Jadi hijau = 4 dari 5 jika candle ke-5 dari belakang (merah di ~0.0385) dihitung merah.\n- Close di atas MA25 (magenta ~0.0402): ya.\n- Volume terakhir: sekitar 58 juta, bukan yang tertinggi.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0477, \"last_high\": 0.0495, \"window_high\": 0.0495, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 5.86,
+  "in_tok": 1432,
+  "out_tok": 504,
+  "text": "Estimasi dari pembacaan grafik:\n\n- Candle terakhir (paling kanan) kecil, badan tipis di sekitar 7,65, tampak hijau (volume terakhir juga hijau? batang volume terakhir berwarna hijau).\n- Candle sebelumnya: hijau besar dari sekitar 6,95 sampai 7,65.\n- Harga tertinggi grafik: sumbu atas di sekitar 8,68 (candle sekitar Sep 23).\n- Lima candle terakhir: hijau kecil (terakhir), hijau besar, hijau kecil (6,75–7,0), merah besar (7,5 ke 6,75), merah (8,1 ke 7,5). Jadi hijau = 3.\n- Candle terakhir ditutup sekitar 7,65, sedangkan MA25 (magenta) sekitar 7,55, jadi di atasnya.\n- Volume terakhir kecil, bukan yang tertinggi.\n\nUrutan dari kanan: terakhir (hijau, ~7,65), sebelumnya (hijau besar, 6,95→7,65), sebelumnya lagi (hijau kecil, 6,75→7,0). Jadi prev_color = green.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.65, \"last_high\": 7.92, \"window_high\": 8.68, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 6.58,
+  "in_tok": 1432,
+  "out_tok": 510,
+  "text": "Estimasi dari gambar:\n\n- Candle terakhir hijau, dengan badan dari sekitar 0.036 sampai 0.0385, dan sumbu atas mencapai sekitar 0.0444.\n- Candle sebelumnya hijau, dengan badan sekitar 0.0347 sampai 0.036 dan sumbu atas sekitar 0.0447. Ini sekaligus menjadi puncak tertinggi di grafik.\n- Lima candle terakhir, dari kiri ke kanan:\n  1. merah (sekitar 0.037, besar)\n  2. merah (sekitar 0.033, besar)\n  3. hijau (sekitar 0.0335)\n  4. hijau (sekitar 0.036)\n  5. hijau (terakhir)\n\n  Jadi ada 3 candle hijau.\n- Garis MA25 (magenta) di akhir berada di sekitar 0.0347, sedangkan penutupan terakhir sekitar 0.0385, jadi di atas MA25.\n- Volume candle terakhir sekitar 55 juta, sedangkan volume tertinggi adalah bar hijau pertama sekitar 260 juta. Jadi volume terakhir bukan yang tertinggi.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0385, \"last_high\": 0.0444, \"window_high\": 0.0447, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 8.25,
+  "in_tok": 1432,
+  "out_tok": 983,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 7.91,
+  "in_tok": 1432,
+  "out_tok": 1137,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.164, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 7.86,
+  "in_tok": 1432,
+  "out_tok": 1155,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.069, \"last_high\": 0.070, \"window_high\": 0.070, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 6.97,
+  "in_tok": 1432,
+  "out_tok": 1020,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00101, \"last_high\": 0.00117, \"window_high\": 0.00138, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 8.82,
+  "in_tok": 1432,
+  "out_tok": 1240,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.086, \"last_high\": 0.094, \"window_high\": 0.113, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 8.74,
+  "in_tok": 1432,
+  "out_tok": 1335,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.607, \"last_high\": 0.613, \"window_high\": 0.631, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 6.57,
+  "in_tok": 1432,
+  "out_tok": 857,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0644, \"last_high\": 0.0648, \"window_high\": 0.0717, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 8.39,
+  "in_tok": 1432,
+  "out_tok": 1091,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.962, \"last_high\": 0.969, \"window_high\": 0.969, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 7.87,
+  "in_tok": 1432,
+  "out_tok": 967,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.01607, \"last_high\": 0.0163, \"window_high\": 0.0163, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 7.59,
+  "in_tok": 1432,
+  "out_tok": 1028,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0477, \"last_high\": 0.0495, \"window_high\": 0.0495, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 7.16,
+  "in_tok": 1432,
+  "out_tok": 975,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.65, \"last_high\": 7.9, \"window_high\": 8.7, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 8.68,
+  "in_tok": 1432,
+  "out_tok": 1215,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0385, \"last_high\": 0.0444, \"window_high\": 0.045, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 14.26,
+  "in_tok": 1287,
+  "out_tok": 441,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.11,\n  \"last_high\": 0.125,\n  \"window_high\": 0.126,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 14.27,
+  "in_tok": 1287,
+  "out_tok": 461,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.166,\n  \"last_high\": 0.185,\n  \"window_high\": 0.185,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 17.95,
+  "in_tok": 1287,
+  "out_tok": 768,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.068,\n  \"last_high\": 0.0705,\n  \"window_high\": 0.0705,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 23.77,
+  "in_tok": 1287,
+  "out_tok": 854,
+  "text": "```json\n{\n  \"last_color\": \"red\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.00098,\n  \"last_high\": 0.00119,\n  \"window_high\": 0.00138,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 21.19,
+  "in_tok": 1287,
+  "out_tok": 628,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0845,\n  \"last_high\": 0.094,\n  \"window_high\": 0.113,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 11.84,
+  "in_tok": 1287,
+  "out_tok": 372,
+  "text": "```json\n{\n  \"last_color\": \"red\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.608,\n  \"last_high\": 0.612,\n  \"window_high\": 0.633,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 14.34,
+  "in_tok": 1287,
+  "out_tok": 386,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.065,\n  \"last_high\": 0.0655,\n  \"window_high\": 0.0725,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 18.57,
+  "in_tok": 1287,
+  "out_tok": 656,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.955, \"last_high\": 0.962, \"window_high\": 0.963, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 10.84,
+  "in_tok": 1287,
+  "out_tok": 382,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0160, \"last_high\": 0.0162, \"window_high\": 0.0163, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 15.23,
+  "in_tok": 1287,
+  "out_tok": 566,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.048,\n  \"last_high\": 0.0495,\n  \"window_high\": 0.0498,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 11.77,
+  "in_tok": 1287,
+  "out_tok": 437,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 7.6,\n  \"last_high\": 7.9,\n  \"window_high\": 8.4,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 15.25,
+  "in_tok": 1287,
+  "out_tok": 517,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0385,\n  \"last_high\": 0.0445,\n  \"window_high\": 0.045,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 9.37,
+  "in_tok": 1287,
+  "out_tok": 365,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.108, \"last_high\": 0.125, \"window_high\": 0.125, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 15.68,
+  "in_tok": 1287,
+  "out_tok": 522,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.10,\n  \"last_high\": 0.185,\n  \"window_high\": 0.185,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 12.56,
+  "in_tok": 1287,
+  "out_tok": 438,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.069,\n  \"last_high\": 0.070,\n  \"window_high\": 0.070,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 15.08,
+  "in_tok": 1287,
+  "out_tok": 481,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00100, \"last_high\": 0.00119, \"window_high\": 0.00138, \"green_count_last5\": 1, \"close_above_ma25\": true, \"volume_last_is_max\": true}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 8.42,
+  "in_tok": 1287,
+  "out_tok": 371,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.085, \"last_high\": 0.095, \"window_high\": 0.115, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 15.73,
+  "in_tok": 1287,
+  "out_tok": 620,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0645, \"last_high\": 0.0655, \"window_high\": 0.0715, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 12.13,
+  "in_tok": 1287,
+  "out_tok": 372,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.962,\n  \"last_high\": 0.966,\n  \"window_high\": 0.966,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 12.18,
+  "in_tok": 1287,
+  "out_tok": 406,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0160,\n  \"last_high\": 0.0162,\n  \"window_high\": 0.0163,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 10.37,
+  "in_tok": 1287,
+  "out_tok": 343,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.048, \"last_high\": 0.050, \"window_high\": 0.050, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 14.68,
+  "in_tok": 1287,
+  "out_tok": 463,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 7.7,\n  \"last_high\": 7.9,\n  \"window_high\": 8.5,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "WALUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 23.27,
+  "in_tok": 231,
+  "out_tok": 6059,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.122,\"window_high\":0.122,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 13.83,
+  "in_tok": 231,
+  "out_tok": 6072,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.169, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": true}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 176.43
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 17.96,
+  "in_tok": 231,
+  "out_tok": 6075,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.0009, \"last_high\": 0.0012, \"window_high\": 0.0014, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "ERAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 18.76,
+  "in_tok": 231,
+  "out_tok": 6059,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"red\",\"last_close\":0.610,\"last_high\":0.613,\"window_high\":0.625,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": false,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "CHIPUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 181.01
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 31.45,
+  "in_tok": 231,
+  "out_tok": 6072,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.960, \"last_high\": 0.965, \"window_high\": 0.975, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 26.86,
+  "in_tok": 231,
+  "out_tok": 6062,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"red\",\"last_close\":0.0158,\"last_high\":0.0161,\"window_high\":0.0164,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 19.09,
+  "in_tok": 231,
+  "out_tok": 6059,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.049,\"last_high\":0.05,\"window_high\":0.05,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 47.06,
+  "in_tok": 741,
+  "out_tok": 3175,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 7.4, \"last_high\": 7.6, \"window_high\": 8.5, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 22.38,
+  "in_tok": 231,
+  "out_tok": 6059,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"red\",\"last_close\":0.042,\"last_high\":0.045,\"window_high\":0.045,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 17.33,
+  "in_tok": 1269,
+  "out_tok": 90,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 33.76,
+  "in_tok": 1269,
+  "out_tok": 108,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.165,\n  \"last_high\": 0.183,\n  \"window_high\": 0.183,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 33.14,
+  "in_tok": 1269,
+  "out_tok": 111,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0688,\n  \"last_high\": 0.0710,\n  \"window_high\": 0.0710,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 31.98,
+  "in_tok": 1269,
+  "out_tok": 114,
+  "text": "```json\n{\n  \"last_color\": \"red\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.00101,\n  \"last_high\": 0.00120,\n  \"window_high\": 0.00142,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "ERAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 52.56,
+  "in_tok": 1269,
+  "out_tok": 111,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0648,\n  \"last_high\": 0.0651,\n  \"window_high\": 0.0718,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "AEROUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 14.38,
+  "in_tok": 1269,
+  "out_tok": 95,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0161, \"last_high\": 0.01625, \"window_high\": 0.01635, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 29.76,
+  "in_tok": 1269,
+  "out_tok": 109,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.047,\n  \"last_high\": 0.048,\n  \"window_high\": 0.0495,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 35.78,
+  "in_tok": 1269,
+  "out_tok": 86,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.75, \"last_high\": 7.85, \"window_high\": 8.6, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 38.03,
+  "in_tok": 1269,
+  "out_tok": 110,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0385,\n  \"last_high\": 0.045,\n  \"window_high\": 0.0452,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 6.36,
+  "in_tok": 1267,
+  "out_tok": 112,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.112,\n  \"last_high\": 0.124,\n  \"window_high\": 0.124,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 5.7,
+  "in_tok": 1267,
+  "out_tok": 112,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.165,\n  \"last_high\": 0.184,\n  \"window_high\": 0.184,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 7.22,
+  "in_tok": 1267,
+  "out_tok": 318,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0692,\n  \"last_high\": 0.0704,\n  \"window_high\": 0.0704,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 5.54,
+  "in_tok": 1267,
+  "out_tok": 100,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00101, \"last_high\": 0.00117, \"window_high\": 0.00138, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 7.77,
+  "in_tok": 1267,
+  "out_tok": 463,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.086, \"last_high\": 0.094, \"window_high\": 0.114, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 5.67,
+  "in_tok": 1267,
+  "out_tok": 112,
+  "text": "```json\n{\n  \"last_color\": \"red\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.606,\n  \"last_high\": 0.612,\n  \"window_high\": 0.633,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 26.8,
+  "in_tok": 1269,
+  "out_tok": 2520,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0652,\n  \"last_high\": 0.0655,\n  \"window_high\": 0.0718,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 5.58,
+  "in_tok": 1267,
+  "out_tok": 112,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.963,\n  \"last_high\": 0.968,\n  \"window_high\": 0.968,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 5.49,
+  "in_tok": 1267,
+  "out_tok": 116,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.01615,\n  \"last_high\": 0.0163,\n  \"window_high\": 0.0163,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 6.6,
+  "in_tok": 1267,
+  "out_tok": 341,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0478,\n  \"last_high\": 0.0495,\n  \"window_high\": 0.0495,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 18.08,
+  "in_tok": 1269,
+  "out_tok": 1615,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.65, \"last_high\": 7.8, \"window_high\": 8.7, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 11.75,
+  "in_tok": 1267,
+  "out_tok": 115,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0386,\n  \"last_high\": 0.0445,\n  \"window_high\": 0.0447,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 19.57,
+  "in_tok": 1296,
+  "out_tok": 813,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.108,\n  \"last_high\": 0.123,\n  \"window_high\": 0.123,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 21.65,
+  "in_tok": 1296,
+  "out_tok": 1031,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.17,\n  \"last_high\": 0.185,\n  \"window_high\": 0.185,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 37.33,
+  "in_tok": 1296,
+  "out_tok": 2080,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0685,\n  \"last_high\": 0.0695,\n  \"window_high\": 0.0695,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 21.1,
+  "in_tok": 1296,
+  "out_tok": 943,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00101, \"last_high\": 0.0012, \"window_high\": 0.00138, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": true}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 20.6,
+  "in_tok": 1296,
+  "out_tok": 955,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.086,\n  \"last_high\": 0.095,\n  \"window_high\": 0.115,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 20.52,
+  "in_tok": 1296,
+  "out_tok": 858,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 0.610,\n  \"last_high\": 0.613,\n  \"window_high\": 0.629,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 24.03,
+  "in_tok": 1296,
+  "out_tok": 1136,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0653, \"last_high\": 0.0656, \"window_high\": 0.0715, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 25.55,
+  "in_tok": 1296,
+  "out_tok": 1419,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.962, \"last_high\": 0.966, \"window_high\": 0.968, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 24.05,
+  "in_tok": 1296,
+  "out_tok": 1183,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0160, \"last_high\": 0.0161, \"window_high\": 0.0162, \"green_count_last5\": 2, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 35.82,
+  "in_tok": 1296,
+  "out_tok": 1865,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.047,\n  \"last_high\": 0.049,\n  \"window_high\": 0.0495,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 28.18,
+  "in_tok": 1296,
+  "out_tok": 1322,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 7.5,\n  \"last_high\": 7.7,\n  \"window_high\": 8.7,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 24.91,
+  "in_tok": 1296,
+  "out_tok": 1045,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0385, \"last_high\": 0.0445, \"window_high\": 0.045, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 11.45,
+  "in_tok": 1426,
+  "out_tok": 770,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.110,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 5,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 13.03,
+  "in_tok": 1428,
+  "out_tok": 1031,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.16,\n  \"last_high\": 0.18,\n  \"window_high\": 0.18,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": true\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 10.29,
+  "in_tok": 1428,
+  "out_tok": 710,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\",\n \"last_close\": 0.066, \"last_high\": 0.070,\n \"window_high\": 0.070,\n \"green_count_last5\": 3,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": true}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 12.7,
+  "in_tok": 1426,
+  "out_tok": 908,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 0.00102,\n  \"last_high\": 0.00107,\n  \"window_high\": 0.00140,\n  \"green_count_last5\": 2,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": true\n}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 23.67,
+  "in_tok": 1426,
+  "out_tok": 1852,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.085,\n  \"last_high\": 0.09,\n  \"window_high\": 0.115,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": true\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 14.52,
+  "in_tok": 1426,
+  "out_tok": 892,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.610,\n  \"last_high\": 0.625,\n  \"window_high\": 0.630,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "CHIPUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 11.87,
+  "in_tok": 1428,
+  "out_tok": 997,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.965,\n  \"last_high\": 0.968,\n  \"window_high\": 0.968,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 7.97,
+  "in_tok": 1428,
+  "out_tok": 565,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.0161,\n  \"last_high\": 0.0163,\n  \"window_high\": 0.0163,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 10.62,
+  "in_tok": 1428,
+  "out_tok": 713,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.048,\n  \"last_high\": 0.050,\n  \"window_high\": 0.050,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 59.62,
+  "in_tok": 1428,
+  "out_tok": 703,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 7.6,\n  \"last_high\": 7.7,\n  \"window_high\": 8.4,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 10.03,
+  "in_tok": 1428,
+  "out_tok": 971,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 0.039,\n  \"last_high\": 0.045,\n  \"window_high\": 0.045,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 58.83,
+  "in_tok": 1299,
+  "out_tok": 3899,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.11, \"last_high\": 0.13, \"window_high\": 0.13, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 59.39,
+  "in_tok": 1299,
+  "out_tok": 3795,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.166,\n  \"last_high\": 0.185,\n  \"window_high\": 0.185,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": true\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "MBLUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "ERAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 60.89,
+  "in_tok": 1299,
+  "out_tok": 4140,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 0.066,\n  \"last_high\": 0.067,\n  \"window_high\": 0.072,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 61.25,
+  "in_tok": 1299,
+  "out_tok": 3896,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.965, \"last_high\": 0.970, \"window_high\": 0.972, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 50.53,
+  "in_tok": 1299,
+  "out_tok": 3107,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0162, \"last_high\": 0.0163, \"window_high\": 0.0164, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "SUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "INJUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "WALUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "LUMIAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "MBLUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "ERAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 176.13
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "CHIPUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 180.56
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "AEROUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 53.03,
+  "in_tok": 1371,
+  "out_tok": 6645,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"red\",\"last_close\":0.0162,\"last_high\":0.0163,\"window_high\":0.0164,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "SUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "INJUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "WALUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 174.3
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 14.3,
+  "in_tok": 1166,
+  "out_tok": 1190,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 7.76,
+  "in_tok": 1166,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.165,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 10.01,
+  "in_tok": 1166,
+  "out_tok": 578,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.069,\"last_high\":0.0703,\"window_high\":0.0703,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 16.89,
+  "in_tok": 1166,
+  "out_tok": 1543,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.00101,\"last_high\":0.00117,\"window_high\":0.00138,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 8.55,
+  "in_tok": 1166,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.094,\"window_high\":0.114,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 12.12,
+  "in_tok": 1166,
+  "out_tok": 968,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.608,\"last_high\":0.612,\"window_high\":0.633,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 9.7,
+  "in_tok": 1166,
+  "out_tok": 790,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0645,\"last_high\":0.0648,\"window_high\":0.0718,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 21.99,
+  "in_tok": 1166,
+  "out_tok": 1827,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.965,\"last_high\":0.970,\"window_high\":0.970,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 13.79,
+  "in_tok": 1166,
+  "out_tok": 777,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0162,\"last_high\":0.0163,\"window_high\":0.0163,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 11.15,
+  "in_tok": 1166,
+  "out_tok": 853,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0475,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 11.26,
+  "in_tok": 1166,
+  "out_tok": 908,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.7,\"last_high\":7.9,\"window_high\":8.7,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 13.57,
+  "in_tok": 1166,
+  "out_tok": 1097,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0444,\"window_high\":0.0447,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 10.55,
+  "in_tok": 1201,
+  "out_tok": 373,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 13.02,
+  "in_tok": 1201,
+  "out_tok": 528,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.164,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 35.07,
+  "in_tok": 1201,
+  "out_tok": 1097,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0691,\"last_high\":0.0703,\"window_high\":0.0703,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 11.86,
+  "in_tok": 1201,
+  "out_tok": 538,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.00101,\"last_high\":0.00117,\"window_high\":0.00138,\"green_count_last5\":2,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 30.61,
+  "in_tok": 1201,
+  "out_tok": 1040,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.094,\"window_high\":0.114,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 14.75,
+  "in_tok": 1201,
+  "out_tok": 547,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.607,\"last_high\":0.612,\"window_high\":0.634,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 14.38,
+  "in_tok": 1201,
+  "out_tok": 628,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0645,\"last_high\":0.0650,\"window_high\":0.0718,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 12.55,
+  "in_tok": 1201,
+  "out_tok": 523,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.963,\"last_high\":0.969,\"window_high\":0.969,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 12.25,
+  "in_tok": 1201,
+  "out_tok": 481,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0161,\"last_high\":0.0163,\"window_high\":0.0163,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 12.55,
+  "in_tok": 1201,
+  "out_tok": 564,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0477,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 19.58,
+  "in_tok": 1201,
+  "out_tok": 924,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.7,\"last_high\":7.9,\"window_high\":8.7,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 20.41,
+  "in_tok": 1201,
+  "out_tok": 856,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0445,\"window_high\":0.0447,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 49.08,
+  "in_tok": 1202,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.165,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 29.66,
+  "in_tok": 1202,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.069,\"last_high\":0.070,\"window_high\":0.070,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "MBLUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 9.67,
+  "in_tok": 1202,
+  "out_tok": 214,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.093,\"window_high\":0.113,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 15.0,
+  "in_tok": 1202,
+  "out_tok": 361,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0645,\"last_high\":0.0648,\"window_high\":0.0718,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 22.72,
+  "in_tok": 1202,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.963,\"last_high\":0.968,\"window_high\":0.968,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 43.87,
+  "in_tok": 1202,
+  "out_tok": 559,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0161,\"last_high\":0.0163,\"window_high\":0.0163,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 44.48,
+  "in_tok": 1202,
+  "out_tok": 899,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0477,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 24.62,
+  "in_tok": 1202,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.65,\"last_high\":7.92,\"window_high\":8.68,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 38.66,
+  "in_tok": 1202,
+  "out_tok": 845,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0448,\"window_high\":0.0448,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 8.38,
+  "in_tok": 1185,
+  "out_tok": 132,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 9.27,
+  "in_tok": 1185,
+  "out_tok": 131,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.165,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 7.64,
+  "in_tok": 1185,
+  "out_tok": 154,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0692,\"last_high\":0.0704,\"window_high\":0.0704,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 7.09,
+  "in_tok": 1185,
+  "out_tok": 209,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.001005,\"last_high\":0.00117,\"window_high\":0.00138,\"green_count_last5\":2,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 22.46,
+  "in_tok": 1185,
+  "out_tok": 166,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.094,\"window_high\":0.114,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 10.83,
+  "in_tok": 1185,
+  "out_tok": 183,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.607,\"last_high\":0.612,\"window_high\":0.633,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 9.51,
+  "in_tok": 1185,
+  "out_tok": 192,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0646,\"last_high\":0.0655,\"window_high\":0.0718,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 21.77,
+  "in_tok": 1185,
+  "out_tok": 155,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.963,\"last_high\":0.969,\"window_high\":0.969,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 11.58,
+  "in_tok": 1185,
+  "out_tok": 265,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.01612,\"last_high\":0.01632,\"window_high\":0.01632,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 30.12,
+  "in_tok": 1185,
+  "out_tok": 151,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0478,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 9.77,
+  "in_tok": 1185,
+  "out_tok": 245,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.65,\"last_high\":7.91,\"window_high\":8.68,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 7.72,
+  "in_tok": 1185,
+  "out_tok": 203,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0445,\"window_high\":0.0448,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 7.96,
+  "in_tok": 1185,
+  "out_tok": 381,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 7.23,
+  "in_tok": 1185,
+  "out_tok": 387,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.165,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 6.95,
+  "in_tok": 1185,
+  "out_tok": 465,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0692,\"last_high\":0.0704,\"window_high\":0.0704,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 13.51,
+  "in_tok": 1185,
+  "out_tok": 949,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.0101,\"last_high\":0.0117,\"window_high\":0.0138,\"green_count_last5\":2,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 8.45,
+  "in_tok": 1185,
+  "out_tok": 413,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.094,\"window_high\":0.113,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 13.1,
+  "in_tok": 1185,
+  "out_tok": 897,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.606,\"last_high\":0.612,\"window_high\":0.633,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 10.16,
+  "in_tok": 1185,
+  "out_tok": 660,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0645,\"last_high\":0.0647,\"window_high\":0.0717,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 18.07,
+  "in_tok": 1185,
+  "out_tok": 2006,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.963,\"last_high\":0.969,\"window_high\":0.969,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 21.89,
+  "in_tok": 1185,
+  "out_tok": 1009,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0161,\"last_high\":0.0163,\"window_high\":0.0163,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 9.61,
+  "in_tok": 1185,
+  "out_tok": 881,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0477,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 9.86,
+  "in_tok": 1185,
+  "out_tok": 770,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.7,\"last_high\":7.9,\"window_high\":8.7,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 15.28,
+  "in_tok": 1185,
+  "out_tok": 1602,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0445,\"window_high\":0.0448,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 40.46,
+  "in_tok": 1202,
+  "out_tok": 805,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 22.24,
+  "in_tok": 1202,
+  "out_tok": 433,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.165,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 31.18,
+  "in_tok": 1202,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.069,\"last_high\":0.070,\"window_high\":0.070,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 35.91,
+  "in_tok": 1202,
+  "out_tok": 663,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.00101,\"last_high\":0.00117,\"window_high\":0.00138,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 29.84,
+  "in_tok": 1202,
+  "out_tok": 333,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.094,\"window_high\":0.114,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 9.8,
+  "in_tok": 1202,
+  "out_tok": 264,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.606,\"last_high\":0.612,\"window_high\":0.633,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "CHIPUSDT_1h",
+  "ok": false,
+  "error": "HTTP 500: {\"error\":{\"message\":\"The model provider is temporarily unavailable. Please try again.\",\"type\":\"api_error\",\"param\":null,\"code\":null}}",
+  "latency": 4.14
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 8.44,
+  "in_tok": 1202,
+  "out_tok": 281,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.963,\"last_high\":0.969,\"window_high\":0.969,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 49.56,
+  "in_tok": 1202,
+  "out_tok": 955,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0162,\"last_high\":0.0163,\"window_high\":0.0163,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 9.81,
+  "in_tok": 1202,
+  "out_tok": 310,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0477,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 34.07,
+  "in_tok": 1202,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.65,\"last_high\":7.9,\"window_high\":8.7,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 31.3,
+  "in_tok": 1202,
+  "out_tok": 579,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0444,\"window_high\":0.0447,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 90.74,
+  "in_tok": 1201,
+  "out_tok": 880,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 87.88,
+  "in_tok": 1201,
+  "out_tok": 155,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.165,\"last_high\":0.183,\"window_high\":0.183,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 51.32,
+  "in_tok": 1201,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.069,\"last_high\":0.070,\"window_high\":0.070,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 51.55,
+  "in_tok": 1201,
+  "out_tok": 691,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.00101,\"last_high\":0.00117,\"window_high\":0.00138,\"green_count_last5\":2,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 65.21,
+  "in_tok": 1201,
+  "out_tok": 202,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.086,\"last_high\":0.094,\"window_high\":0.114,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 67.15,
+  "in_tok": 1201,
+  "out_tok": 937,
+  "text": "{\"last_color\":\"red\",\"prev_color\":\"green\",\"last_close\":0.607,\"last_high\":0.612,\"window_high\":0.633,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 73.06,
+  "in_tok": 1201,
+  "out_tok": 902,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0645,\"last_high\":0.0648,\"window_high\":0.0718,\"green_count_last5\":2,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "AEROUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "ZKUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 37.86,
+  "in_tok": 1201,
+  "out_tok": 276,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0478,\"last_high\":0.0495,\"window_high\":0.0495,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 10.35,
+  "in_tok": 1201,
+  "out_tok": 203,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":7.65,\"last_high\":7.91,\"window_high\":8.68,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 53.85,
+  "in_tok": 1201,
+  "out_tok": 172,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.0385,\"last_high\":0.0445,\"window_high\":0.0448,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 54.51,
+  "in_tok": 1031,
+  "out_tok": 4578,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.11,\n    \"last_high\": 0.125,\n    \"window_high\": 0.125,\n    \"green_count_last5\": 4,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 39.37,
+  "in_tok": 1031,
+  "out_tok": 3299,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.165,\n    \"last_high\": 0.18,\n    \"window_high\": 0.18,\n    \"green_count_last5\": 3,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 49.75,
+  "in_tok": 1031,
+  "out_tok": 4195,
+  "text": "```json\n{\n    \"last_color\": \"red\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.00102,\n    \"last_high\": 0.0012,\n    \"window_high\": 0.00138,\n    \"green_count_last5\": 3,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 49.88,
+  "in_tok": 1031,
+  "out_tok": 3967,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.085,\n    \"last_high\": 0.115,\n    \"window_high\": 0.115,\n    \"green_count_last5\": 4,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 52.76,
+  "in_tok": 1031,
+  "out_tok": 4083,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.610,\n    \"last_high\": 0.615,\n    \"window_high\": 0.635,\n    \"green_count_last5\": 3,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 47.01,
+  "in_tok": 1031,
+  "out_tok": 3570,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.065,\n    \"last_high\": 0.0655,\n    \"window_high\": 0.071,\n    \"green_count_last5\": 2,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 48.95,
+  "in_tok": 1031,
+  "out_tok": 3901,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.965,\n    \"last_high\": 0.970,\n    \"window_high\": 0.970,\n    \"green_count_last5\": 3,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 45.84,
+  "in_tok": 1031,
+  "out_tok": 3538,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"red\",\n    \"last_close\": 0.0162,\n    \"last_high\": 0.0165,\n    \"window_high\": 0.0165,\n    \"green_count_last5\": 2,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 65.8,
+  "in_tok": 1031,
+  "out_tok": 4699,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.048,\n    \"last_high\": 0.049,\n    \"window_high\": 0.049,\n    \"green_count_last5\": 4,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "INJUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 45.38,
+  "in_tok": 1031,
+  "out_tok": 3176,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.038,\n    \"last_high\": 0.045,\n    \"window_high\": 0.045,\n    \"green_count_last5\": 3,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "LUMIAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 40.73,
+  "in_tok": 1044,
+  "out_tok": 2052,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00102, \"last_high\": 0.00117, \"window_high\": 0.00138, \"green_count_last5\": 1, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "ERAUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "CHIPUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "AEROUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "ZKUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.41
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "SUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "INJUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "WALUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 57.48,
+  "in_tok": 1055,
+  "out_tok": 2123,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.113,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 14.76,
+  "in_tok": 1055,
+  "out_tok": 348,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 0.165,\n  \"last_high\": 0.185,\n  \"window_high\": 0.185,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": true\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 10.59,
+  "in_tok": 1055,
+  "out_tok": 312,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.0010, \"last_high\": 0.00118, \"window_high\": 0.00139, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 29.63,
+  "in_tok": 1055,
+  "out_tok": 1179,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.086,\n  \"last_high\": 0.094,\n  \"window_high\": 0.113,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.4
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 28.83,
+  "in_tok": 1055,
+  "out_tok": 684,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.0652, \"last_high\": 0.0662,\n \"window_high\": 0.0718,\n \"green_count_last5\": 3,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 42.2,
+  "in_tok": 1055,
+  "out_tok": 1223,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"red\",\n  \"last_close\": 0.955,\n  \"last_high\": 0.965,\n  \"window_high\": 0.965,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 13.37,
+  "in_tok": 1055,
+  "out_tok": 294,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0162, \"last_high\": 0.0165, \"window_high\": 0.0165, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "SUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 32.72,
+  "in_tok": 1055,
+  "out_tok": 826,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 7.9,\n  \"last_high\": 8.0,\n  \"window_high\": 8.75,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 10.45,
+  "in_tok": 1055,
+  "out_tok": 273,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.038, \"last_high\": 0.045, \"window_high\": 0.045, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.45
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "LUMIAUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.43
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "CFXUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 3.14
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "MBLUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 120.39
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "ERAUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.23
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "TIAUSDT_1h",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.84
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "CHIPUSDT_1h",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 2.76
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "AEROUSDT_1h",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.47
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "ZKUSDT_1h",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.25
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "SUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 2.58
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "INJUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.26
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "WALUSDT_1d",
+  "ok": false,
+  "error": "HTTP 402: {\"error\":{\"message\":\"This model is temporarily unavailable. Please try again later or contact support.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"no_provider_under_bid\"}}",
+  "latency": 1.62
+ }
+]

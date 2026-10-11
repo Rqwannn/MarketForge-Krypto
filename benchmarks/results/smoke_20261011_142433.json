@@ -1,0 +1,486 @@
+[
+ {
+  "model": "anthropic/claude-fable-5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 7.03,
+  "in_tok": 1406,
+  "out_tok": 285,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\",\n \"last_close\": 0.11, \"last_high\": 0.123,\n \"window_high\": 0.123,\n \"green_count_last5\": 4,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-fable-5.1",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 12.75,
+  "in_tok": 1432,
+  "out_tok": 767,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 9.45,
+  "in_tok": 1406,
+  "out_tok": 429,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.111, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-opus-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 6.55,
+  "in_tok": 1432,
+  "out_tok": 461,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 4.04,
+  "in_tok": 1430,
+  "out_tok": 99,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\",\n \"last_close\": 0.108, \"last_high\": 0.124,\n \"window_high\": 0.124,\n \"green_count_last5\": 3,\n \"close_above_ma25\": true,\n \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": false,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/claude-sonnet-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 5.91,
+  "in_tok": 1432,
+  "out_tok": 365,
+  "text": "Berdasarkan pembacaan grafik:\n\n- Candle terakhir hijau, dengan body dari sekitar 0,103 hingga 0,112 dan sumbu atas mencapai sekitar 0,124.\n- Candle sebelumnya juga hijau (body 0,073 hingga 0,103).\n- Lima candle terakhir: merah (0,052), hijau (0,055), hijau (0,073), hijau (0,103), hijau (0,112), sehingga 4 hijau.\n- Garis magenta (MA25) di sekitar 0,051, jauh di bawah close.\n- Volume terakhir sekitar 390, sementara volume tertinggi ada pada candle sebelumnya (sekitar 850) dan sekitar 880 pada candle di September. Jadi bukan yang tertinggi.\n\n```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.112, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 7.3,
+  "in_tok": 1432,
+  "out_tok": 721,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.111, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 15.93,
+  "in_tok": 1287,
+  "out_tok": 622,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.105,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 3,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4-pro",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 52.67,
+  "in_tok": 1287,
+  "out_tok": 376,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.111,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "deepseek/deepseek-v4.1-flash",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 240.4
+ },
+ {
+  "model": "gemini/gemini-3.7-flash-high",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 57.79,
+  "in_tok": 1269,
+  "out_tok": 108,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.113,\n  \"last_high\": 0.123,\n  \"window_high\": 0.123,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "gemini/gemini-3.8-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 21.87,
+  "in_tok": 1269,
+  "out_tok": 3146,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.113,\n  \"last_high\": 0.123,\n  \"window_high\": 0.123,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "glm/glm-5.3-flash",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 27.89,
+  "in_tok": 1296,
+  "out_tok": 1259,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.112,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "minimax/minimax-m3",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 12.42,
+  "in_tok": 1428,
+  "out_tok": 1055,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.11,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k2.7-code",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 60.58,
+  "in_tok": 1299,
+  "out_tok": 3793,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.11, \"last_high\": 0.12, \"window_high\": 0.12, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "moonshot/kimi-k3",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 240.39
+ },
+ {
+  "model": "openai/gpt-5.6-luna",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 7.58,
+  "in_tok": 1166,
+  "out_tok": 576,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":5,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-sol",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 9.04,
+  "in_tok": 1201,
+  "out_tok": 308,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-5.6-terra",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 58.35,
+  "in_tok": 1202,
+  "out_tok": 765,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":3,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-astra",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 14.68,
+  "in_tok": 1185,
+  "out_tok": 135,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-luna",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 8.88,
+  "in_tok": 1185,
+  "out_tok": 532,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6-sol",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 38.21,
+  "in_tok": 1202,
+  "out_tok": 790,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "openai/gpt-6.1-sol",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 60.53,
+  "in_tok": 1201,
+  "out_tok": 153,
+  "text": "{\"last_color\":\"green\",\"prev_color\":\"green\",\"last_close\":0.112,\"last_high\":0.124,\"window_high\":0.124,\"green_count_last5\":4,\"close_above_ma25\":true,\"volume_last_is_max\":false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.6-plus-uncensored",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 47.07,
+  "in_tok": 1031,
+  "out_tok": 3958,
+  "text": "```json\n{\n    \"last_color\": \"green\",\n    \"prev_color\": \"green\",\n    \"last_close\": 0.11,\n    \"last_high\": 0.125,\n    \"window_high\": 0.125,\n    \"green_count_last5\": 4,\n    \"close_above_ma25\": true,\n    \"volume_last_is_max\": false\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "qwen/qwen3.8-max",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 38.58,
+  "in_tok": 1044,
+  "out_tok": 1749,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.11, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "vikey/qwen3.8-27b-uncensored",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "HTTP 400: {\"error\":{\"message\":\"Invalid request.\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}}",
+  "latency": 3.91
+ },
+ {
+  "model": "xiaomi/mimo-v2.6-pro",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 48.05,
+  "in_tok": 1055,
+  "out_tok": 1712,
+  "text": "```json\n{\n  \"last_color\": \"green\",\n  \"prev_color\": \"green\",\n  \"last_close\": 0.115,\n  \"last_high\": 0.125,\n  \"window_high\": 0.125,\n  \"green_count_last5\": 4,\n  \"close_above_ma25\": true,\n  \"volume_last_is_max\": true\n}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": false
+  }
+ },
+ {
+  "model": "zai/glm-5.3",
+  "case": "STRKUSDT_1d",
+  "ok": false,
+  "error": "TimeoutError: The read operation timed out",
+  "latency": 240.39
+ }
+]

@@ -1,0 +1,230 @@
+[
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "STRKUSDT_1d",
+  "ok": true,
+  "latency": 2.97,
+  "in_tok": 1431,
+  "out_tok": 89,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.113, \"last_high\": 0.124, \"window_high\": 0.124, \"green_count_last5\": 5, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "LUMIAUSDT_1d",
+  "ok": true,
+  "latency": 2.37,
+  "in_tok": 1431,
+  "out_tok": 84,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.165, \"last_high\": 0.183, \"window_high\": 0.183, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "CFXUSDT_1d",
+  "ok": true,
+  "latency": 2.99,
+  "in_tok": 1431,
+  "out_tok": 92,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0615, \"last_high\": 0.0700, \"window_high\": 0.0700, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": false,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "MBLUSDT_1d",
+  "ok": true,
+  "latency": 4.04,
+  "in_tok": 1431,
+  "out_tok": 87,
+  "text": "{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.00100, \"last_high\": 0.00117, \"window_high\": 0.00140, \"green_count_last5\": 2, \"close_above_ma25\": false, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": false,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "ERAUSDT_1d",
+  "ok": true,
+  "latency": 3.18,
+  "in_tok": 1431,
+  "out_tok": 84,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.086, \"last_high\": 0.094, \"window_high\": 0.114, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "TIAUSDT_1h",
+  "ok": true,
+  "latency": 3.5,
+  "in_tok": 1431,
+  "out_tok": 89,
+  "text": "```json\n{\"last_color\": \"red\", \"prev_color\": \"green\", \"last_close\": 0.609, \"last_high\": 0.614, \"window_high\": 0.634, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "CHIPUSDT_1h",
+  "ok": true,
+  "latency": 3.0,
+  "in_tok": 1431,
+  "out_tok": 92,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0645, \"last_high\": 0.0650, \"window_high\": 0.0718, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "AEROUSDT_1h",
+  "ok": true,
+  "latency": 3.18,
+  "in_tok": 1431,
+  "out_tok": 89,
+  "text": "```json\n{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.96, \"last_high\": 0.97, \"window_high\": 0.975, \"green_count_last5\": 5, \"close_above_ma25\": true, \"volume_last_is_max\": false}\n```",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": false,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "ZKUSDT_1h",
+  "ok": true,
+  "latency": 3.72,
+  "in_tok": 1431,
+  "out_tok": 87,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0161, \"last_high\": 0.0163, \"window_high\": 0.0163, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "SUSDT_1d",
+  "ok": true,
+  "latency": 2.82,
+  "in_tok": 1431,
+  "out_tok": 87,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 0.0476, \"last_high\": 0.0492, \"window_high\": 0.0503, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "INJUSDT_1d",
+  "ok": true,
+  "latency": 3.12,
+  "in_tok": 1431,
+  "out_tok": 84,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"green\", \"last_close\": 7.65, \"last_high\": 7.9, \"window_high\": 8.7, \"green_count_last5\": 4, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": true,
+   "last_close": true,
+   "last_high": true,
+   "window_high": true,
+   "green_count_last5": false,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ },
+ {
+  "model": "anthropic/haiku-5.5",
+  "case": "WALUSDT_1d",
+  "ok": true,
+  "latency": 3.21,
+  "in_tok": 1431,
+  "out_tok": 87,
+  "text": "{\"last_color\": \"green\", \"prev_color\": \"red\", \"last_close\": 0.0385, \"last_high\": 0.0455, \"window_high\": 0.0455, \"green_count_last5\": 3, \"close_above_ma25\": true, \"volume_last_is_max\": false}",
+  "scores": {
+   "last_color": true,
+   "prev_color": false,
+   "last_close": true,
+   "last_high": false,
+   "window_high": true,
+   "green_count_last5": true,
+   "close_above_ma25": true,
+   "volume_last_is_max": true
+  }
+ }
+]
