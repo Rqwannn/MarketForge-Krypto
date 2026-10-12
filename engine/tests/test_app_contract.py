@@ -6,7 +6,7 @@ import logging
 from binance_bot.binance_desktop.layout import window_ready, window_size_problem, window_target
 from binance_bot.cli import build_parser
 from binance_bot.config import Settings
-from binance_bot.exceptions import MarketDataError
+from binance_bot.exceptions import MarketDataError, WindowError
 from binance_bot.logging_setup import JsonLinesFormatter, event
 from binance_bot.macos import Rect
 from binance_bot.market import Quote
@@ -88,6 +88,17 @@ def test_readiness_accepts_a_wrong_window_size_that_the_bot_will_fix() -> None:
     assert checks["window"]["ok"] is True
     assert "otomatis" in str(checks["window"]["pesan"])
     assert screen.events == []  # cek tidak mengubah apa pun
+
+
+def test_readiness_does_not_flag_a_binance_window_on_another_desktop() -> None:
+    class OtherSpaceScreen(FakeScreen):
+        def bounds(self, app_name: str) -> Rect:
+            raise WindowError("System Events: Indeks yang tidak sah (-1719)")
+
+    _, checks = readiness(screen=OtherSpaceScreen())
+    assert checks["window"]["ok"] is True
+    _, checks = readiness(screen=OtherSpaceScreen(), areas=[Rect(0, 25, 1440, 790)])
+    assert checks["window"]["ok"] is False
 
 
 def test_readiness_reports_each_problem_without_clicking() -> None:

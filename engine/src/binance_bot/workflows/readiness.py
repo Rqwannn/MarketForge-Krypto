@@ -100,24 +100,21 @@ class ReadinessWorkflow:
     def _binance_checks(self) -> list[Check]:
         s = self._settings
         areas = self._screens()
-        auto = "Jendela Binance diatur otomatis ke ukuran yang dibutuhkan saat bot mulai."
+        auto = "Jendela Binance ditampilkan dan diatur otomatis saat bot mulai."
+        fits = any(a.width >= EXPECTED_WINDOW[0] and a.height >= EXPECTED_WINDOW[1] for a in areas)
+        screen_check = Check("window", fits, auto if fits else screen_too_small(areas))
         if not self._apps.is_running(s.app_bundle_id):
-            fits = any(
-                a.width >= EXPECTED_WINDOW[0] and a.height >= EXPECTED_WINDOW[1] for a in areas
-            )
             return [
                 Check("binance", False, "Binance belum dibuka. Buka dan login dulu."),
-                Check("window", fits, auto if fits else screen_too_small(areas)),
+                screen_check,
             ]
         running = Check("binance", True, "Binance berjalan.")
         try:
             rect = self._window.bounds(s.app_name)
         except BotError:
-            hidden = (
-                "Jendela Binance tidak terlihat (diperkecil, disembunyikan, atau di Desktop lain). "
-                "Bot akan menampilkannya saat mulai; bila tetap gagal, buka jendelanya manual."
-            )
-            return [running, Check("window", False, hidden)]
+            # Jendela di Desktop (Space) lain atau diperkecil tidak terbaca dari sini; bot
+            # membawa Binance ke depan saat mulai, jadi yang perlu dicek hanya ukuran layar.
+            return [running, screen_check]
         if window_ready(rect, areas):
             return [
                 running,
