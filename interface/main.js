@@ -13,6 +13,7 @@ const { loadLeaderKey, loadLeaderPublic, sealForLeader } = require('./leaderkey'
 const { Team } = require('./team');
 
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
+const ICON = path.join(__dirname, 'assets', 'icon.png'); // logo MarketForge (dari app_icon_adaptive)
 const PAGE_URL = pathToFileURL(PAGE).href;
 
 const proc = new engine.EngineProcess();
@@ -150,7 +151,8 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 680,
     title: 'MarketForge',
-    backgroundColor: '#0c0d14',
+    icon: ICON, // Windows/Linux; di macOS ikon Dock diatur lewat app.dock
+    backgroundColor: '#121316',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -255,6 +257,7 @@ handle('team:leave', () => {
 });
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') app.dock?.setIcon(ICON);
   startDiscovery();
   createWindow();
 });

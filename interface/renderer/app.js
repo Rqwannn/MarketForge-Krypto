@@ -134,7 +134,7 @@ function activity(entry) {
   if (/^Tidak ada koin dengan pola OK/.test(m)) return { text: 'Belum ada koin yang layak, pantau lagi nanti' };
   if (/tidak di depan/.test(m)) return { text: 'Binance tertutup jendela lain, dibawa ke depan lagi' };
   const waitingLeader = m.match(/^Menunggu leader menganalisis (Top \d+)/);
-  if (waitingLeader) return { text: `Menunggu hasil Haiku dari pemimpin untuk ${waitingLeader[1]}` };
+  if (waitingLeader) return { text: `Menunggu hasil AI dari pemimpin untuk ${waitingLeader[1]}` };
   const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
   if (leaderSays) {
     const ok = leaderSays[3] === 'OK';
@@ -354,10 +354,10 @@ function addCoin(e) {
     el('td', { class: 'why' },
       el('strong', { class: `act ${act.css}`, textContent: act.text }),
       el('span', { textContent: act.note }),
-      e.summary ? el('small', { textContent: `Haiku: ${e.summary}` }) : null)));
+      e.summary ? el('small', { textContent: `AI: ${e.summary}` }) : null)));
 }
 
-/** Akibat keputusan Haiku untuk satu koin (kolom Tindakan). */
+/** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
 function actionOf(e) {
   if (e.status === 'open') {
     return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · target ${price(e.target_price)} · batas rugi ${price(e.stop_price)}` };
@@ -377,9 +377,9 @@ function actionOf(e) {
 // --------------------------------------------------------------------------- alur putaran
 
 const FLOW = {
-  single: ['Buka top gainers', 'Cek biaya & slot', 'Haiku baca grafik', 'Catat posisi uji'],
-  leader: ['Buka top gainers', 'Haiku baca grafik', 'Keputusan', 'Bagikan ke pengikut'],
-  follower: ['Tunggu Haiku pemimpin', 'Buka koin yang sama', 'Cek biaya & slot', 'Catat posisi uji'],
+  single: ['Buka top gainers', 'Cek biaya & slot', 'AI baca grafik', 'Catat posisi uji'],
+  leader: ['Buka top gainers', 'AI baca grafik', 'Keputusan', 'Bagikan ke pengikut'],
+  follower: ['Tunggu AI pemimpin', 'Buka koin yang sama', 'Cek biaya & slot', 'Catat posisi uji'],
 };
 const flow = { mode: 'single', step: -1, done: false, symbol: '', nextAt: 0 };
 
@@ -413,7 +413,7 @@ function advanceFlow(entry) {
   }
   const waiting = m.match(/^Menunggu leader menganalisis (Top \d+)/);
   if (waiting) {
-    setFlow(0, `Menunggu hasil Haiku dari pemimpin untuk ${waiting[1]}`);
+    setFlow(0, `Menunggu hasil AI dari pemimpin untuk ${waiting[1]}`);
     return;
   }
   const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
@@ -435,7 +435,7 @@ function advanceFlow(entry) {
     return;
   }
   if (/_15m\.png/.test(m) && !follower) {
-    setFlow(leader ? 1 : 2, `Haiku membaca garis kuning ${flow.symbol} di grafik 15 menit`);
+    setFlow(leader ? 1 : 2, `AI membaca garis kuning ${flow.symbol} di grafik 15 menit`);
     return;
   }
   if (e?.type === 'coin') {
@@ -573,7 +573,7 @@ function donut(s) {
     ['Target tercapai', s.targets, 'var(--green)'],
     ['Kena batas rugi', s.stops, 'var(--red)'],
     ['Waktu habis', s.timeouts, 'var(--amber)'],
-    ['Masih berjalan', s.open, 'var(--violet-2)'],
+    ['Masih berjalan', s.open, 'var(--accent-2)'],
   ];
   const total = parts.reduce((sum, [, n]) => sum + n, 0);
   const r = 58;
@@ -617,7 +617,7 @@ async function loadJournal() {
     const phase = !enough ? 'Belum cukup data' : passed ? 'Lulus fase uji' : 'Belum lulus, tinjau aturan';
     $('journal-kpis').replaceChildren(
       kpi('Trade uji selesai', `${s.closed}/${s.required_trades}`, phase,
-        { bar: s.closed / s.required_trades, barClass: 'violet', css: enough ? (passed ? 'pos' : 'neg') : '' }),
+        { bar: s.closed / s.required_trades, barClass: 'accent', css: enough ? (passed ? 'pos' : 'neg') : '' }),
       kpi('Tingkat menang', s.win_rate === null ? '–' : pct1(s.win_rate), `garis = titik impas ${pct1(s.breakeven)}`,
         { bar: s.win_rate ?? 0, barClass: s.win_rate !== null && s.win_rate >= s.breakeven ? 'green' : 'red', mark: s.breakeven,
           css: s.win_rate === null ? '' : s.win_rate >= s.breakeven ? 'pos' : 'neg' }),
@@ -683,7 +683,7 @@ async function loadChecks() {
     $('ready-text').textContent = result.ok ? 'Laptop ini siap dipakai.' : 'Belum siap. Selesaikan yang bertanda merah.';
     $('ready-count').className = result.ok ? 'pos' : '';
     setBar('ready-bar', ready / result.checks.length);
-    $('ready-bar').parentElement.className = `meter wide ${result.ok ? 'green' : 'violet'}`;
+    $('ready-bar').parentElement.className = `meter wide ${result.ok ? 'green' : 'accent'}`;
     $('checks').replaceChildren(...result.checks.map((c) => {
       const [title, fix] = CHECKS[c.id] || [c.id, 'Belum siap.'];
       const needed = !c.ok && c.wajib;

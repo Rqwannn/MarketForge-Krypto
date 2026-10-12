@@ -10,7 +10,7 @@ detailnya tetap tersimpan di `engine/logs/bot.log` untuk admin.
 
 | Halaman | Isi |
 |---|---|
-| **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Kartu **Alur putaran** menyorot langkah yang sedang berjalan (mis. Haiku baca grafik) dan hitung mundur ke putaran berikutnya. Tabel "Putaran ini" menampilkan keputusan Haiku dan **tindakan**-nya (mis. Tunggu = tidak ada tindakan; Layak short = pengikut boleh membuka posisi uji). |
+| **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Kartu **Alur putaran** menyorot langkah yang sedang berjalan (mis. AI baca grafik) dan hitung mundur ke putaran berikutnya. Tabel "Putaran ini" menampilkan keputusan AI dan **tindakan**-nya (mis. Tunggu = tidak ada tindakan; Layak short = pengikut boleh membuka posisi uji). |
 | **Hasil uji** | Progres 50 trade uji, tingkat menang dibanding titik impas, hasil bersih dalam % modal, dan trade terakhir. |
 | **Cek laptop** | Daftar kesiapan: izin macOS, Binance terbuka, ukuran jendela, koneksi data Binance, AI, dan kerja sama antar laptop. Tombol **Lihat laptop** menampilkan laptop lain di WiFi yang sama yang sedang membuka MarketForge (nama, OS, peran, status bot). |
 
@@ -39,7 +39,7 @@ Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
 5. Laptop yang diajak menampilkan ajakan; pemiliknya mengisi modal lalu menekan **Terima**.
    Perannya otomatis menjadi Pengikut untuk Top itu, dengan alamat hub dari laptop pemimpin.
 6. Setiap pemimpin memulai putaran, bot di laptop pengikut ikut mulai sendiri. Pengikut tidak
-   membaca grafik: ia menunggu keputusan Haiku pemimpin untuk Top-nya. Tunggu/Jangan = tidak
+   membaca grafik: ia menunggu keputusan AI pemimpin untuk Top-nya. Tunggu/Jangan = tidak
    ada tindakan (Binance tidak disentuh). Layak short = pengikut membuka **koin yang sama**
    (dicari dari nama pair, karena peringkat bisa bergeser), cek biaya dan slot, lalu entry.
    Pengikut bisa keluar lewat **Keluar dari kelompok**; pemimpin bisa menekan **Lepas**.
