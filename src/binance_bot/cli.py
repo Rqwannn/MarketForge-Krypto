@@ -15,11 +15,11 @@ from binance_bot.config import Settings, read_dotenv
 from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubClient, HubServer
 from binance_bot.logging_setup import setup_logging
-from binance_bot.macos import MacAppController, MacTextReader, MacWindowController
 from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.market import FuturesMarket
 from binance_bot.strategy import DryRunOrderGate, Journal, SopParams
 from binance_bot.strategy.params import SIGNAL_SOURCES
+from binance_bot.system import build_system
 from binance_bot.workflows import (
     FillTestWorkflow,
     FollowerWorkflow,
@@ -28,6 +28,7 @@ from binance_bot.workflows import (
     OpenBinanceWorkflow,
     SingleWorkflow,
     SopTrader,
+    WindowSizeWorkflow,
     Workflow,
 )
 
@@ -135,6 +136,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("open", help="Buka aplikasi Binance hanya jika belum berjalan.")
 
+    size = sub.add_parser("window-size", help="Cek ukuran jendela Binance terhadap kalibrasi.")
+    size.add_argument(
+        "--atur", action="store_true", help="Atur ukuran jendela ke ukuran kalibrasi (Windows)"
+    )
+
     single = sub.add_parser("single", parents=[sop], help="Satu laptop: SOP penuh, AI sendiri.")
     single.add_argument("--ranks", type=parse_ranks, default=[1, 2, 3], help="Rank, mis. 1,2,3")
 
@@ -168,16 +174,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
-    apps = MacAppController()
+    system = build_system(settings)
+    apps = system.apps
     if args.command == "open":
         return OpenBinanceWorkflow(settings, apps)
+    if args.command == "window-size":
+        return WindowSizeWorkflow(settings, system.window, resize=args.atur)
 
     market = FuturesMarket()
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
         return JournalWorkflow(params_from(args), journal, market)
 
-    navigator = BinanceNavigator(settings, apps, MacWindowController(), MacTextReader())
+    navigator = BinanceNavigator(settings, apps, system.window, system.reader)
     if args.command == "uji-isi":
         return FillTestWorkflow(navigator, rank=args.rank, quantity_text=args.jumlah)
     if args.command == "leader":

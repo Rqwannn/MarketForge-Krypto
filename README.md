@@ -1,7 +1,7 @@
 # Binance Bot
 
 Engine untuk menjalankan **SOP "Short Top Gainers (Futures 1x)"** milik Pak Saputra di Binance
-Desktop (macOS). Bot membuka Top Gainers Futures, menilai tanda "pucuk" di chart 15 menit
+Desktop (macOS dan Windows). Bot membuka Top Gainers Futures, menilai tanda "pucuk" di chart 15 menit
 dengan AI visual (default Claude Haiku 5.5), mengecek funding dan spread, menghitung ukuran
 posisi sesuai rumus SOP, mengisi kolom **Jumlah**, lalu mencatat posisi **uji kertas** di jurnal.
 
@@ -14,11 +14,12 @@ posisi sesuai rumus SOP, mengisi kolom **Jumlah**, lalu mencatat posisi **uji ke
 |---|---|
 | [docs/SOP.md](docs/SOP.md) | Pemetaan PDF ke engine: langkah, parameter, 4 tanda pucuk, titik impas, pengaman, hal yang perlu disepakati |
 | [docs/MODE_SINGLE.md](docs/MODE_SINGLE.md) | Satu laptop menjalankan SOP penuh |
+| [docs/WINDOWS.md](docs/WINDOWS.md) | Setup, kalibrasi, dan perintah di Windows (tanpa `make`) |
 | [docs/MODE_BANYAK.md](docs/MODE_BANYAK.md) | Beberapa laptop di satu WiFi; AI dipanggil sekali per koin oleh leader |
 
 ## Setup (sekali per laptop)
 
-Butuh macOS, Python 3.11+, dan Binance Desktop (bahasa Indonesia, akun Futures aktif).
+Butuh macOS (atau Windows, lihat [docs/WINDOWS.md](docs/WINDOWS.md)), Python 3.11+, dan Binance Desktop (bahasa Indonesia, akun Futures aktif).
 
 ```bash
 make install       # buat .venv dan pasang bot

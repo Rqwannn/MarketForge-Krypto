@@ -7,12 +7,13 @@ from pathlib import Path
 from binance_bot.analysis import AnalysisRecord, PeakReading
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
+from binance_bot.config import DEFAULT_APP_ID
 from binance_bot.exceptions import BotError
 from binance_bot.macos import Rect, TextLine
 from binance_bot.market import Candle, Quote, SymbolRules
 from binance_bot.strategy import OrderPlan, PeakSigns
 
-BUNDLE = "com.binance.BinanceDesktop"
+BUNDLE = DEFAULT_APP_ID
 WINDOW = Rect(x=0, y=33, width=1470, height=859)
 THREE_SIGNS = PeakSigns(
     upper_wick=True, failed_new_high=True, volume_declining=True, big_red_after_greens=False

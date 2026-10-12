@@ -9,15 +9,6 @@ from __future__ import annotations
 import re
 import time
 
-from Quartz import (
-    CGEventCreateKeyboardEvent,
-    CGEventKeyboardSetUnicodeString,
-    CGEventPost,
-    CGEventSetFlags,
-    kCGEventFlagMaskCommand,
-    kCGHIDEventTap,
-)
-
 _KEY_A = 0
 _KEY_DELETE = 51
 _KEY_DELAY_S = 0.03
@@ -25,6 +16,15 @@ NUMBER_PATTERN = re.compile(r"[0-9]+([.,][0-9]+)?")
 
 
 def _key(keycode: int, *, command: bool = False, text: str | None = None) -> None:
+    from Quartz import (
+        CGEventCreateKeyboardEvent,
+        CGEventKeyboardSetUnicodeString,
+        CGEventPost,
+        CGEventSetFlags,
+        kCGEventFlagMaskCommand,
+        kCGHIDEventTap,
+    )
+
     for down in (True, False):
         event = CGEventCreateKeyboardEvent(None, keycode, down)
         if command:
