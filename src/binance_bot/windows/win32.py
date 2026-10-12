@@ -196,12 +196,18 @@ def click_at(x: int, y: int, *, hover_s: float = 0.15, press_s: float = 0.06) ->
     _send([_mouse(_MOUSEEVENTF_LEFTUP)])
 
 
-def scroll_up_at(x: int, y: int, notches: int) -> None:
+def scroll_at(x: int, y: int, notches: int) -> None:
+    """Gulir roda mouse di (x, y): `notches` positif = ke atas, negatif = ke bawah."""
     user32.SetCursorPos(x, y)
     time.sleep(0.15)
-    for _ in range(notches):
-        _send([_mouse(_MOUSEEVENTF_WHEEL, _WHEEL_DELTA)])
+    delta = _WHEEL_DELTA if notches > 0 else -_WHEEL_DELTA
+    for _ in range(abs(notches)):
+        _send([_mouse(_MOUSEEVENTF_WHEEL, delta)])
         time.sleep(0.02)
+
+
+def scroll_up_at(x: int, y: int, notches: int) -> None:
+    scroll_at(x, y, abs(notches))
 
 
 def select_all_and_delete() -> None:
