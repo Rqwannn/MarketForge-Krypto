@@ -25,6 +25,20 @@ Arti keputusan di tabel:
 
 Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
 
+### Kelompok pemimpin dan pengikut
+
+1. Admin mengisi `BOT_HUB_TOKEN` yang **sama** di `interface/.env` setiap laptop (`make token`).
+2. Laptop pemimpin: halaman **Pantau**, pilih peran **Pemimpin**.
+3. Halaman **Cek laptop** > **Lihat laptop**: pilih Top untuk laptop lain, tekan **Jadikan pengikut**.
+4. Laptop yang diajak menampilkan ajakan; pemiliknya mengisi modal lalu menekan **Terima**.
+   Perannya otomatis menjadi Pengikut untuk Top itu, dengan alamat hub dari laptop pemimpin.
+5. Setiap pemimpin memulai putaran, bot di laptop pengikut ikut mulai sendiri.
+   Pengikut bisa keluar lewat **Keluar dari kelompok**; pemimpin bisa menekan **Lepas**.
+
+Peran laptop selalu diatur di halaman Pantau (tombol **Ubah peran** di daftar laptop menuju ke
+sana). Ajakan dan sinyal mulai ditandatangani dengan token hub; laptop dengan token lain tidak
+bisa memalsukannya. Keanggotaan kelompok hilang bila aplikasi ditutup.
+
 ## Untuk admin (sekali per laptop)
 
 1. Siapkan engine: `make install` di root repo, lalu ikuti langkah **Setup** di

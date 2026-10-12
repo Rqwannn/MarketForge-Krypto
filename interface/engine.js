@@ -66,6 +66,15 @@ function ranksOf(value) {
   return ranks.sort((a, b) => a - b);
 }
 
+/** Alamat hub pemimpin dari jaringan lokal, mis. http://192.168.1.19:8765. */
+function hubOf(value) {
+  const text = String(value || '').trim();
+  if (!/^http:\/\/\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(text)) {
+    throw new InputError('Alamat laptop pemimpin tidak valid');
+  }
+  return text;
+}
+
 function modalOf(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
     throw new InputError('Isi modal dalam USDT');
@@ -81,8 +90,10 @@ function buildArgs(mode, params = {}) {
   if (!MODES.includes(mode)) throw new InputError(`Mode tidak dikenal: ${mode}`);
   const p = params || {};
   if (mode === 'follower') {
+    // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
+    const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];
     return ['--events', 'follower', '--rank', String(number(p.rank, 'Top gainer', 1, MAX_RANK, true)),
-      '--modal', modalOf(p.modal)];
+      ...hub, '--modal', modalOf(p.modal)];
   }
   const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN));
   const args = ['--events', mode, '--ranks', ranksOf(p.ranks).join(','), '--interval', interval];
@@ -231,6 +242,12 @@ function runJson(
   });
 }
 
+/** Token hub: interface/.env, lingkungan, lalu engine/.env. '' bila belum diatur. */
+function hubToken(env = process.env) {
+  return readAppEnv().BOT_HUB_TOKEN || env.BOT_HUB_TOKEN
+    || readAppEnv(path.join(ENGINE_DIR, '.env')).BOT_HUB_TOKEN || '';
+}
+
 module.exports = {
   APP_ENV_KEYS,
   BOT,
@@ -241,6 +258,7 @@ module.exports = {
   buildArgs,
   engineEnv,
   findBot,
+  hubToken,
   parseLine,
   readAppEnv,
   runJson,

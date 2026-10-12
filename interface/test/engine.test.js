@@ -32,6 +32,15 @@ test('pengikut: satu top gainer dan modal (alamat hub dari .env admin)', () => {
   ]);
 });
 
+test('pengikut dari ajakan pemimpin: alamat hub ikut, dan divalidasi', () => {
+  assert.deepEqual(buildArgs('follower', { rank: 3, modal: '100', hub: 'http://192.168.1.19:8765' }), [
+    '--events', 'follower', '--rank', '3', '--hub', 'http://192.168.1.19:8765', '--modal', '100',
+  ]);
+  for (const hub of ['http://evil.example:80', 'http://1.2.3.4:80/; rm -rf /', 'https://1.2.3.4:8765']) {
+    assert.throws(() => buildArgs('follower', { rank: 1, modal: '100', hub }), InputError, hub);
+  }
+});
+
 test('isian tidak valid ditolak sebelum menjadi argumen', () => {
   const bad = [
     ['jual', { modal: 100, ranks: [1] }],

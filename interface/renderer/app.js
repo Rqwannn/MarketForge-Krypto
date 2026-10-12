@@ -194,7 +194,7 @@ function render() {
   $('ranks-note').textContent = multi ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih` : 'Pilih satu';
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
   if (state === 'stopped') $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
-  window.bot.setRole(form.mode).catch(() => {}); // peran laptop ini untuk daftar laptop di WiFi
+  window.bot.setRole(form.mode).then(applyTeam).catch(() => {}); // peran untuk daftar laptop di WiFi
   saveForm();
 }
 
@@ -236,13 +236,14 @@ function setupForm() {
 // --------------------------------------------------------------------------- jalankan dan hentikan
 
 let state = 'stopped';
+let teamInfo = { available: false, enabled: false, role: 'single', membership: null };
 const counts = { seen: 0, ok: 0, open: 0 };
 
 function setState(next, title, sub) {
   state = next;
   const running = next === 'running';
   $('status').classList.toggle('running', running);
-  $('setup').classList.toggle('locked', next !== 'stopped');
+  lockSetup();
 
   const engine = $('engine-state');
   engine.classList.toggle('running', running);
@@ -256,6 +257,10 @@ function setState(next, title, sub) {
     el('span', { textContent: { stopped: 'Mulai memantau', running: 'Hentikan', stopping: 'Menghentikan…' }[next] }));
   if (title) $('status-title').textContent = title;
   if (sub) $('status-sub').textContent = sub;
+}
+
+function lockSetup() {
+  $('setup').classList.toggle('locked', state !== 'stopped' || Boolean(teamInfo.membership));
 }
 
 function setCounts() {
@@ -586,20 +591,16 @@ async function loadPeers() {
   try {
     const peers = await window.bot.peers();
     const others = peers.filter((p) => !p.self).length;
-    $('peers-sub').textContent = others
-      ? `${others} laptop lain ditemukan. HP dan perangkat lain tidak ditampilkan.`
-      : 'Belum ada laptop lain. Pastikan laptop lain membuka MarketForge di WiFi yang sama.';
-    $('peers').replaceChildren(...peers.map((p) => {
-      const [role, roleCss] = ROLE_LABEL[p.role] || ROLE_LABEL.single;
-      const meta = [p.os, p.address].filter(Boolean).join(' · ');
-      return el('li', { class: `peer ${p.self ? 'self' : ''}` },
-        el('span', { class: 'icon' }, icon('laptop')),
-        el('div', {},
-          el('strong', { textContent: p.self ? `${p.name} (laptop ini)` : p.name }),
-          el('span', { textContent: meta })),
-        el('span', { class: `tag ${roleCss}`, textContent: role }),
-        el('span', { class: `tag ${p.running ? 'ok' : ''}`, textContent: p.running ? 'Bot berjalan' : 'Bot berhenti' }));
-    }));
+    const leading = teamInfo.enabled && teamInfo.role === 'leader' && !teamInfo.membership;
+    let hint = 'Belum ada laptop lain. Pastikan laptop lain membuka MarketForge di WiFi yang sama.';
+    if (others) {
+      hint = `${others} laptop lain ditemukan. `;
+      if (!teamInfo.enabled) hint += 'Untuk mengajak pengikut, admin perlu mengisi token hub yang sama di kedua laptop.';
+      else if (!leading) hint += 'Pilih peran Pemimpin di halaman Pantau untuk mengajak laptop lain menjadi pengikut.';
+      else hint += 'Pilih top gainer, tekan Jadikan pengikut, lalu laptop itu menerima ajakannya.';
+    }
+    $('peers-sub').textContent = hint;
+    $('peers').replaceChildren(...peers.map((p) => peerRow(p, leading)));
   } catch (err) {
     $('peers-sub').textContent = err.message;
     $('peers').replaceChildren();
@@ -608,6 +609,123 @@ async function loadPeers() {
   }
 }
 $('peers-refresh').addEventListener('click', loadPeers);
+
+function peerRow(p, leading) {
+  const [role, roleCss] = ROLE_LABEL[p.role] || ROLE_LABEL.single;
+  const meta = [p.os, p.address].filter(Boolean).join(' · ');
+  const tags = el('div', { class: 'peer-tags' },
+    el('span', { class: `tag ${roleCss}`, textContent: role }),
+    el('span', { class: `tag ${p.running ? 'ok' : ''}`, textContent: p.running ? 'Bot berjalan' : 'Bot berhenti' }));
+  let actions = [];
+  if (p.self) {
+    // Peran laptop ini diatur di halaman Pantau (Peran laptop).
+    actions = [el('button', { class: 'secondary small', textContent: 'Ubah peran', onclick: () => showPage('run') })];
+  } else if (leading) {
+    actions = peerActions(p);
+  }
+  return el('li', { class: `peer ${p.self ? 'self' : ''}` },
+    el('span', { class: 'icon' }, icon('laptop')),
+    el('div', { class: 'peer-info' },
+      el('strong', { textContent: p.self ? `${p.name} (laptop ini)` : p.name }),
+      el('span', { textContent: meta })),
+    tags,
+    el('div', { class: 'peer-actions' }, ...actions));
+}
+
+/** Aksi pemimpin untuk satu laptop: ajak, batalkan ajakan, atau lepas pengikut. */
+function peerActions(p) {
+  const act = (fn) => async () => {
+    try {
+      await fn();
+      await loadPeers();
+    } catch (err) {
+      $('peers-sub').textContent = err.message;
+    }
+  };
+  if (p.followerRank) {
+    return [el('span', { class: 'tag follower', textContent: `Pengikut · Top ${p.followerRank}` }),
+      el('button', { class: 'secondary small', textContent: 'Lepas', onclick: act(() => window.bot.team.uninvite(p.id)) })];
+  }
+  if (p.invitedRank) {
+    return [el('span', { class: 'tag tunggu', textContent: `Menunggu jawaban · Top ${p.invitedRank}` }),
+      el('button', { class: 'secondary small', textContent: 'Batal', onclick: act(() => window.bot.team.uninvite(p.id)) })];
+  }
+  const select = el('select', { class: 'rank-select' },
+    ...RANKS.map((r) => el('option', { value: String(r), textContent: `Top ${r}` })));
+  select.setAttribute('aria-label', `Top gainer untuk ${p.name}`);
+  return [select,
+    el('button', { class: 'primary small', textContent: 'Jadikan pengikut', onclick: act(() => window.bot.team.invite(p.id, Number(select.value))) })];
+}
+
+// --------------------------------------------------------------------------- kelompok
+
+function applyTeam(info) {
+  if (!info) return;
+  teamInfo = info;
+  const member = info.membership;
+  $('group').hidden = !member;
+  if (member) {
+    $('group-title').textContent = `Pengikut dari ${member.leaderName} · Top ${member.rank}`;
+    $('group-sub').textContent = `Bot mulai otomatis setiap pemimpin memulai putaran (modal ${member.modal} USDT).`;
+    if (form.mode !== 'follower' || form.rank !== member.rank) {
+      form.mode = 'follower';
+      form.rank = member.rank;
+      render();
+    }
+  }
+  lockSetup();
+}
+
+let pendingInvite = null;
+
+function showInvite(invite) {
+  pendingInvite = invite;
+  $('invite-title').textContent = `${invite.leaderName} mengajak laptop ini`;
+  $('invite-text').textContent = `Menjadi Pengikut untuk Top ${invite.rank}. Bot laptop ini akan mulai otomatis setiap pemimpin memulai putaran, memakai hasil AI dari pemimpin.`;
+  $('invite-modal').value = form.modal;
+  $('invite-error').textContent = '';
+  $('invite').hidden = false;
+  $('invite-modal').focus();
+}
+
+$('invite-accept').addEventListener('click', async () => {
+  if (!pendingInvite) return;
+  try {
+    const modal = $('invite-modal').value.trim();
+    applyTeam(await window.bot.team.accept(pendingInvite.leaderId, modal));
+    form.modal = modal;
+    $('modal').value = modal;
+    $('invite').hidden = true;
+    pendingInvite = null;
+    render();
+    showPage('run');
+  } catch (err) {
+    $('invite-error').textContent = err.message;
+  }
+});
+$('invite-decline').addEventListener('click', async () => {
+  if (pendingInvite) await window.bot.team.decline(pendingInvite.leaderId).catch(() => {});
+  pendingInvite = null;
+  $('invite').hidden = true;
+});
+$('group-leave').addEventListener('click', async () => {
+  applyTeam(await window.bot.team.leave());
+});
+
+window.bot.team.onInvite(showInvite);
+window.bot.team.onChanged((info) => {
+  applyTeam(info);
+  if (info.notice) addFeed({ text: info.notice, css: 'warn' }, Date.now() / 1000);
+});
+window.bot.team.onError((message) => addFeed({ text: message, css: 'bad' }, Date.now() / 1000));
+window.bot.team.onStarted(({ leaderName, rank }) => {
+  Object.assign(counts, { seen: 0, ok: 0, open: 0 });
+  setCounts();
+  emptyCoins('Menyiapkan Binance…');
+  emptyFeed('Menunggu aktivitas pertama…');
+  setState('running', 'Mengikuti pemimpin', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
+});
+window.bot.team.state().then(applyTeam).catch(() => {});
 
 // --------------------------------------------------------------------------- mulai
 

@@ -26,6 +26,18 @@ contextBridge.exposeInMainWorld('bot', {
   summary: () => call('engine:summary'),
   peers: () => call('peers:list'),
   setRole: (role) => call('presence:update', role),
+  team: {
+    state: () => call('team:state'),
+    invite: (peerId, rank) => call('team:invite', peerId, rank),
+    uninvite: (peerId) => call('team:uninvite', peerId),
+    accept: (leaderId, modal) => call('team:accept', leaderId, modal),
+    decline: (leaderId) => call('team:decline', leaderId),
+    leave: () => call('team:leave'),
+    onInvite: (callback) => listen('team:invite', callback),
+    onStarted: (callback) => listen('team:started', callback),
+    onChanged: (callback) => listen('team:changed', callback),
+    onError: (callback) => listen('team:error', callback),
+  },
   onLog: (callback) => listen('engine:log', callback),
   onExit: (callback) => listen('engine:exit', callback),
 });

@@ -57,6 +57,12 @@
         </div>
       </header>
 
+      <section class="card group" id="group" hidden>
+        <span class="group-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M10.5 9.6L6.5 15.8M13.5 9.6l4 6.2"/></svg></span>
+        <div><strong id="group-title"></strong><span id="group-sub"></span></div>
+        <button class="secondary" id="group-leave">Keluar dari kelompok</button>
+      </section>
+
       <section class="card setup" id="setup">
         <div class="card-head">
           <div><h2>Pengaturan putaran</h2><p>Terkunci selama bot berjalan.</p></div>
@@ -208,6 +214,20 @@
       </section>
     </section>
   </main>
+</div>
+<div class="backdrop" id="invite" hidden>
+  <div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+    <span class="tag outline">Ajakan kelompok</span>
+    <h2 id="invite-title"></h2>
+    <p id="invite-text"></p>
+    <label class="label" for="invite-modal">Modal laptop ini</label>
+    <div class="money"><input id="invite-modal" inputmode="decimal" placeholder="0" autocomplete="off"><span>USDT</span></div>
+    <p class="error" id="invite-error" role="alert"></p>
+    <div class="dialog-actions">
+      <button class="secondary" id="invite-decline">Tolak</button>
+      <button class="primary" id="invite-accept">Terima</button>
+    </div>
+  </div>
 </div>
 <script src="app.js"></script>
 </body>
