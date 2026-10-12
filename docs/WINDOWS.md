@@ -15,22 +15,25 @@ Pengaman tetap sama: tombol order tidak pernah ditekan, hanya angka yang bisa di
 
 ## Setup
 
-PowerShell, dari folder repo:
+PowerShell, dari root repo. Engine ada di `engine/`; `.env` dibaca dari folder tempat bot dijalankan,
+jadi jalankan perintah dari `engine\`:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev]"
+.\.venv\Scripts\python -m pip install -e "engine[dev]"
+cd engine
 copy .env.example .env     # lalu isi VIKEY_API_KEY dst.
 ```
 
-Perintah `make` tidak dipakai di Windows. Panggil CLI langsung:
+Perintah `make` tidak dipakai di Windows. Panggil CLI langsung (dari `engine\`):
 
 ```powershell
-.\.venv\Scripts\binance-bot open
-.\.venv\Scripts\binance-bot window-size --atur
-.\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 200
-.\.venv\Scripts\binance-bot single --ranks 1,2,3 --modal 100
-.\.venv\Scripts\binance-bot jurnal
+..\.venv\Scripts\binance-bot cek                 # kesiapan laptop (JSON)
+..\.venv\Scripts\binance-bot open
+..\.venv\Scripts\binance-bot window-size --atur
+..\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 200
+..\.venv\Scripts\binance-bot single --ranks 1,2,3 --modal 100
+..\.venv\Scripts\binance-bot jurnal
 ```
 
 Parameter SOP sama dengan tabel di Makefile (`--sl`, `--target`, `--min-naik`, `--min-tanda`,
@@ -56,7 +59,7 @@ diganti `python -c "import secrets; print(secrets.token_hex(16))"`.
 
 ## Kalibrasi
 
-Posisi klik Windows ada di `binance_desktop/layout_windows.py` (menimpa `layout.py` yang diukur
+Posisi klik Windows ada di `engine/src/binance_bot/binance_desktop/layout_windows.py` (menimpa `layout.py` yang diukur
 dari macOS). `BOT_LAYOUT=mac|windows` memaksa profil tertentu. Ukuran: piksel / (1920, 1020).
 
 Alur Windows: Pasar > tab Futures > gulir 1 langkah (agar 5 baris terlihat) > pilih sub-tab
@@ -65,8 +68,8 @@ Futures USD-M > urutkan "Perubahan 24jam" > klik ikon candle di kolom "Tindakan"
 Uji kalibrasi (hasilnya harus `BERHASIL`; lalu kosongkan kolom Jumlah):
 
 ```powershell
-.\.venv\Scripts\binance-bot window-size --atur
-.\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 200
+..\.venv\Scripts\binance-bot window-size --atur
+..\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 200
 ```
 
 Gunakan jumlah di atas kuantitas minimum pair itu. Angka terlalu kecil memunculkan tooltip
@@ -85,3 +88,9 @@ Diuji langsung terhadap Binance Desktop 2.5.2 (Indonesia, 1920x1020): buka aplik
 gainer (6 dari 6 percobaan), buka rank 1 dan 2, baca pair, baca "Cross 20x", isi dan verifikasi
 kolom Jumlah (`uji-isi` berhasil). **Belum diuji:** alur `single`/`leader` penuh (analisis AI
 terhadap grafik, jurnal) di Binance Windows, dan layar selain 1920x1080.
+
+## Aplikasi desktop (interface/)
+
+Aplikasi Electron di `interface/` (lihat [APLIKASI.md](APLIKASI.md)) saat ini mengasumsikan macOS:
+`interface/engine.js` memanggil `engine/.venv/bin/binance-bot` dan skrip `npm start` memakai
+`env -u`. Keduanya belum disesuaikan untuk Windows. Di Windows, jalankan engine lewat CLI di atas.
