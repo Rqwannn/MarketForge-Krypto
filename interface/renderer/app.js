@@ -552,15 +552,16 @@ async function loadChecks() {
       if (c.id === 'window' && !c.ok && /tidak terlihat/.test(c.pesan)) {
         detail = binanceOpen ? 'Jendela Binance sedang diperkecil atau tersembunyi. Tampilkan jendelanya.' : fix;
       }
-      const side = c.id === 'hub_token'
-        ? el('div', { class: 'check-actions' },
-          el('span', { class: `tag ${tag}`, textContent: label }),
-          el('button', { class: 'secondary small', textContent: 'Lihat laptop', onclick: loadPeers }))
-        : el('span', { class: `tag ${tag}`, textContent: label });
-      return el('div', { class: `card check ${kind}` },
+      const footer = c.id === 'hub_token'
+        ? el('div', { class: 'check-footer' },
+          el('span', { textContent: 'Lihat laptop lain di WiFi ini yang sedang membuka MarketForge.' }),
+          el('button', { class: 'secondary with-icon', onclick: loadPeers }, icon('laptop'), 'Lihat laptop'))
+        : null;
+      return el('div', { class: `card check ${kind} ${footer ? 'wide' : ''}` },
         el('span', { class: 'icon' }, icon(c.ok ? 'check' : needed ? 'cross' : 'dash')),
         el('div', {}, el('strong', { textContent: title }), el('span', { textContent: detail })),
-        side);
+        el('span', { class: `tag ${tag}`, textContent: label }),
+        footer);
     }));
   } catch (err) {
     $('ready-text').textContent = err.message;

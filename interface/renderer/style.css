@@ -303,8 +303,20 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .check strong { font-size: 14px; }
 .check span { color: var(--faint); font-size: 12.5px; }
 
-.check-actions { display: grid; justify-items: end; gap: 8px; }
-.secondary.small { padding: 5px 12px; font-size: 12.5px; border-radius: 8px; }
+.check.wide { grid-column: 1 / -1; }
+.check > .check-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.check > .check-footer > span { color: var(--muted); font-size: 13px; }
+.secondary.with-icon { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.secondary.with-icon svg { width: 16px; height: 16px; color: var(--violet-2); }
 .tag.follower { background: rgba(91, 140, 255, 0.12); border-color: rgba(91, 140, 255, 0.4); color: var(--blue); }
 
 /* laptop di WiFi */

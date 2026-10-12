@@ -38,6 +38,8 @@ test('laptop ini diumumkan dengan peran dan status, diumumkan ulang bila berubah
   discovery.update({ role: 'leader', running: false });
   assert.deepEqual(bonjour.published[0].txt, { id: SELF, name: 'MacBook', role: 'leader', state: 'idle', os: 'darwin' });
   assert.equal(bonjour.published[0].type, SERVICE_TYPE);
+  // nama host sendiri, bukan nama host Mac (supaya macOS tidak mengganti nama komputernya)
+  assert.equal(bonjour.published[0].host, `marketforge-${SELF.slice(0, 8)}.local`);
 
   discovery.update({ role: 'leader', running: false }); // tidak berubah: tidak diumumkan ulang
   assert.equal(bonjour.published.length, 1);

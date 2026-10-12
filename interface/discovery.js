@@ -4,6 +4,7 @@
 // yang sama dengan AirDrop dan printer jaringan). Hanya aplikasi MarketForge yang mengumumkan
 // layanan ini, jadi HP atau perangkat lain tidak pernah masuk daftar. Tidak memindai jaringan.
 
+const { execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const os = require('node:os');
 
@@ -16,6 +17,19 @@ const MAX_NAME = 64;
 /** Nama laptop untuk ditampilkan, mis. "MacBook-Air-Raqwan.local" -> "MacBook-Air-Raqwan". */
 function laptopName(hostname = os.hostname()) {
   return hostname.replace(/\.local\.?$/i, '').slice(0, MAX_NAME) || 'Laptop';
+}
+
+/** Nama yang diberikan pemilik laptop (macOS: Nama Komputer), bukan nama host jaringan. */
+function computerName(platform = process.platform) {
+  if (platform === 'darwin') {
+    try {
+      const name = execFileSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8' }).trim();
+      if (name) return name.slice(0, MAX_NAME);
+    } catch {
+      // pakai nama host di bawah
+    }
+  }
+  return laptopName();
 }
 
 /** Layanan Bonjour -> data laptop. Isinya dari jaringan: dibatasi dan divalidasi. */
@@ -39,7 +53,7 @@ function sortPeers(peers) {
 
 class Discovery {
   /** `bonjour`: objek dengan publish/find/unpublishAll/destroy (pustaka bonjour-service). */
-  constructor({ bonjour, name = laptopName(), platform = process.platform, id = crypto.randomUUID() }) {
+  constructor({ bonjour, name = computerName(), platform = process.platform, id = crypto.randomUUID() }) {
     this.bonjour = bonjour;
     this.id = id;
     this.name = name;
@@ -54,6 +68,9 @@ class Discovery {
     if (this.service) this.service.stop?.();
     this.service = this.bonjour.publish({
       name: `MarketForge ${this.id.slice(0, 8)}`,
+      // Nama host sendiri: memakai nama host macOS membuat mDNSResponder menganggapnya bentrok
+      // lalu mengganti nama Mac (MacBook-Air-2, -3, ...).
+      host: `marketforge-${this.id.slice(0, 8)}.local`,
       type: SERVICE_TYPE,
       port: SERVICE_PORT,
       txt: {
@@ -103,4 +120,4 @@ class Discovery {
   }
 }
 
-module.exports = { Discovery, SERVICE_TYPE, laptopName, peerFrom };
+module.exports = { Discovery, SERVICE_TYPE, computerName, laptopName, peerFrom };
