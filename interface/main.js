@@ -27,6 +27,12 @@ function syncPresence() {
   if (!discovery) return;
   const role = team.membership ? 'follower' : uiRole;
   discovery.update({ role, running: proc.running, extra: team.fields(role) });
+  send('peers:changed');
+}
+
+/** Daftar laptop saat ini (tanpa menunggu pengumuman ulang), dengan status kelompok. */
+function peersNow() {
+  return discovery ? discovery.snapshot().map((peer) => team.describe(peer)) : [];
 }
 
 function teamState() {
@@ -63,6 +69,7 @@ function startDiscovery() {
     team = new Team({ myId: discovery.id, token });
     discovery.on('peers', (peers) => {
       if (team.evaluate(peers)) syncPresence();
+      send('peers:changed');
     });
     team.on('invite', (invite) => {
       invitations.set(invite.leaderId, invite);
@@ -172,6 +179,7 @@ handle('peers:list', async () => {
   if (!discovery) throw new Error('Pencarian laptop tidak bisa berjalan di jaringan ini.');
   return (await discovery.list()).map((peer) => team.describe(peer));
 });
+handle('peers:now', () => peersNow());
 handle('team:state', () => teamState());
 handle('team:invite', (peerId, rank) => {
   if (!team?.enabled) throw new Error('Token hub belum diatur di laptop ini. Hubungi admin.');

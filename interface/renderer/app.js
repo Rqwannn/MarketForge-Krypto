@@ -129,6 +129,7 @@ function activity(entry) {
   if (opened) return { text: `Membuka top ${opened[1]}: ${opened[2]}` };
   if (/^(Tidak masuk putaran ini|Berhenti memantau): /.test(m)) return { text: plain(m), css: 'warn' };
   if (/^Tidak ada koin dengan pola OK/.test(m)) return { text: 'Belum ada koin yang layak, pantau lagi nanti' };
+  if (/tidak di depan/.test(m)) return { text: 'Binance tertutup jendela lain, dibawa ke depan lagi' };
   if (entry.level === 'WARNING') return { text: plain(m), css: 'warn' };
   if (entry.level === 'ERROR' || entry.level === 'CRITICAL') {
     // Traceback Python terdiri dari banyak baris: cukup baris pesannya.
@@ -590,7 +591,18 @@ async function loadPeers() {
   $('peers').replaceChildren(el('li', { class: 'peer-empty', textContent: 'Mencari…' }));
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   try {
-    const peers = await window.bot.peers();
+    renderPeers(await window.bot.peers());
+  } catch (err) {
+    $('peers-sub').textContent = err.message;
+    $('peers').replaceChildren();
+  } finally {
+    $('peers-refresh').disabled = false;
+  }
+}
+
+/** Gambar daftar laptop. Dipanggil setelah pencarian dan setiap ada perubahan dari jaringan. */
+function renderPeers(peers) {
+  {
     const others = peers.filter((p) => !p.self).length;
     const leading = teamInfo.enabled && teamInfo.role === 'leader' && !teamInfo.membership;
     let hint = 'Belum ada laptop lain. Pastikan laptop lain membuka MarketForge di WiFi yang sama.';
@@ -602,13 +614,24 @@ async function loadPeers() {
     }
     $('peers-sub').textContent = hint;
     $('peers').replaceChildren(...peers.map((p) => peerRow(p, leading)));
-  } catch (err) {
-    $('peers-sub').textContent = err.message;
-    $('peers').replaceChildren();
-  } finally {
-    $('peers-refresh').disabled = false;
   }
 }
+
+// Daftar yang sedang tampil ikut berubah saat peran/status laptop ini atau laptop lain berubah.
+let peersPending = false;
+window.bot.onPeersChanged(() => {
+  if ($('peers-card').hidden || peersPending) return;
+  peersPending = true;
+  setTimeout(async () => {
+    peersPending = false;
+    try {
+      teamInfo = await window.bot.team.state();
+      renderPeers(await window.bot.peersNow());
+    } catch {
+      // daftar tetap seperti sebelumnya
+    }
+  }, 300);
+});
 $('peers-refresh').addEventListener('click', loadPeers);
 
 function peerRow(p, leading) {
