@@ -8,12 +8,27 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const engine = require('./engine');
+const { Discovery } = require('./discovery');
 
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
 const PAGE_URL = pathToFileURL(PAGE).href;
 
 const proc = new engine.EngineProcess();
 let win = null;
+let discovery = null; // dibuat saat aplikasi siap; null bila jaringan tidak mendukung mDNS
+
+/** Umumkan laptop ini ke MarketForge lain di WiFi yang sama (Bonjour). */
+function startDiscovery() {
+  try {
+    const { Bonjour } = require('bonjour-service');
+    const bonjour = new Bonjour({}, (err) => console.error(`Bonjour: ${err.message}`));
+    discovery = new Discovery({ bonjour });
+    discovery.update({ running: proc.running });
+  } catch (err) {
+    console.error(`Penemuan laptop tidak aktif: ${err.message}`);
+    discovery = null;
+  }
+}
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -22,6 +37,7 @@ function send(channel, payload) {
 proc.on('log', (entry) => send('engine:log', entry));
 proc.on('exit', (info) => {
   send('engine:exit', info);
+  discovery?.update({ running: false });
   // Bot selesai: tampilkan lagi jendela aplikasi.
   if (win && !win.isDestroyed()) {
     win.restore();
@@ -66,6 +82,7 @@ function handle(channel, fn) {
 
 handle('engine:start', (mode, params) => {
   proc.start(engine.buildArgs(mode, params));
+  discovery?.update({ role: mode, running: true });
   // Bot memakai layar Binance: jendela aplikasi jangan menutupinya (screenshot dan OCR).
   win?.minimize();
   return true;
@@ -77,8 +94,19 @@ handle('engine:stop', () => {
 handle('engine:status', () => ({ running: proc.running }));
 handle('engine:checks', () => engine.runJson(['cek']));
 handle('engine:summary', () => engine.runJson(['jurnal', '--json']));
+handle('presence:update', (role) => {
+  discovery?.update({ role });
+  return true;
+});
+handle('peers:list', () => {
+  if (!discovery) throw new Error('Pencarian laptop tidak bisa berjalan di jaringan ini.');
+  return discovery.list();
+});
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  startDiscovery();
+  createWindow();
+});
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
@@ -86,4 +114,7 @@ app.on('window-all-closed', () => {
   proc.stop();
   app.quit();
 });
-app.on('before-quit', () => proc.stop());
+app.on('before-quit', () => {
+  proc.stop();
+  discovery?.stop();
+});

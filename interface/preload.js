@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('bot', {
   status: () => call('engine:status'),
   checks: () => call('engine:checks'),
   summary: () => call('engine:summary'),
+  peers: () => call('peers:list'),
+  setRole: (role) => call('presence:update', role),
   onLog: (callback) => listen('engine:log', callback),
   onExit: (callback) => listen('engine:exit', callback),
 });

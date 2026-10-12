@@ -34,6 +34,7 @@ const ICONS = {
   check: ['M5 12.5l4.5 4.5L19 7.5'],
   cross: ['M7 7l10 10M17 7L7 17'],
   dash: ['M6 12h12'],
+  laptop: ['M5 6h14v9H5z', 'M3 18h18'],
 };
 
 // --------------------------------------------------------------------------- pembantu
@@ -193,6 +194,7 @@ function render() {
   $('ranks-note').textContent = multi ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih` : 'Pilih satu';
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
   if (state === 'stopped') $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
+  window.bot.setRole(form.mode).catch(() => {}); // peran laptop ini untuk daftar laptop di WiFi
   saveForm();
 }
 
@@ -550,10 +552,15 @@ async function loadChecks() {
       if (c.id === 'window' && !c.ok && /tidak terlihat/.test(c.pesan)) {
         detail = binanceOpen ? 'Jendela Binance sedang diperkecil atau tersembunyi. Tampilkan jendelanya.' : fix;
       }
+      const side = c.id === 'hub_token'
+        ? el('div', { class: 'check-actions' },
+          el('span', { class: `tag ${tag}`, textContent: label }),
+          el('button', { class: 'secondary small', textContent: 'Lihat laptop', onclick: loadPeers }))
+        : el('span', { class: `tag ${tag}`, textContent: label });
       return el('div', { class: `card check ${kind}` },
         el('span', { class: 'icon' }, icon(c.ok ? 'check' : needed ? 'cross' : 'dash')),
         el('div', {}, el('strong', { textContent: title }), el('span', { textContent: detail })),
-        el('span', { class: `tag ${tag}`, textContent: label }));
+        side);
     }));
   } catch (err) {
     $('ready-text').textContent = err.message;
@@ -563,6 +570,43 @@ async function loadChecks() {
 }
 loaders.ready = loadChecks;
 $('ready-refresh').addEventListener('click', loadChecks);
+
+// --------------------------------------------------------------------------- laptop di WiFi
+
+const ROLE_LABEL = { leader: ['Pemimpin', 'open'], follower: ['Pengikut', 'follower'], single: ['Sendiri', ''] };
+
+async function loadPeers() {
+  const card = $('peers-card');
+  card.hidden = false;
+  $('peers-refresh').disabled = true;
+  $('peers-sub').textContent = 'Mencari laptop yang membuka MarketForge…';
+  $('peers').replaceChildren(el('li', { class: 'peer-empty', textContent: 'Mencari…' }));
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  try {
+    const peers = await window.bot.peers();
+    const others = peers.filter((p) => !p.self).length;
+    $('peers-sub').textContent = others
+      ? `${others} laptop lain ditemukan. HP dan perangkat lain tidak ditampilkan.`
+      : 'Belum ada laptop lain. Pastikan laptop lain membuka MarketForge di WiFi yang sama.';
+    $('peers').replaceChildren(...peers.map((p) => {
+      const [role, roleCss] = ROLE_LABEL[p.role] || ROLE_LABEL.single;
+      const meta = [p.os, p.address].filter(Boolean).join(' · ');
+      return el('li', { class: `peer ${p.self ? 'self' : ''}` },
+        el('span', { class: 'icon' }, icon('laptop')),
+        el('div', {},
+          el('strong', { textContent: p.self ? `${p.name} (laptop ini)` : p.name }),
+          el('span', { textContent: meta })),
+        el('span', { class: `tag ${roleCss}`, textContent: role }),
+        el('span', { class: `tag ${p.running ? 'ok' : ''}`, textContent: p.running ? 'Bot berjalan' : 'Bot berhenti' }));
+    }));
+  } catch (err) {
+    $('peers-sub').textContent = err.message;
+    $('peers').replaceChildren();
+  } finally {
+    $('peers-refresh').disabled = false;
+  }
+}
+$('peers-refresh').addEventListener('click', loadPeers);
 
 // --------------------------------------------------------------------------- mulai
 

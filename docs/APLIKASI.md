@@ -12,7 +12,7 @@ detailnya tetap tersimpan di `engine/logs/bot.log` untuk admin.
 |---|---|
 | **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Hasil tiap koin tampil di tabel "Putaran ini" beserta aktivitas bot. |
 | **Hasil uji** | Progres 50 trade uji, tingkat menang dibanding titik impas, hasil bersih dalam % modal, dan trade terakhir. |
-| **Cek laptop** | Daftar kesiapan: izin macOS, Binance terbuka, ukuran jendela, koneksi data Binance, AI, dan kerja sama antar laptop. |
+| **Cek laptop** | Daftar kesiapan: izin macOS, Binance terbuka, ukuran jendela, koneksi data Binance, AI, dan kerja sama antar laptop. Tombol **Lihat laptop** menampilkan laptop lain di WiFi yang sama yang sedang membuka MarketForge (nama, OS, peran, status bot). |
 
 Arti keputusan di tabel:
 
@@ -66,6 +66,11 @@ renderer  --IPC-->  main.js  --spawn-->  python -m binance_bot --events single|l
   terpengaruh flag "hidden" macOS pada file `.pth` instalasi editable.
 - Saat bot mulai, jendela aplikasi diperkecil agar tidak menutupi Binance (bot membaca layar),
   lalu ditampilkan lagi saat bot selesai.
+- Daftar laptop memakai Bonjour/mDNS (pustaka `bonjour-service`): setiap aplikasi MarketForge
+  mengumumkan layanan `_marketforge._tcp` berisi nama laptop, OS, peran, dan status bot selama
+  aplikasi terbuka. Jaringan tidak dipindai, jadi HP dan perangkat lain tidak pernah muncul.
+  macOS bisa meminta izin **Jaringan Lokal** untuk aplikasi ini; Windows bisa meminta izin
+  firewall. WiFi tamu yang memblokir multicast membuat laptop lain tidak terlihat.
 - Tombol Hentikan mengirim SIGINT (sama dengan Ctrl+C).
 - Debugging tetap lewat terminal: `make single MODAL=100`, `make cek`, `make jurnal`.
 
