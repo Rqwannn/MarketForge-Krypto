@@ -24,12 +24,12 @@ proc.on('exit', (info) => send('engine:exit', info));
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1240,
-    height: 840,
-    minWidth: 960,
+    width: 1360,
+    height: 880,
+    minWidth: 1000,
     minHeight: 680,
     title: 'MarketForge',
-    backgroundColor: '#0b0e13',
+    backgroundColor: '#0c0d14',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

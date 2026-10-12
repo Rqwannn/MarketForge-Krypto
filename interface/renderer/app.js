@@ -7,13 +7,15 @@
 const $ = (id) => document.getElementById(id);
 const FORM_KEY = 'marketforge.form.v2';
 const RANKS = [1, 2, 3, 4, 5];
+const MAX_OPEN = 2; // SOP V2: maksimal 2 posisi bersamaan
 const MAX_FEED = 120;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 const NUM = new Intl.NumberFormat('id-ID', { maximumSignificantDigits: 6 });
 
 const MODE_NOTE = {
-  single: 'Laptop ini membaca grafik dan mencatat posisi sendiri.',
-  leader: 'Laptop ini membaca grafik lalu membagikan hasilnya ke laptop pengikut.',
-  follower: 'Laptop ini memakai hasil dari laptop pemimpin, tanpa membaca grafik sendiri.',
+  single: 'Membaca grafik dan mencatat posisi sendiri.',
+  leader: 'Membaca grafik lalu membagikan hasil ke laptop pengikut.',
+  follower: 'Memakai hasil laptop pemimpin, tanpa membaca grafik sendiri.',
 };
 const VERDICT = {
   ok: ['Layak short', 'ok'],
@@ -21,11 +23,20 @@ const VERDICT = {
   jangan: ['Jangan short', 'jangan'],
 };
 const STATUS = {
-  open: ['Berjalan', 'opened'],
-  target: ['Target tercapai', 'pos'],
-  stop: ['Kena batas rugi', 'neg'],
-  timeout: ['Ditutup, waktu habis', 'hold'],
+  open: ['Berjalan', 'open'],
+  target: ['Target tercapai', 'target'],
+  stop: ['Kena batas rugi', 'stop'],
+  timeout: ['Waktu habis', 'timeout'],
 };
+const ICONS = {
+  play: ['M8 5v14l11-7z'],
+  stop: ['M7 7h10v10H7z'],
+  check: ['M5 12.5l4.5 4.5L19 7.5'],
+  cross: ['M7 7l10 10M17 7L7 17'],
+  dash: ['M6 12h12'],
+};
+
+// --------------------------------------------------------------------------- pembantu
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -37,8 +48,24 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+function svg(tag, attrs = {}, ...children) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  for (const child of children) if (child) node.append(child);
+  return node;
+}
+
+function icon(name) {
+  return svg('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' }, ...ICONS[name].map((d) => svg('path', { d })));
+}
+
+function setBar(id, fraction) {
+  $(id).style.width = `${Math.max(0, Math.min(1, fraction || 0)) * 100}%`;
+}
+
 const price = (v) => (v === null || v === undefined ? '–' : NUM.format(v));
 const percent = (v) => (v === null || v === undefined ? '–' : `${v > 0 ? '+' : ''}${v.toFixed(2).replace('.', ',')}%`);
+const pct1 = (v) => `${(100 * v).toFixed(1).replace('.', ',')}%`;
 const clock = (ts) => new Date(ts * 1000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 const signClass = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 
@@ -113,13 +140,13 @@ function activity(entry) {
 
 const loaders = {};
 function showPage(name) {
-  for (const tab of document.querySelectorAll('.tab')) tab.classList.toggle('active', tab.dataset.page === name);
+  for (const item of document.querySelectorAll('.menu-item')) item.classList.toggle('active', item.dataset.page === name);
   for (const page of document.querySelectorAll('.page')) page.hidden = page.id !== `page-${name}`;
   loaders[name]?.();
 }
-for (const tab of document.querySelectorAll('.tab')) tab.addEventListener('click', () => showPage(tab.dataset.page));
+for (const item of document.querySelectorAll('.menu-item')) item.addEventListener('click', () => showPage(item.dataset.page));
 
-// --------------------------------------------------------------------------- formulir
+// --------------------------------------------------------------------------- pengaturan putaran
 
 const form = { mode: 'single', modal: '', ranks: [...RANKS], rank: 1, interval: 0 };
 
@@ -148,6 +175,10 @@ function mark(group, isOn) {
   }
 }
 
+function watchedCount() {
+  return form.mode === 'follower' ? 1 : form.ranks.length;
+}
+
 function render() {
   const multi = form.mode !== 'follower';
   mark($('mode'), (v) => v === form.mode);
@@ -159,18 +190,16 @@ function render() {
   }
   $('mode-note').textContent = MODE_NOTE[form.mode];
   $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
-  $('ranks-note').textContent = multi
-    ? `Bisa lebih dari satu. ${form.ranks.length} dari 5 dipilih.`
-    : 'Pilih satu.';
+  $('ranks-note').textContent = multi ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih` : 'Pilih satu';
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
+  if (state === 'stopped') $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
   saveForm();
 }
 
 function setupForm() {
   for (const r of RANKS) {
-    const btn = el('button', { type: 'button', textContent: String(r) });
+    const btn = el('button', { type: 'button' }, el('small', { textContent: 'Top' }), el('strong', { textContent: String(r) }));
     btn.dataset.value = String(r);
-    btn.setAttribute('aria-label', `Top ${r}`);
     $('ranks').append(btn);
   }
   $('mode').addEventListener('click', (ev) => {
@@ -209,31 +238,41 @@ const counts = { seen: 0, ok: 0, open: 0 };
 
 function setState(next, title, sub) {
   state = next;
-  $('status').classList.toggle('running', next === 'running');
+  const running = next === 'running';
+  $('status').classList.toggle('running', running);
   $('setup').classList.toggle('locked', next !== 'stopped');
-  const side = $('engine-state');
-  side.classList.toggle('running', next === 'running');
-  side.textContent = { stopped: 'Berhenti', running: 'Berjalan', stopping: 'Menghentikan' }[next];
+
+  const engine = $('engine-state');
+  engine.classList.toggle('running', running);
+  engine.querySelector('strong').textContent = running ? 'Bot sedang bekerja' : next === 'stopping' ? 'Menghentikan bot' : 'Bot berhenti';
+  engine.querySelector('span').textContent = running ? 'Jangan pakai mouse' : 'Siap dijalankan';
+
   const toggle = $('toggle');
   toggle.disabled = next === 'stopping';
   toggle.classList.toggle('stop', next !== 'stopped');
-  toggle.textContent = { stopped: 'Mulai memantau', running: 'Hentikan', stopping: 'Menghentikan…' }[next];
+  toggle.replaceChildren(icon(next === 'stopped' ? 'play' : 'stop'),
+    el('span', { textContent: { stopped: 'Mulai memantau', running: 'Hentikan', stopping: 'Menghentikan…' }[next] }));
   if (title) $('status-title').textContent = title;
   if (sub) $('status-sub').textContent = sub;
 }
 
 function setCounts() {
+  const watched = watchedCount();
   $('count-seen').textContent = String(counts.seen);
   $('count-ok').textContent = String(counts.ok);
-  $('count-open').textContent = String(counts.open);
+  $('count-open').textContent = `${counts.open}`;
+  $('seen-note').textContent = `dari ${watched} top gainers`;
+  setBar('seen-bar', counts.seen / watched);
+  setBar('ok-bar', counts.seen ? counts.ok / counts.seen : 0);
+  setBar('open-bar', counts.open / MAX_OPEN);
 }
 
 function emptyCoins(text) {
-  $('coins').replaceChildren(el('tr', {}, el('td', { class: 'empty', colSpan: 5, textContent: text })));
+  $('coins').replaceChildren(el('tr', { class: 'empty-row' }, el('td', { colSpan: 5, textContent: text })));
 }
 
 function emptyFeed(text) {
-  $('feed').replaceChildren(el('li', {}, el('span', { class: 'idle', textContent: text })));
+  $('feed').replaceChildren(el('li', { class: 'idle', textContent: text }));
 }
 
 async function toggleRun() {
@@ -253,6 +292,7 @@ async function toggleRun() {
   Object.assign(counts, { seen: 0, ok: 0, open: 0 });
   setCounts();
   $('share').hidden = true;
+  $('cycle-info').textContent = 'Menyiapkan Binance…';
   emptyCoins('Menyiapkan Binance…');
   emptyFeed('Menunggu aktivitas pertama…');
   setState('running', 'Sedang memantau', 'Menyiapkan aplikasi Binance…');
@@ -260,10 +300,17 @@ async function toggleRun() {
 
 function addFeed(item, ts) {
   const feed = $('feed');
-  feed.querySelector('.idle')?.parentElement.remove();
-  feed.prepend(el('li', {}, el('time', { textContent: clock(ts) }), el('span', { class: item.css || '', textContent: item.text })));
+  feed.querySelector('.idle')?.remove();
+  feed.prepend(el('li', { class: item.css || '' }, el('i'),
+    el('div', {}, el('span', { textContent: item.text }), el('time', { textContent: clock(ts) }))));
   while (feed.childElementCount > MAX_FEED) feed.lastElementChild.remove();
   if (state === 'running') $('status-sub').textContent = item.text;
+}
+
+function dips(count) {
+  if (count === null || count === undefined) return el('span', { class: 'dips', textContent: '–' });
+  const blocks = [0, 1, 2].map((i) => el('i', { class: i < count ? 'on' : '' }));
+  return el('span', { class: 'dips' }, ...blocks, el('span', { textContent: `${count}×` }));
 }
 
 function addCoin(e) {
@@ -272,28 +319,31 @@ function addCoin(e) {
   if (e.status === 'open') counts.open += 1;
   setCounts();
 
-  const [label, css] = e.status === 'open' ? ['Masuk posisi uji', 'opened'] : VERDICT[e.verdict] || ['Dilewati', ''];
-  const count = e.count_ai ?? e.count_data;
+  const [label, css] = e.status === 'open' ? ['Posisi uji', 'opened'] : VERDICT[e.verdict] || ['Dilewati', ''];
   let note;
   if (e.status === 'open') note = `Masuk ${price(e.entry_price)} · target ${price(e.target_price)} · batas rugi ${price(e.stop_price)}`;
   else if (e.status === 'analyzed') note = 'Dibagikan ke laptop pengikut';
   else note = plain(e.reason);
-  $('coins').querySelector('.empty')?.parentElement.remove();
+  $('coins').querySelector('.empty-row')?.remove();
   $('coins').append(el('tr', {},
-    el('td', { class: 'rank', textContent: String(e.rank) }),
+    el('td', { class: 'rank' }, el('span', { class: 'rank-badge', textContent: String(e.rank) })),
     el('td', { class: 'sym', textContent: e.symbol }),
-    el('td', { textContent: count === null || count === undefined ? '–' : `${count}× di bawah` }),
-    el('td', { class: css, textContent: label }),
-    el('td', {}, note, e.summary ? el('small', { textContent: e.summary }) : null)));
+    el('td', {}, dips(e.count_ai ?? e.count_data)),
+    el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
+    el('td', { class: 'why' }, note, e.summary ? el('small', { textContent: e.summary }) : null)));
 }
 
 window.bot.onLog((entry) => {
   const e = entry.event;
-  if (e?.type === 'cycle' && e.phase === 'start') emptyCoins('Membaca top gainers…');
+  if (e?.type === 'cycle' && e.phase === 'start') {
+    emptyCoins('Membaca top gainers…');
+    $('cycle-info').textContent = `Dimulai ${clock(entry.ts || Date.now() / 1000)}`;
+  }
   if (e?.type === 'coin') addCoin(e);
   if (e?.type === 'hub') $('share').hidden = false;
-  if (e?.type === 'cycle' && e.phase === 'done' && $('coins').querySelector('.empty')) {
-    emptyCoins('Tidak ada koin yang bisa dinilai di putaran ini.');
+  if (e?.type === 'cycle' && e.phase === 'done') {
+    $('cycle-info').textContent = `Selesai ${clock(entry.ts || Date.now() / 1000)}`;
+    if ($('coins').querySelector('.empty-row')) emptyCoins('Tidak ada koin yang bisa dinilai di putaran ini.');
   }
   const item = activity(entry);
   if (item) addFeed(item, entry.ts || Date.now() / 1000);
@@ -311,8 +361,101 @@ $('toggle').addEventListener('click', toggleRun);
 
 // --------------------------------------------------------------------------- hasil uji
 
-function figure(label, value, note, css = '') {
-  return el('div', {}, el('dt', { textContent: label }), el('dd', { class: css }, value, note ? el('small', { textContent: note }) : null));
+function kpi(label, value, note, { css = '', bar = null, barClass = '', mark: markAt = null } = {}) {
+  let meter = null;
+  if (bar !== null) {
+    const fill = el('i');
+    fill.style.width = `${Math.max(0, Math.min(1, bar)) * 100}%`;
+    meter = el('div', { class: `meter ${barClass}` }, fill);
+    if (markAt !== null) {
+      const line = el('span', { class: 'mark' });
+      line.style.left = `${markAt * 100}%`;
+      meter.append(line);
+    }
+  }
+  return el('div', { class: 'card kpi' },
+    el('span', { class: 'kpi-label', textContent: label }),
+    el('strong', { class: css, textContent: value }),
+    el('small', { textContent: note }),
+    meter);
+}
+
+/** Batang hasil per trade (% modal), hijau untung dan merah rugi. */
+function pnlChart(trades) {
+  const closed = trades.filter((t) => t.pnl_capital_pct !== null && t.pnl_capital_pct !== undefined && t.status !== 'open');
+  if (closed.length === 0) {
+    return el('div', { class: 'chart-empty', textContent: 'Grafik muncul setelah ada trade uji yang selesai.' });
+  }
+  const W = 640;
+  const H = 220;
+  const pad = { l: 44, r: 8, t: 12, b: 22 };
+  const max = Math.max(1, ...closed.map((t) => Math.abs(t.pnl_capital_pct)));
+  const zero = pad.t + (H - pad.t - pad.b) / 2;
+  const scale = (H - pad.t - pad.b) / 2 / max;
+  const slot = (W - pad.l - pad.r) / closed.length;
+  const parts = [
+    svg('line', { class: 'grid', x1: pad.l, x2: W - pad.r, y1: pad.t, y2: pad.t }),
+    svg('line', { class: 'grid', x1: pad.l, x2: W - pad.r, y1: H - pad.b, y2: H - pad.b }),
+    svg('line', { class: 'axis', x1: pad.l, x2: W - pad.r, y1: zero, y2: zero }),
+  ];
+  for (const [y, text] of [[pad.t, `+${max.toFixed(1)}%`], [zero, '0%'], [H - pad.b, `-${max.toFixed(1)}%`]]) {
+    const label = svg('text', { x: pad.l - 6, y: y + 3.5, 'text-anchor': 'end' });
+    label.textContent = text.replace('.', ',');
+    parts.push(label);
+  }
+  closed.forEach((t, i) => {
+    const v = t.pnl_capital_pct;
+    const h = Math.max(1.5, Math.abs(v) * scale);
+    const w = Math.min(28, slot * 0.62);
+    const rect = svg('rect', {
+      class: v >= 0 ? 'bar-pos' : 'bar-neg',
+      x: pad.l + slot * i + (slot - w) / 2,
+      y: v >= 0 ? zero - h : zero,
+      width: w,
+      height: h,
+      rx: 2,
+    });
+    const tip = svg('title');
+    tip.textContent = `${t.symbol}: ${percent(v)} modal`;
+    rect.append(tip);
+    parts.push(rect);
+  });
+  return svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': 'Hasil per trade' }, ...parts);
+}
+
+/** Donat akhir posisi: target, batas rugi, waktu habis, masih berjalan. */
+function donut(s) {
+  const parts = [
+    ['Target tercapai', s.targets, 'var(--green)'],
+    ['Kena batas rugi', s.stops, 'var(--red)'],
+    ['Waktu habis', s.timeouts, 'var(--amber)'],
+    ['Masih berjalan', s.open, 'var(--violet-2)'],
+  ];
+  const total = parts.reduce((sum, [, n]) => sum + n, 0);
+  const r = 58;
+  const c = 2 * Math.PI * r;
+  const rings = [svg('circle', { cx: 75, cy: 75, r, stroke: 'var(--card-2)', 'stroke-width': 16, fill: 'none' })];
+  let offset = 0;
+  for (const [, n, color] of parts) {
+    if (!n) continue;
+    const len = (n / total) * c;
+    rings.push(svg('circle', {
+      cx: 75, cy: 75, r, fill: 'none', stroke: color, 'stroke-width': 16,
+      'stroke-dasharray': `${len} ${c - len}`, 'stroke-dashoffset': -offset, transform: 'rotate(-90 75 75)',
+    }));
+    offset += len;
+  }
+  const big = svg('text', { x: 75, y: 78, 'text-anchor': 'middle', class: 'center-big' });
+  big.textContent = String(total);
+  const small = svg('text', { x: 75, y: 96, 'text-anchor': 'middle', class: 'center-small' });
+  small.textContent = 'posisi uji';
+  const chart = svg('svg', { viewBox: '0 0 150 150', role: 'img', 'aria-label': 'Akhir posisi' }, ...rings, big, small);
+  const legend = el('ul', { class: 'legend' }, ...parts.map(([label, n, color]) => {
+    const swatch = el('i');
+    swatch.style.background = color;
+    return el('li', {}, swatch, el('span', { textContent: label }), el('b', { textContent: String(n) }));
+  }));
+  return [chart, legend];
 }
 
 async function loadJournal() {
@@ -327,33 +470,33 @@ async function loadJournal() {
 
     const enough = s.closed >= s.required_trades;
     const passed = s.verdict.startsWith('LULUS');
-    $('progress-text').textContent = `${s.closed} dari ${s.required_trades} trade uji selesai`;
-    $('progress-bar').style.width = `${Math.min(100, (100 * s.closed) / s.required_trades)}%`;
-    const verdict = $('verdict');
-    verdict.className = enough ? (passed ? 'pos' : 'neg') : 'note';
-    verdict.textContent = !enough ? 'Belum cukup data' : passed ? 'Lulus fase uji' : 'Belum lulus, aturan perlu ditinjau';
-
-    const pct = (v) => `${(100 * v).toFixed(1).replace('.', ',')}%`;
-    $('kpis').replaceChildren(
-      figure('Tingkat menang', s.win_rate === null ? '–' : pct(s.win_rate), `titik impas ${pct(s.breakeven)}`,
-        s.win_rate === null ? '' : s.win_rate >= s.breakeven ? 'pos' : 'neg'),
-      figure('Hasil bersih', percent(s.net_capital_pct), 'dari modal', signClass(s.net_capital_pct)),
-      figure('Posisi berjalan', String(s.open), s.needs_review ? `${s.needs_review} perlu ditinjau` : 'maksimal 2'),
-      figure('Batas rugi beruntun', String(s.stop_streak), 'berhenti bila 3 sehari', s.stop_streak >= 2 ? 'neg' : ''),
+    const phase = !enough ? 'Belum cukup data' : passed ? 'Lulus fase uji' : 'Belum lulus, tinjau aturan';
+    $('journal-kpis').replaceChildren(
+      kpi('Trade uji selesai', `${s.closed}/${s.required_trades}`, phase,
+        { bar: s.closed / s.required_trades, barClass: 'violet', css: enough ? (passed ? 'pos' : 'neg') : '' }),
+      kpi('Tingkat menang', s.win_rate === null ? '–' : pct1(s.win_rate), `garis = titik impas ${pct1(s.breakeven)}`,
+        { bar: s.win_rate ?? 0, barClass: s.win_rate !== null && s.win_rate >= s.breakeven ? 'green' : 'red', mark: s.breakeven,
+          css: s.win_rate === null ? '' : s.win_rate >= s.breakeven ? 'pos' : 'neg' }),
+      kpi('Hasil bersih', percent(s.net_capital_pct), 'dari modal', { css: signClass(s.net_capital_pct) }),
+      kpi('Batas rugi beruntun', String(s.stop_streak), 'bot berhenti bila 3 dalam sehari',
+        { bar: s.stop_streak / 3, barClass: 'red', css: s.stop_streak >= 2 ? 'neg' : '' }),
     );
+
+    $('pnl-chart').replaceChildren(pnlChart(report.trades));
+    $('donut').replaceChildren(...donut(s));
 
     const rows = [...report.trades].reverse().map((t) => {
       const [label, css] = STATUS[t.status] || [t.status, ''];
       return el('tr', {},
         el('td', { textContent: new Date(t.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
         el('td', { class: 'sym', textContent: t.symbol }),
-        el('td', { class: css, textContent: label }),
+        el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
         el('td', { class: 'num', textContent: price(t.entry_price) }),
         el('td', { class: 'num', textContent: price(t.exit_price) }),
         el('td', { class: `num ${signClass(t.pnl_capital_pct)}`, textContent: percent(t.pnl_capital_pct) }));
     });
     $('trades').replaceChildren(...(rows.length ? rows
-      : [el('tr', {}, el('td', { class: 'empty', colSpan: 6, textContent: 'Belum ada posisi uji.' }))]));
+      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 6, textContent: 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
   } catch (err) {
     notice.hidden = false;
     notice.className = 'notice bad';
@@ -368,38 +511,41 @@ $('journal-refresh').addEventListener('click', loadJournal);
 // --------------------------------------------------------------------------- cek laptop
 
 const CHECKS = {
-  accessibility: ['Izin mengendalikan laptop', 'Belum diizinkan. Buka Pengaturan Sistem › Privasi & Keamanan › Aksesibilitas.'],
-  screen: ['Izin melihat layar', 'Belum diizinkan. Buka Pengaturan Sistem › Privasi & Keamanan › Perekaman Layar.'],
-  binance: ['Aplikasi Binance', 'Belum dibuka. Buka Binance dan pastikan sudah login.'],
+  accessibility: ['Izin mengendalikan laptop', 'Buka Pengaturan Sistem › Privasi & Keamanan › Aksesibilitas.'],
+  screen: ['Izin melihat layar', 'Buka Pengaturan Sistem › Privasi & Keamanan › Perekaman Layar.'],
+  binance: ['Aplikasi Binance', 'Buka Binance dan pastikan sudah login.'],
   window: ['Ukuran jendela Binance', 'Kembalikan ukuran jendela Binance seperti semula.'],
   api: ['Data harga Binance', 'Jaringan ini memblokir Binance. Coba jaringan lain.'],
   ai_key: ['Pembaca grafik (AI)', 'Belum diatur di laptop ini. Hubungi admin.'],
-  hub_token: ['Kerja sama antar laptop', 'Belum diatur. Hanya perlu untuk Pemimpin dan Pengikut.'],
+  hub_token: ['Kerja sama antar laptop', 'Hanya perlu untuk Pemimpin dan Pengikut.'],
 };
 
 async function loadChecks() {
-  const summary = $('ready-summary');
-  summary.className = 'lede';
-  summary.textContent = 'Memeriksa laptop…';
+  $('ready-text').textContent = 'Memeriksa laptop…';
   $('ready-refresh').disabled = true;
   try {
     const result = await window.bot.checks();
     const binanceOpen = result.checks.find((c) => c.id === 'binance')?.ok;
+    const ready = result.checks.filter((c) => c.ok).length;
+    $('ready-count').textContent = `${ready}/${result.checks.length}`;
+    $('ready-text').textContent = result.ok ? 'Laptop ini siap dipakai.' : 'Belum siap. Selesaikan yang bertanda merah.';
+    $('ready-count').className = result.ok ? 'pos' : '';
+    setBar('ready-bar', ready / result.checks.length);
+    $('ready-bar').parentElement.className = `meter wide ${result.ok ? 'green' : 'violet'}`;
     $('checks').replaceChildren(...result.checks.map((c) => {
       const [title, fix] = CHECKS[c.id] || [c.id, 'Belum siap.'];
       const waiting = c.id === 'window' && !binanceOpen;
-      const [status, css] = c.ok ? ['Siap', 'pos'] : c.wajib && !waiting ? ['Perlu tindakan', 'neg'] : ['–', 'note'];
-      const detail = c.ok ? '' : waiting ? 'Dicek setelah Binance dibuka.' : fix;
-      return el('tr', {},
-        el('td', { textContent: title }),
-        el('td', { class: 'note', textContent: detail }),
-        el('td', { class: css, textContent: status }));
+      const needed = !c.ok && c.wajib && !waiting;
+      const kind = c.ok ? 'ok' : needed ? 'no' : '';
+      const [label, tag] = c.ok ? ['Siap', 'ok'] : needed ? ['Perlu tindakan', 'jangan'] : ['Opsional', ''];
+      const detail = c.ok ? 'Sudah beres.' : waiting ? 'Dicek setelah Binance dibuka.' : fix;
+      return el('div', { class: `card check ${kind}` },
+        el('span', { class: 'icon' }, icon(c.ok ? 'check' : needed ? 'cross' : 'dash')),
+        el('div', {}, el('strong', { textContent: title }), el('span', { textContent: detail })),
+        el('span', { class: `tag ${tag}`, textContent: label }));
     }));
-    summary.className = `lede ${result.ok ? 'pos' : 'neg'}`;
-    summary.textContent = result.ok ? 'Laptop ini siap dipakai.' : 'Belum siap. Selesaikan yang bertanda "Perlu tindakan".';
   } catch (err) {
-    summary.className = 'lede neg';
-    summary.textContent = err.message;
+    $('ready-text').textContent = err.message;
   } finally {
     $('ready-refresh').disabled = false;
   }
@@ -412,9 +558,10 @@ $('ready-refresh').addEventListener('click', loadChecks);
 loadForm();
 setupForm();
 render();
-emptyCoins('Belum ada koin yang dinilai.');
+setState('stopped');
+setCounts();
+emptyCoins('Belum ada koin yang dinilai. Tekan Mulai memantau.');
 emptyFeed('Aktivitas bot akan muncul di sini.');
 window.bot.status().then(({ running }) => {
   if (running) setState('running', 'Sedang memantau', 'Bot sedang bekerja.');
-  else setState('stopped');
 });
