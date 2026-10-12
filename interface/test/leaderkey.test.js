@@ -37,3 +37,26 @@ test('aktivitas terenkripsi hanya bisa dibaca pemimpin', () => {
   assert.equal(openAsLeader(other, sealed), null); // pengikut/laptop lain tidak bisa membaca
   assert.equal(openAsLeader(keys, `${sealed.slice(0, -4)}AAAA`), null); // dirusak
 });
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { hashPassword, verifyPassword, setEnvValue } = require('../leaderkey');
+
+test('password admin disimpan sebagai hash: cocok untuk password benar saja', () => {
+  const stored = hashPassword('rahasia-uji-123');
+  assert.ok(stored.startsWith('scrypt$') && !stored.includes('rahasia'));
+  assert.equal(verifyPassword('rahasia-uji-123', stored), true);
+  assert.equal(verifyPassword('rahasia-uji-124', stored), false);
+  assert.equal(verifyPassword('rahasia-uji-123', ''), false);
+  assert.notEqual(hashPassword('sama'), hashPassword('sama')); // salt acak
+});
+
+test('hash password ditulis ke .env tanpa mengubah baris lain', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mf-')), '.env');
+  fs.writeFileSync(file, '# catatan\nVIKEY_API_KEY=abc\nBOT_LEADER_PASSWORD_HASH=lama\n');
+  setEnvValue(file, 'BOT_LEADER_PASSWORD_HASH', 'baru');
+  setEnvValue(file, 'BOT_HUB_TOKEN', 'xyz');
+  assert.equal(fs.readFileSync(file, 'utf8'), '# catatan\nVIKEY_API_KEY=abc\nBOT_LEADER_PASSWORD_HASH=baru\nBOT_HUB_TOKEN=xyz\n');
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+});

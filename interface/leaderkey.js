@@ -131,12 +131,121 @@ module.exports = {
   verifyLeader,
 };
 
-// `node leaderkey.js`: cetak pasangan kunci baru (dipakai `make leader-key`).
-if (require.main === module) {
+// --------------------------------------------------------------------------- password admin
+// `make leader-key` hanya jalan dengan password admin. Yang disimpan di .env hanya hash-nya
+// (BOT_LEADER_PASSWORD_HASH, scrypt + salt acak), bukan password-nya, dan tidak ada di kode.
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+const PASSWORD_KEY = 'BOT_LEADER_PASSWORD_HASH';
+const SCRYPT = { N: 16384, r: 8, p: 1 };
+
+function hashPassword(password, salt = crypto.randomBytes(16)) {
+  const hash = crypto.scryptSync(String(password), salt, 32, SCRYPT);
+  return `scrypt$${b64(salt)}$${b64(hash)}`;
+}
+
+function verifyPassword(password, stored) {
+  const [kind, salt, hash] = String(stored || '').split('$');
+  if (kind !== 'scrypt' || !salt || !hash) return false;
+  const want = unb64(hash);
+  const got = crypto.scryptSync(String(password), unb64(salt), want.length, SCRYPT);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
+/** Ganti atau tambah KEY=VALUE di file .env; baris lain dipertahankan, izin file 600. */
+function setEnvValue(file, key, value) {
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const lines = text === '' ? [] : text.replace(/\n$/, '').split('\n');
+  let found = false;
+  const out = lines.map((line) => {
+    if (line.split('=')[0].trim() !== key || line.trim().startsWith('#')) return line;
+    found = true;
+    return `${key}=${value}`;
+  });
+  if (!found) out.push(`${key}=${value}`);
+  fs.writeFileSync(file, `${out.join('\n')}\n`, { encoding: 'utf8', mode: 0o600 });
+  fs.chmodSync(file, 0o600);
+}
+
+/** Minta input tanpa menampilkan ketikan (TTY); dari pipe dibaca satu baris. */
+function askHidden(prompt) {
+  return new Promise((resolve) => {
+    const input = process.stdin;
+    process.stderr.write(prompt);
+    if (!input.isTTY) {
+      let data = '';
+      input.setEncoding('utf8');
+      input.on('data', (chunk) => { data += chunk; });
+      input.on('end', () => resolve(data.split(/\r?\n/)[0]));
+      return;
+    }
+    let value = '';
+    input.setRawMode(true);
+    input.resume();
+    input.setEncoding('utf8');
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') {
+          input.setRawMode(false);
+          input.pause();
+          input.removeListener('data', onData);
+          process.stderr.write('\n');
+          resolve(value);
+          return;
+        }
+        if (ch === '\u0003') process.exit(130); // Ctrl+C
+        if (ch === '\u007f' || ch === '\b') value = value.slice(0, -1);
+        else value += ch;
+      }
+    };
+    input.on('data', onData);
+  });
+}
+
+async function main(argv) {
+  const engine = require('./engine');
+  const envFile = path.join(engine.ENGINE_DIR, '.env');
+  const stored = engine.appSetting(PASSWORD_KEY);
+
+  if (argv.includes('--set-password')) {
+    if (stored && !verifyPassword(await askHidden('Password lama: '), stored)) {
+      console.error('Password lama salah. Tidak ada yang diubah.');
+      return 1;
+    }
+    const first = await askHidden('Password baru: ');
+    const second = process.stdin.isTTY ? await askHidden('Ulangi password baru: ') : first;
+    if (first.length < 8 || first !== second) {
+      console.error('Password baru minimal 8 karakter dan harus sama saat diulang.');
+      return 1;
+    }
+    setEnvValue(envFile, PASSWORD_KEY, hashPassword(first));
+    console.error(`Hash password disimpan di ${path.relative(process.cwd(), envFile)} (${PASSWORD_KEY}).`);
+    return 0;
+  }
+
+  if (!stored) {
+    console.error(`Password admin belum diatur. Jalankan dulu: make leader-password`);
+    return 1;
+  }
+  if (!verifyPassword(await askHidden('Password admin: '), stored)) {
+    console.error('Password salah. Kunci pemimpin tidak dibuat.');
+    return 1;
+  }
   const { privateText, publicText } = generateLeaderKeys();
-  console.log('# Laptop PEMIMPIN saja (rahasia, jangan dibagikan) -> interface/.env:');
+  console.log('# Laptop PEMIMPIN saja (rahasia, jangan dibagikan) -> .env:');
   console.log(`BOT_LEADER_KEY=${privateText}`);
   console.log('');
-  console.log('# SEMUA laptop pengikut -> interface/.env:');
+  console.log('# Boleh dibagikan ke semua laptop pengikut -> .env:');
   console.log(`BOT_LEADER_PUBLIC=${publicText}`);
+  return 0;
+}
+
+module.exports.hashPassword = hashPassword;
+module.exports.verifyPassword = verifyPassword;
+module.exports.setEnvValue = setEnvValue;
+
+if (require.main === module) {
+  main(process.argv.slice(2)).then((code) => process.exit(code));
 }

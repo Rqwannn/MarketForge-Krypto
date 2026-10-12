@@ -28,7 +28,9 @@ Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
 ### Kelompok pemimpin dan pengikut
 
 1. Admin mengisi `BOT_HUB_TOKEN` yang **sama** di `interface/.env` setiap laptop (`make token`).
-2. Admin menjalankan `make leader-key` **sekali** di laptop pemimpin:
+2. Admin mengatur password sekali dengan `make leader-password` (yang tersimpan di `engine/.env`
+   hanya hash-nya, `BOT_LEADER_PASSWORD_HASH`), lalu menjalankan `make leader-key` **sekali** di
+   laptop pemimpin dan memasukkan password itu:
    - `BOT_LEADER_KEY` (kunci privat) hanya di `interface/.env` laptop pemimpin. Rahasia.
    - `BOT_LEADER_PUBLIC` (kunci publik) di `interface/.env` semua laptop pengikut.
    Tanpa kunci privat, tombol Pemimpin terkunci. Token hub saja tidak cukup: pengikut hanya
