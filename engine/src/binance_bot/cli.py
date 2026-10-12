@@ -69,7 +69,9 @@ def _sop_options() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(add_help=False)
     g = p.add_argument_group("parameter SOP V2")
     g.add_argument("--modal", type=float, help="Modal USDT")
-    g.add_argument("--jumlah", type=float, help="Jumlah koin manual (menimpa margin x leverage)")
+    g.add_argument(
+        "--jumlah", type=float, help="Ukuran order manual dalam USDT (menimpa margin x leverage)"
+    )
     g.add_argument("--margin", type=float, default=d.margin_pct, help="Margin %% modal per posisi")
     g.add_argument("--leverage", type=int, default=d.leverage, help="Leverage")
     g.add_argument("--sl", type=float, default=d.stop_pct, help="Stop-loss %% di atas harga masuk")
@@ -113,7 +115,7 @@ def _sop_options() -> argparse.ArgumentParser:
 def params_from(args: argparse.Namespace) -> SopParams:
     return SopParams(
         capital_usdt=args.modal,
-        quantity=args.jumlah,
+        order_usdt=args.jumlah,
         margin_pct=args.margin,
         leverage=args.leverage,
         stop_pct=args.sl,
@@ -192,7 +194,9 @@ def build_parser() -> argparse.ArgumentParser:
         "uji-isi", help="Uji kalibrasi: buka top gainer lalu isi kolom Jumlah (tanpa order)."
     )
     fill.add_argument("--rank", type=parse_rank, default=1, help="Top gainer ke berapa")
-    fill.add_argument("--jumlah", type=parse_number, required=True, help="Angka, mis. 1 atau 1,5")
+    fill.add_argument(
+        "--jumlah", type=parse_number, required=True, help="Ukuran order USDT, mis. 5 atau 5,5"
+    )
     return parser
 
 

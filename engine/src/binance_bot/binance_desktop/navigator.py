@@ -52,6 +52,8 @@ _VERIFY_RETRY_DELAY_S = 0.4
 _CHART_TAB = re.compile(r"\bGrafik\b")
 _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
 _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
+_USDT_UNIT = re.compile(r"\bUSDT\b")
+_MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _CHART_LOAD_TIMEOUT_S = 25.0  # aplikasi bisa lambat memuat grafik
 
 
@@ -237,13 +239,15 @@ class BinanceNavigator:
         return parse_margin(self._read_texts(self.rect.sub(*layout.MARGIN_AREA)))
 
     def fill_quantity(self, text: str) -> None:
-        """Isi kolom "Jumlah" pada form market order, lalu pastikan angkanya tampil dengan OCR.
+        """Isi kolom "Jumlah" (ukuran order USDT) pada form market order, lalu cek dengan OCR.
 
+        Satuan kolom harus USDT dengan mode "Ukuran Order"; bila tidak, berhenti tanpa mengetik.
         Hanya mengetik angka. Tidak menekan Enter dan tidak menekan tombol order.
         """
         if not self._on_trade_page:
             raise SafetyError("Kolom Jumlah hanya diisi di halaman trade")
         self._click(layout.ORDER_TAB_MARKET)
+        self._check_order_unit()
         self._click(layout.ORDER_QTY_FIELD)
         self._ensure_front()  # ketikan angka hanya boleh masuk ke Binance
         self._window.clear_field()
@@ -260,6 +264,20 @@ class BinanceNavigator:
         else:
             raise ScreenReadError(f"Kolom Jumlah menampilkan {shown}, bukan {text}")
         logger.info("Kolom Jumlah terisi: %s", text)
+
+    def _check_order_unit(self) -> None:
+        """Kolom Jumlah harus bersatuan USDT (Ukuran Order), bukan koin atau Margin Awal.
+
+        Ukuran posisi dihitung dalam USDT; angka yang sama dalam satuan koin atau sebagai margin
+        akan menghasilkan posisi yang jauh berbeda.
+        """
+        shown = self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA))
+        joined = " ".join(shown)
+        fix = "Di Binance klik satuan di kolom Jumlah, lalu pilih USDT > Ukuran Order."
+        if _MARGIN_MODE.search(joined):
+            raise ScreenReadError(f"Kolom Jumlah memakai Margin Awal, bukan Ukuran Order. {fix}")
+        if not _USDT_UNIT.search(joined):
+            raise ScreenReadError(f"Satuan kolom Jumlah bukan USDT (terbaca: {shown}). {fix}")
 
     def capture_window(self, path: Path) -> Path:
         return self._capture(self.rect, path)

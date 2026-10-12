@@ -62,7 +62,11 @@ seberapa sering AI dan data sepakat. Angka itu dasar untuk memilih penentu (`SIN
 | Spread maksimal / funding minimal | `--maks-spread`, `--min-funding` | 0,1% / -0,05% | Usulan engine |
 | Berhenti setelah stop-loss beruntun | (tetap) | 3 dalam sehari | SOP |
 | Modal | `MODAL` | wajib (USDT) | Pengguna |
-| Jumlah manual | `JUMLAH` | kosong (pakai margin × leverage) | Pengguna |
+| Ukuran order manual | `JUMLAH` | kosong (pakai margin × leverage), dalam USDT | Pengguna |
+
+Kolom **Jumlah** di Binance diisi dalam **USDT, mode Ukuran Order** (nilai posisi), bukan jumlah
+koin. Bot membaca satuan kolom sebelum mengetik; bila masih satuan koin atau Margin Awal, bot
+berhenti tanpa mengetik.
 
 Contoh PDF: modal 10.000.000 × margin 50% × 2x = nilai posisi 10.000.000; stop-loss 2% = rugi
 sekitar 200.000 (2% modal). Dengan `MODAL=100` (USDT): margin 50 USDT, nilai posisi 100 USDT.

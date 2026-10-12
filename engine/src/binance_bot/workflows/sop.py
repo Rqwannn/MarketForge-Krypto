@@ -278,9 +278,10 @@ class SopTrader:
 
         # Langkah 5: isi form lalu pintu order (dimatikan).
         if self._fill_form:
-            self._nav.fill_quantity(sizing.quantity_text)
+            self._nav.fill_quantity(sizing.order_text)
         plan = OrderPlan(
             symbol=symbol,
+            order_text=sizing.order_text,
             quantity_text=sizing.quantity_text,
             notional=sizing.notional,
             margin_usdt=sizing.margin_usdt,
@@ -301,11 +302,11 @@ class SopTrader:
         entry.stop_price = plan.stop_price
         entry.deadline = entry.created_at + params.max_hold_h * 3600
         logger.info(
-            "#%d %s MASUK UJI KERTAS: short %s @ %g (%dx, margin %.2f USDT) | target %g | "
+            "#%d %s MASUK UJI KERTAS: short %s USDT @ %g (%dx, margin %.2f USDT) | target %g | "
             "stop-loss %g | tinjau %s, tutup paling lambat %s",
             entry.rank,
             symbol,
-            sizing.quantity_text,
+            sizing.order_text,
             price,
             params.leverage,
             sizing.margin_usdt,

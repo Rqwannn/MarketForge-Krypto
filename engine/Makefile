@@ -3,7 +3,7 @@
 #   make single MODAL=100                      # pantau top 5, masuk bila pola garis kuning OK
 #   make single MODAL=100 INTERVAL=5           # pantau ulang tiap 5 menit
 #   make single MODAL=100 RANKS=1,2 TARGET=1   # hanya top 1-2, target 1%
-#   make single JUMLAH=150 RANKS=2
+#   make single JUMLAH=150 RANKS=2           # ukuran order manual 150 USDT
 #   make leader INTERVAL=15
 #   make follower HUB=http://192.168.1.24:8765 RANK=2 MODAL=100
 #   make jurnal

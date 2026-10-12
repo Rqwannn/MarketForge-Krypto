@@ -59,7 +59,7 @@ Ketik `make` untuk daftar lengkap. Semua perintah dijalankan dari root repo.
 | `make app` | Buka aplikasi desktop (pengguna non-teknis) |
 | `make single MODAL=100` | SOP V2 di satu laptop: pantau top 5, masuk bila pola OK (maks 2 posisi) |
 | `make single MODAL=100 INTERVAL=5` | Pantau ulang tiap 5 menit sampai dihentikan |
-| `make single JUMLAH=150 RANKS=2` | Jumlah koin manual, hanya top gainer #2 |
+| `make single JUMLAH=150 RANKS=2` | Ukuran order manual 150 USDT, hanya top gainer #2 |
 | `make leader INTERVAL=15` | Mode banyak, leader: AI pola garis kuning sekali per koin, lewat hub |
 | `make follower HUB=http://IP:8765 RANK=2 MODAL=100` | Mode banyak, follower: SOP penuh pakai hasil AI leader |
 | `make jurnal` | Nilai uji kertas dan rekap terhadap titik impas SOP |

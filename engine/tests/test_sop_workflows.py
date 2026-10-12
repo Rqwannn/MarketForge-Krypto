@@ -85,7 +85,7 @@ def test_ok_pattern_is_sized_2x_filled_and_paper_traded(tmp_path: Path) -> None:
     entry = trader.trade(1, "STRKUSDT", source(analyzer))
 
     assert (entry.status, entry.verdict) == ("open", "ok")
-    assert nav.filled == ["100,0"]  # 100 USDT x margin 50% x 2x = nilai 100 USDT, bid 1,0
+    assert nav.filled == ["100"]  # Jumlah dalam USDT (Ukuran Order): 100 x margin 50% x 2x
     plan = gate.plans[0]
     assert (plan.side, plan.leverage, plan.margin_usdt) == ("SHORT", 2, pytest.approx(50.0))
     assert plan.target_price == pytest.approx(0.98)  # target 2% di bawah
@@ -353,7 +353,7 @@ def test_follower_enters_the_same_coin_as_the_leader_even_after_ranks_shift(tmp_
     assert follower.result is not None
     assert (follower.result.symbol, follower.result.status) == ("CFXUSDT", "open")
     assert follower.result.pattern_ai == OK.as_dict()  # pola dari Haiku di leader
-    assert nav.filled == ["100,0"]
+    assert nav.filled == ["100"]
 
 
 def test_follower_does_not_touch_binance_when_leader_says_wait(tmp_path: Path) -> None:

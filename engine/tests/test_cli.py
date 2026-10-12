@@ -59,7 +59,7 @@ def test_single_maps_sop_parameters() -> None:
         1.5,
         1,
     )
-    assert (params.min_crosses, params.quantity, params.signal_source) == (3, 75, "data")
+    assert (params.min_crosses, params.order_usdt, params.signal_source) == (3, 75, "data")
 
 
 def test_leader_and_follower_arguments() -> None:

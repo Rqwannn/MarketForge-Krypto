@@ -38,7 +38,7 @@ Lakukan sekali per laptop (langkah lengkap di bagian **Setup** pada [README](../
 | `make single MODAL=100 MARGIN=25` | Tahap modal kecil di PDF (satu stop-loss sekitar 1% modal) |
 | `make single MODAL=100 TARGET=1` | Target 1% (rentang beliau 1-4%) |
 | `make single MODAL=100 MIN_TURUN=3` | Pola OK baru bila MA7 minimal 3 kali di bawah MA25 |
-| `make single JUMLAH=150 RANKS=2` | Jumlah koin manual 150 (rumus tidak dipakai) |
+| `make single JUMLAH=150 RANKS=2` | Ukuran order manual 150 USDT (rumus tidak dipakai) |
 | `make single MODAL=100 SINYAL=data` | Pola dari data candle, tanpa AI (gratis, butuh API) |
 | `make single MODAL=100 NO_FILL=1` | Semua langkah kecuali mengisi kolom Jumlah |
 | `make jurnal` | Nilai posisi uji yang terbuka dan tampilkan rekap |
@@ -94,7 +94,8 @@ Belum cukup data: 12/50 trade uji selesai
 
 | Pesan | Penyebab | Solusi |
 |---|---|---|
-| `Parameter SOP tidak valid: isi MODAL (USDT) atau JUMLAH (koin)` | Modal belum diisi | `make single MODAL=100` |
+| `Parameter SOP tidak valid: isi MODAL (USDT) atau JUMLAH (USDT)` | Modal belum diisi | `make single MODAL=100` |
+| `Satuan kolom Jumlah bukan USDT` / `memakai Margin Awal` | Satuan kolom Jumlah di Binance masih koin atau Margin Awal | Klik satuan di kolom Jumlah, pilih **USDT** lalu **Ukuran Order** (sekali; Binance mengingatnya) |
 | `Data pasar Binance tidak bisa diambil: ... certificate ... internetpositif` | Jaringan memblokir domain Binance | Pakai jaringan yang tidak memblokir; engine tidak mengakali pemblokiran |
 | `Tidak masuk putaran ini: sudah 2 posisi terbuka` | Slot penuh (SOP) | Normal; tunggu posisi selesai (`make jurnal`) |
 | `posisi X sedang rugi; koin berikutnya belum boleh dibuka` | Aturan koin kedua (SOP) | Normal |

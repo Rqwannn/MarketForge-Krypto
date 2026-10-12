@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True, slots=True)
 class OrderPlan:
     symbol: str
-    quantity_text: str
+    order_text: str  # ukuran order USDT seperti diketik di kolom Jumlah
+    quantity_text: str  # perkiraan jumlah koin
     notional: float  # nilai posisi (USDT)
     margin_usdt: float  # margin terpakai = nilai posisi / leverage
     entry_price: float
@@ -29,11 +30,13 @@ class OrderPlan:
 class DryRunOrderGate:
     def submit(self, plan: OrderPlan) -> None:
         logger.warning(
-            "[DRY RUN] Tombol Jual/Short TIDAK ditekan. Rencana: %s %s %s | nilai ~%.2f USDT, "
+            "[DRY RUN] Tombol Jual/Short TIDAK ditekan. Rencana: %s %s USDT %s (~%s koin) | "
+            "nilai ~%.2f USDT, "
             "margin ~%.2f USDT, %s %dx | masuk ~%g | target %g | stop-loss %g",
             plan.side,
-            plan.quantity_text,
+            plan.order_text,
             plan.symbol,
+            plan.quantity_text,
             plan.notional,
             plan.margin_usdt,
             plan.margin_mode,

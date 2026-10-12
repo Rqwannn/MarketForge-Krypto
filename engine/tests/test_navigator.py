@@ -147,34 +147,56 @@ def test_fill_quantity_types_number_and_verifies_it_on_screen() -> None:
     screen = FakeScreen(
         texts={
             layout.SYMBOL_AREA: [text_lines("STRKUSDT Perp")],
-            layout.ORDER_QTY_AREA: [text_lines("184,6", "STRK")],
+            # sebelum mengetik: satuan USDT; sesudah mengetik: angkanya tampil
+            layout.ORDER_QTY_AREA: [text_lines("USDT"), text_lines("100", "USDT")],
         }
     )
     nav = make_nav(screen)
     nav.prepare()
     nav.open_gainer(1)
-    nav.fill_quantity("184,6")
+    nav.fill_quantity("100")
 
     assert screen.events[-4:] == [
         ("click", at(layout.ORDER_TAB_MARKET)),
         ("click", at(layout.ORDER_QTY_FIELD)),
         ("clear", None),
-        ("type", "184,6"),
+        ("type", "100"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("unit", "message"),
+    [
+        (text_lines("STRK"), "bukan USDT"),  # masih satuan koin
+        (text_lines("Margin Awal", "USDT"), "Margin Awal"),  # USDT tapi mode margin
+    ],
+)
+def test_fill_quantity_refuses_to_type_unless_unit_is_usdt_order_size(
+    unit: list[TextLine], message: str
+) -> None:
+    screen = FakeScreen(
+        texts={layout.SYMBOL_AREA: [text_lines("STRKUSDT Perp")], layout.ORDER_QTY_AREA: [unit]}
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    nav.open_gainer(1)
+    with pytest.raises(ScreenReadError, match=message):
+        nav.fill_quantity("100")
+    assert not any(kind in ("type", "clear") for kind, _ in screen.events)  # tidak mengetik apa pun
 
 
 def test_fill_quantity_fails_when_screen_shows_another_number() -> None:
     screen = FakeScreen(
         texts={
             layout.SYMBOL_AREA: [text_lines("STRKUSDT Perp")],
-            layout.ORDER_QTY_AREA: [text_lines("1846", "STRK")],
+            layout.ORDER_QTY_AREA: [text_lines("USDT"), text_lines("1000", "USDT")],
         }
     )
     nav = make_nav(screen)
     nav.prepare()
     nav.open_gainer(1)
-    with pytest.raises(ScreenReadError, match="1846"):
-        nav.fill_quantity("184,6")
+    with pytest.raises(ScreenReadError, match="1000"):
+        nav.fill_quantity("100")
 
 
 def test_fill_quantity_only_on_trade_page() -> None:

@@ -33,7 +33,7 @@ def test_params_require_capital_or_quantity_and_sane_values() -> None:
         SopParams(capital_usdt=100, leverage=50).validate()
     with pytest.raises(ConfigError, match="SINYAL"):
         SopParams(capital_usdt=100, signal_source="feeling").validate()
-    SopParams(quantity=10).validate()
+    SopParams(order_usdt=10).validate()
 
 
 RULES = SymbolRules(step=0.1, min_qty=0.1, min_notional=5.0)
@@ -48,16 +48,21 @@ def test_position_size_follows_the_v2_example() -> None:
     assert sizing.loss_at_stop == pytest.approx(200_000)
 
 
-def test_quantity_is_floored_to_step_and_typed_with_comma() -> None:
+def test_order_size_is_typed_in_usdt_and_coins_are_estimated() -> None:
+    # Kolom Jumlah Binance: satuan USDT, mode Ukuran Order -> diketik nilai posisi, bukan koin.
     sizing = size_position(SopParams(capital_usdt=100), 0.10999, RULES)
     assert isinstance(sizing, Sizing)
-    assert sizing.quantity_text == "909,1"  # 100 x 50% x 2 / 0,10999 = 909,17 -> 909,1
+    assert sizing.order_text == "100"  # 100 x 50% x 2 = 100 USDT
+    assert sizing.quantity_text == "909,1"  # perkiraan koin: 100 / 0,10999 = 909,17 -> 909,1
+    odd = size_position(SopParams(capital_usdt=99.555), 1.0, RULES)
+    assert isinstance(odd, Sizing) and odd.order_text == "99,55"  # dibulatkan ke bawah, koma
 
 
-def test_manual_quantity_overrides_formula_but_not_the_margin_limit() -> None:
-    sizing = size_position(SopParams(quantity=50.27), 1.0, RULES, decimal_separator=".")
-    assert isinstance(sizing, Sizing) and sizing.quantity_text == "50.2"
-    too_big = size_position(SopParams(capital_usdt=100, quantity=500), 1.0, RULES)
+def test_manual_order_size_overrides_formula_but_not_the_margin_limit() -> None:
+    sizing = size_position(SopParams(order_usdt=50.27), 1.0, RULES, decimal_separator=".")
+    assert isinstance(sizing, Sizing) and sizing.order_text == "50.27"
+    assert sizing.quantity_text == "50.2"
+    too_big = size_position(SopParams(capital_usdt=100, order_usdt=500), 1.0, RULES)
     assert "melebihi 50% modal" in str(too_big)
 
 

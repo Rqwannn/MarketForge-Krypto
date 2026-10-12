@@ -20,7 +20,7 @@ MAX_HOLD_LIMIT_H = 16  # evaluasi memakai maksimal 1000 candle 1 menit
 @dataclass(frozen=True, slots=True)
 class SopParams:
     capital_usdt: float | None = None  # modal (USDT)
-    quantity: float | None = None  # jumlah koin manual; menimpa rumus margin x leverage
+    order_usdt: float | None = None  # JUMLAH manual: ukuran order USDT (menimpa margin x leverage)
     margin_pct: float = 50.0  # beliau: margin 50% modal per posisi
     leverage: int = 2  # beliau: 2x (nilai posisi per koin = 100% modal)
     target_pct: float = 2.0  # beliau: turun 1-4%; titik impas di PDF memakai 2%
@@ -38,11 +38,11 @@ class SopParams:
 
     def validate(self) -> None:
         errors = []
-        if self.capital_usdt is None and self.quantity is None:
-            errors.append("isi MODAL (USDT) atau JUMLAH (koin)")
+        if self.capital_usdt is None and self.order_usdt is None:
+            errors.append("isi MODAL (USDT) atau JUMLAH (USDT)")
         if self.capital_usdt is not None and self.capital_usdt <= 0:
             errors.append("MODAL harus lebih dari 0")
-        if self.quantity is not None and self.quantity <= 0:
+        if self.order_usdt is not None and self.order_usdt <= 0:
             errors.append("JUMLAH harus lebih dari 0")
         if not 0 < self.margin_pct <= 100:
             errors.append("MARGIN harus di antara 0 dan 100 persen")
