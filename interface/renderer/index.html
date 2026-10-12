@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MarketForge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <!-- ================================================================== samping -->
+  <aside class="side">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b4dff"/><stop offset="1" stop-color="#4f6bff"/></linearGradient></defs>
+        <rect width="32" height="32" rx="8" fill="url(#lg)"/>
+        <path d="M8 21l5-6 4 3 7-9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <strong>MarketForge</strong>
+    </div>
+
+    <p class="menu-label">Menu</p>
+    <nav class="menu">
+      <button class="menu-item active" data-page="run">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Pantau
+      </button>
+      <button class="menu-item" data-page="journal">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        Hasil uji
+      </button>
+      <button class="menu-item" data-page="ready">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+        Cek laptop
+      </button>
+    </nav>
+
+    <div class="side-foot">
+      <div class="engine" id="engine-state"><i></i><div><strong>Bot berhenti</strong><span>Siap dijalankan</span></div></div>
+      <div class="paper">
+        <span class="tag outline">Uji kertas</span>
+        <p>Bot tidak pernah menekan tombol beli atau jual. Setiap posisi hanya dicatat.</p>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <!-- ================================================================ Pantau -->
+    <section class="page" id="page-run">
+      <header class="page-head">
+        <div>
+          <p class="crumb">Dashboard</p>
+          <h1>Pantau Top Gainers</h1>
+          <p class="lede">Atur putaran, tekan Mulai, lalu lihat koin yang dinilai bot di bawah.</p>
+        </div>
+      </header>
+
+      <section class="card setup" id="setup">
+        <div class="card-head">
+          <div><h2>Pengaturan putaran</h2><p>Terkunci selama bot berjalan.</p></div>
+        </div>
+        <div class="setup-grid">
+          <div class="field">
+            <span class="label">Peran laptop</span>
+            <div class="seg" id="mode" role="radiogroup" aria-label="Peran laptop">
+              <button type="button" role="radio" data-value="single">Sendiri</button>
+              <button type="button" role="radio" data-value="leader">Pemimpin</button>
+              <button type="button" role="radio" data-value="follower">Pengikut</button>
+            </div>
+            <small id="mode-note"></small>
+          </div>
+          <div class="field" data-modes="single follower">
+            <label class="label" for="modal">Modal</label>
+            <div class="money"><input id="modal" inputmode="decimal" placeholder="0" autocomplete="off"><span>USDT</span></div>
+            <small>Tiap posisi memakai separuh modal, leverage 2x.</small>
+          </div>
+          <div class="field" data-modes="single leader">
+            <span class="label">Ulangi pemantauan</span>
+            <div class="seg" id="interval" role="radiogroup" aria-label="Ulangi">
+              <button type="button" role="radio" data-value="0">Sekali</button>
+              <button type="button" role="radio" data-value="15">15 mnt</button>
+              <button type="button" role="radio" data-value="30">30 mnt</button>
+              <button type="button" role="radio" data-value="60">1 jam</button>
+            </div>
+            <small>Tiap putaran membaca ulang daftar top gainers.</small>
+          </div>
+          <div class="field ranks-field">
+            <span class="label"><span id="ranks-title">Top gainers</span>
+              <button type="button" class="text-btn" id="ranks-all" data-modes="single leader">Pilih semua</button></span>
+            <div class="chips" id="ranks" role="group" aria-label="Top gainers"></div>
+            <small id="ranks-note"></small>
+          </div>
+          <div class="go-wrap">
+            <p class="error" id="run-error" role="alert"></p>
+            <button type="button" class="primary big" id="toggle"></button>
+            <small>Selama bot bekerja, jangan pakai mouse dan keyboard.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="kpis">
+        <div class="card kpi state-kpi" id="status">
+          <span class="kpi-label">Status</span>
+          <strong><i class="dot"></i><span id="status-title">Belum berjalan</span></strong>
+          <small id="status-sub">Tekan Mulai memantau.</small>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Koin dinilai</span>
+          <strong id="count-seen">0</strong>
+          <small id="seen-note">dari 5 top gainers</small>
+          <div class="meter"><i id="seen-bar"></i></div>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Layak short</span>
+          <strong class="green" id="count-ok">0</strong>
+          <small>garis kuning sering turun</small>
+          <div class="meter green"><i id="ok-bar"></i></div>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Posisi uji dibuka</span>
+          <strong id="count-open">0</strong>
+          <small>maksimal 2 posisi berjalan</small>
+          <div class="meter violet"><i id="open-bar"></i></div>
+        </div>
+      </section>
+
+      <section class="cols">
+        <div class="card">
+          <div class="card-head">
+            <div><h2>Putaran ini</h2><p id="cycle-info">Belum ada putaran.</p></div>
+            <span class="tag" id="share" hidden>Dibagikan ke pengikut</span>
+          </div>
+          <table class="table">
+            <thead><tr><th>Top</th><th>Koin</th><th>Garis kuning</th><th>Keputusan</th><th>Keterangan</th></tr></thead>
+            <tbody id="coins"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h2>Aktivitas</h2><p>Langkah bot terbaru di atas.</p></div></div>
+          <ol class="feed" id="feed"></ol>
+        </div>
+      </section>
+    </section>
+
+    <!-- ================================================================ Hasil uji -->
+    <section class="page" id="page-journal" hidden>
+      <header class="page-head">
+        <div>
+          <p class="crumb">Laporan</p>
+          <h1>Hasil uji kertas</h1>
+          <p class="lede">SOP meminta 50 trade uji sebelum memakai uang sungguhan.</p>
+        </div>
+        <button class="secondary" id="journal-refresh">Perbarui</button>
+      </header>
+      <p class="notice" id="journal-notice" hidden></p>
+
+      <section class="kpis" id="journal-kpis"></section>
+
+      <section class="cols">
+        <div class="card">
+          <div class="card-head"><div><h2>Hasil per trade</h2><p>Persen dari modal, trade selesai terbaru di kanan.</p></div></div>
+          <div class="chart" id="pnl-chart"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h2>Akhir posisi</h2><p>Semua posisi uji.</p></div></div>
+          <div class="donut-wrap" id="donut"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div><h2>Trade terakhir</h2><p>20 posisi uji terbaru.</p></div></div>
+        <table class="table">
+          <thead><tr><th>Waktu</th><th>Koin</th><th>Status</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Hasil</th></tr></thead>
+          <tbody id="trades"></tbody>
+        </table>
+      </section>
+    </section>
+
+    <!-- ================================================================ Cek laptop -->
+    <section class="page" id="page-ready" hidden>
+      <header class="page-head">
+        <div>
+          <p class="crumb">Persiapan</p>
+          <h1>Cek laptop</h1>
+          <p class="lede">Pastikan semua siap sebelum mulai memantau.</p>
+        </div>
+        <button class="secondary" id="ready-refresh">Cek ulang</button>
+      </header>
+
+      <section class="card ready-summary">
+        <div>
+          <span class="kpi-label">Kesiapan</span>
+          <strong id="ready-count">–</strong>
+          <small id="ready-text">Memeriksa laptop…</small>
+        </div>
+        <div class="meter wide"><i id="ready-bar"></i></div>
+      </section>
+      <section class="checks" id="checks"></section>
+    </section>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

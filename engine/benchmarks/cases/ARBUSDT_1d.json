@@ -1,0 +1,14 @@
+{
+ "name": "ARBUSDT_1d",
+ "price_range": 0.18330000000000002,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.196,
+  "last_high": 0.198,
+  "window_high": 0.2555,
+  "green_count_last5": 3,
+  "close_above_ma25": false,
+  "volume_last_is_max": false
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "name": "AEROUSDT_1h",
+ "price_range": 0.1765,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.9631,
+  "last_high": 0.9692,
+  "window_high": 0.9692,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "name": "MBLUSDT_1d",
+ "price_range": 0.0008240000000000001,
+ "truth": {
+  "last_color": "red",
+  "prev_color": "green",
+  "last_close": 0.001008,
+  "last_high": 0.001169,
+  "window_high": 0.001381,
+  "green_count_last5": 2,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}
