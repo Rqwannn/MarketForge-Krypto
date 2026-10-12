@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from binance_bot.analysis import PeakReading
+from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.config import Settings
 from binance_bot.exceptions import ConfigError, HubError
@@ -19,7 +19,7 @@ _HUB_POLL_S = 5.0
 
 
 class FollowerWorkflow:
-    """Mode banyak, laptop follower: SOP penuh dengan hasil AI dari hub (tanpa biaya AI).
+    """Mode banyak, laptop follower: SOP V2 penuh dengan hasil AI dari hub (tanpa biaya AI).
 
     Hasil dicocokkan berdasarkan pair, karena peringkat bisa bergeser antara saat leader
     menganalisis dan saat follower membuka koin. Modal, ukuran posisi, dan jurnal milik
@@ -62,13 +62,17 @@ class FollowerWorkflow:
             )
         if self._trader.halted(self._trader.refresh_journal()):
             return
+        blocker = self._trader.slot_blocker()
+        if blocker:
+            logger.info("Tidak masuk: %s", blocker)
+            return
 
         self._nav.prepare()
         log_top_gainers(self._nav.open_top_gainers())
         symbol = self._nav.open_gainer(self._rank)
         self.result = self._trader.trade(self._rank, symbol, self._from_hub if uses_ai else None)
 
-    def _from_hub(self, symbol: str, _chart: Path) -> PeakReading:
+    def _from_hub(self, symbol: str, _chart: Path) -> PatternReading:
         shared = self._wait_for(symbol)
         if shared.age_s > self._settings.analysis_ttl_s:
             logger.warning(

@@ -1,19 +1,20 @@
-"""Inti SOP "Short Top Gainers (Futures 1x)" untuk satu koin yang halaman trade-nya terbuka.
+"""Inti SOP V2 "Short Top Gainers (Futures 2x)" untuk satu koin yang halaman trade-nya terbuka.
 
 Dipakai bersama oleh mode single (AI sendiri) dan follower (AI dari hub leader). Urutan:
-saringan gratis dulu (naik >= 30%, funding, spread), baru tanda pucuk (AI atau data), lalu
-ukuran posisi, isi kolom Jumlah, dan pintu order yang DIMATIKAN. Semua tercatat di jurnal.
+cek slot (maks 2 posisi; koin kedua hanya bila koin pertama tidak rugi), saringan gratis
+(funding, spread, kenaikan minimal bila diisi), pola garis kuning MA7 (AI atau data), ukuran
+posisi (margin 50% x 2x), isi kolom Jumlah, lalu pintu order yang DIMATIKAN. Semua dicatat.
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 
-from binance_bot.analysis import PeakReading
+from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.config import Settings
@@ -25,7 +26,8 @@ from binance_bot.strategy import (
     JournalEntry,
     OrderPlan,
     SopParams,
-    data_peak_signs,
+    candles_needed,
+    data_ma_pattern,
     evaluate_open_trades,
     size_position,
     stop_streak,
@@ -33,17 +35,21 @@ from binance_bot.strategy import (
 
 logger = logging.getLogger(__name__)
 
-# Mengambil hasil AI tanda pucuk untuk (pair, screenshot grafik 15 menit).
-ReadingSource = Callable[[str, Path], PeakReading]
+# Mengambil hasil AI pola garis kuning untuk (pair, screenshot grafik 15 menit).
+ReadingSource = Callable[[str, Path], PatternReading]
 
-_CHART_CANDLES = 40
+_VERDICT_TEXT = {
+    "jangan": "JANGAN (garis kuning selalu di atas)",
+    "tunggu": "TUNGGU (baru sekali di bawah)",
+    "ok": "OK (berkali-kali di bawah)",
+}
 
 
 class _Skip(Exception):
     """Koin gugur di salah satu saringan SOP; pesan = alasannya."""
 
 
-def log_top_gainers(rows: list[GainerRow]) -> None:
+def log_top_gainers(rows: Sequence[GainerRow]) -> None:
     logger.info(
         "Top gainers Futures: %s",
         ", ".join(f"#{r.rank} {r.symbol} {r.change_pct:+.2f}%" for r in rows) or "-",
@@ -56,16 +62,18 @@ def refresh_journal(
     """Langkah 6 SOP: nilai posisi uji yang masih terbuka dari candle sungguhan."""
     entries = journal.load()
     updated = evaluate_open_trades(entries, market, now_s, fee_pct)
-    closed_now = [new for old, new in zip(entries, updated, strict=True) if old != new]
-    for entry in closed_now:
-        logger.info(
-            "Uji kertas %s selesai: %s, hasil bersih %+.2f%% (%+.2f USDT)",
-            entry.symbol,
-            entry.status,
-            entry.pnl_pct or 0,
-            entry.pnl_usdt or 0,
-        )
-    if closed_now:
+    changed = [new for old, new in zip(entries, updated, strict=True) if old != new]
+    for entry in changed:
+        if entry.is_closed:
+            logger.info(
+                "Uji kertas %s selesai: %s, hasil %+.2f%% posisi (%+.2f USDT = %+.2f%% modal)",
+                entry.symbol,
+                entry.status,
+                entry.pnl_pct or 0,
+                entry.pnl_usdt or 0,
+                entry.pnl_capital_pct or 0,
+            )
+    if changed:
         journal.save(updated)
     return updated
 
@@ -99,43 +107,64 @@ class SopTrader:
         return refresh_journal(self._journal, self._market, self.params.fee_pct, self._wall_clock())
 
     def halted(self, entries: list[JournalEntry]) -> bool:
-        """SOP: setelah 3 stop-loss berturut-turut, berhenti hari itu dan tinjau jurnal."""
+        """SOP: setelah 3 stop-loss berturut-turut, berhenti hari itu dan tinjau catatan."""
         today = self._now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         streak = stop_streak(entries, since_s=today)
         if streak >= self.params.max_stop_streak:
             logger.error(
-                "%d stop-loss berturut-turut hari ini. Sesuai SOP: berhenti dan tinjau jurnal.",
+                "%d stop-loss berturut-turut hari ini. Sesuai SOP: berhenti dan tinjau catatan.",
                 streak,
             )
             return True
         return False
 
+    def slot_blocker(self) -> str | None:
+        """Langkah 4 SOP: posisi terbuka < maks; koin kedua hanya bila yang pertama tidak rugi."""
+        opened = [e for e in self._journal.load() if e.status == "open"]
+        if len(opened) >= self.params.max_open_positions:
+            return f"sudah {len(opened)} posisi terbuka (maksimal {self.params.max_open_positions})"
+        for entry in opened:
+            assert entry.entry_price is not None
+            # Short rugi bila harga naik di atas harga masuk. Dibandingkan dengan sisi harga yang
+            # sama saat masuk (bid), supaya spread sesaat setelah masuk tidak dihitung sebagai rugi.
+            price = self._market.quote(entry.symbol).bid
+            if price > entry.entry_price:
+                return (
+                    f"posisi {entry.symbol} sedang rugi ({price:g} > masuk {entry.entry_price:g}); "
+                    "koin berikutnya belum boleh dibuka"
+                )
+        return None
+
     def trade(self, rank: int, symbol: str, reading_source: ReadingSource | None) -> JournalEntry:
-        """Jalankan langkah 1-5 SOP untuk pair yang halaman trade-nya sedang terbuka."""
+        """Jalankan langkah 2-5 SOP untuk pair yang halaman trade-nya sedang terbuka."""
         entry = JournalEntry(
             id=f"{self._now():%Y%m%d_%H%M%S}_{symbol}",
             created_at=self._wall_clock(),
             symbol=symbol,
             rank=rank,
+            capital_usdt=self.params.capital_usdt,
+            leverage=self.params.leverage,
         )
         try:
             self._run(entry, reading_source)
         except (_Skip, BotError) as exc:
             entry.status = "skipped"
             entry.reason = str(exc)
-            logger.info("#%d %s dilewati: %s", rank, symbol, exc)
+            logger.info("#%d %s tidak masuk: %s", rank, symbol, exc)
         self._journal.append(entry)
         return entry
 
     def _run(self, entry: JournalEntry, reading_source: ReadingSource | None) -> None:
         params, symbol = self.params, entry.symbol
-        open_symbols = {e.symbol for e in self._journal.load() if e.status == "open"}
-        if symbol in open_symbols:
+        if any(e.symbol == symbol and e.status == "open" for e in self._journal.load()):
             raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
+        blocker = self.slot_blocker()
+        if blocker:
+            raise _Skip(blocker)
 
-        # Saringan 1 dan 3 (gratis, sebelum AI): naik minimal, funding, spread.
+        # Saringan biaya (gratis, sebelum AI): funding, spread, dan kenaikan minimal bila diisi.
         quote = self._market.quote(symbol)
         entry.change_pct = quote.change_pct
         entry.funding_rate = quote.funding_rate
@@ -147,7 +176,7 @@ class SopTrader:
         if quote.spread_pct > params.max_spread_pct:
             raise _Skip(f"spread {quote.spread_pct:.3f}% > {params.max_spread_pct:g}%")
 
-        # Saringan 2: tanda pucuk di chart 15 menit.
+        # Saringan pola: garis kuning (MA7) terhadap MA25 di chart 15 menit.
         self._nav.show_15m_chart()
         name = f"{entry.id}_rank{entry.rank}"
         shots = self._settings.screenshot_dir
@@ -155,29 +184,31 @@ class SopTrader:
         chart = self._nav.capture_chart(shots / f"{name}_15m.png")
         entry.screenshots.append(str(chart))
 
-        data = data_peak_signs(self._market.klines(symbol, "15m", limit=_CHART_CANDLES))
-        entry.signs_data = data.as_dict()
+        data = data_ma_pattern(self._market.klines(symbol, "15m", limit=candles_needed()))
+        entry.pattern_data = data.as_dict()
         decisive = data
         if params.signal_source == "ai":
             if reading_source is None:
                 raise _Skip("SINYAL=ai tetapi tidak ada sumber analisis AI")
             reading = reading_source(symbol, chart)
-            entry.signs_ai = reading.signs.as_dict()
+            entry.pattern_ai = reading.pattern.as_dict()
             entry.ai_summary = reading.summary
-            decisive = reading.signs
+            decisive = reading.pattern
+        entry.verdict = decisive.verdict(params.min_crosses)
         logger.info(
-            "#%d %s tanda pucuk %s: %d/4 (data: %d/4)%s",
+            "#%d %s garis kuning %s: %d kali di bawah MA25 -> %s (data: %d kali)%s",
             entry.rank,
             symbol,
             params.signal_source.upper(),
-            decisive.count,
-            data.count,
+            decisive.below_count,
+            _VERDICT_TEXT[entry.verdict],
+            data.below_count,
             f" | {entry.ai_summary}" if entry.ai_summary else "",
         )
-        if decisive.count < params.min_signs:
-            raise _Skip(f"tanda pucuk {decisive.count}/4, butuh {params.min_signs}")
+        if entry.verdict != "ok":
+            raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
 
-        # Langkah 4: ukuran posisi.
+        # Ukuran posisi: margin % modal x leverage.
         rules = self._market.rules(symbol)
         price = quote.bid  # short menjual ke harga bid
         sizing = size_position(params, price, rules, self._settings.decimal_separator)
@@ -186,11 +217,8 @@ class SopTrader:
 
         margin = self._nav.read_margin_settings()
         entry.margin = margin.describe()
-        if not margin.is_sop_compliant:
-            logger.warning(
-                "Margin %s: SOP mewajibkan Isolated 1x. Wajib diubah sebelum order sungguhan.",
-                entry.margin,
-            )
+        for issue in margin.problems(params.leverage):
+            logger.warning("Margin di aplikasi: %s. Wajib diubah sebelum order sungguhan.", issue)
 
         # Langkah 5: isi form lalu pintu order (dimatikan).
         if self._fill_form:
@@ -199,27 +227,36 @@ class SopTrader:
             symbol=symbol,
             quantity_text=sizing.quantity_text,
             notional=sizing.notional,
+            margin_usdt=sizing.margin_usdt,
             entry_price=price,
             target_price=price * (1 - params.target_pct / 100),
             stop_price=price * (1 + params.stop_pct / 100),
+            leverage=params.leverage,
         )
         self._gate.submit(plan)
 
         entry.status = "open"
         entry.entry_price = plan.entry_price
+        entry.max_price = plan.entry_price
         entry.quantity = sizing.quantity
         entry.notional = sizing.notional
+        entry.margin_usdt = sizing.margin_usdt
         entry.target_price = plan.target_price
         entry.stop_price = plan.stop_price
         entry.deadline = entry.created_at + params.max_hold_h * 3600
         logger.info(
-            "#%d %s MASUK UJI KERTAS: short %s @ %g | target %g | stop-loss %g | tutup paling "
-            "lambat %s",
+            "#%d %s MASUK UJI KERTAS: short %s @ %g (%dx, margin %.2f USDT) | target %g | "
+            "stop-loss %g | tinjau %s, tutup paling lambat %s",
             entry.rank,
             symbol,
             sizing.quantity_text,
             price,
+            params.leverage,
+            sizing.margin_usdt,
             plan.target_price,
             plan.stop_price,
+            datetime.fromtimestamp(entry.created_at + params.review_after_h * 3600).strftime(
+                "%H:%M"
+            ),
             datetime.fromtimestamp(entry.deadline).strftime("%H:%M"),
         )

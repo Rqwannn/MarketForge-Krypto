@@ -1,4 +1,9 @@
-"""Jurnal SOP: setiap koin yang dinilai (dilewati atau masuk uji kertas) satu baris JSON."""
+"""Jurnal SOP: setiap koin yang dinilai (dilewati atau masuk uji kertas) satu baris JSON.
+
+Isi per trade mengikuti "Yang dicatat tiap trade" di SOP V2: koin, kenaikan 24 jam, jam masuk
+dan keluar, harga masuk dan keluar, hasil bersih setelah fee dan funding, harga tertinggi
+setelah masuk, berapa kali MA7 di bawah MA25 saat masuk, dan alasan keluar (status).
+"""
 
 from __future__ import annotations
 
@@ -22,26 +27,38 @@ class JournalEntry:
     change_pct: float | None = None
     funding_rate: float | None = None
     spread_pct: float | None = None
-    signs_ai: dict[str, bool] | None = None
-    signs_data: dict[str, bool] | None = None
+    pattern_ai: dict[str, Any] | None = None  # {"below_count", "below_now"} dari AI
+    pattern_data: dict[str, Any] | None = None  # sama, dihitung dari candle
+    verdict: str = ""  # jangan | tunggu | ok (dari sumber penentu)
     ai_summary: str = ""
-    margin: str = ""
+    margin: str = ""  # mode margin dan leverage yang terbaca di aplikasi
+    capital_usdt: float | None = None
+    leverage: int | None = None
+    margin_usdt: float | None = None
     entry_price: float | None = None
     quantity: float | None = None
     notional: float | None = None
     target_price: float | None = None
     stop_price: float | None = None
     deadline: float | None = None
+    max_price: float | None = None  # harga tertinggi setelah masuk (melawan posisi short)
     exit_price: float | None = None
     closed_at: float | None = None
     funding_pct: float | None = None
-    pnl_pct: float | None = None
+    pnl_pct: float | None = None  # hasil bersih terhadap nilai posisi
     pnl_usdt: float | None = None
     screenshots: list[str] = field(default_factory=list)
 
     @property
     def is_closed(self) -> bool:
         return self.status in CLOSED_STATUSES
+
+    @property
+    def pnl_capital_pct(self) -> float | None:
+        """Hasil bersih dalam persen modal (SOP: laporkan dalam persen modal, bukan ROI)."""
+        if self.pnl_usdt is None or not self.capital_usdt:
+            return None
+        return 100 * self.pnl_usdt / self.capital_usdt
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

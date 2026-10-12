@@ -15,6 +15,15 @@ def test_parse_ranks_rejects_invalid(text: str) -> None:
         parse_ranks(text)
 
 
+def test_single_defaults_follow_sop_v2() -> None:
+    args = build_parser().parse_args(["single"])
+    params = params_from(args)
+    assert args.ranks == [1, 2, 3, 4, 5]  # pantau top 5
+    assert (params.leverage, params.margin_pct, params.max_open_positions) == (2, 50.0, 2)
+    assert (params.target_pct, params.stop_pct, params.fee_pct) == (2.0, 2.0, 0.1)
+    assert (params.min_crosses, params.min_gain_pct, params.max_hold_h) == (2, 0.0, 4.0)
+
+
 def test_single_maps_sop_parameters() -> None:
     args = build_parser().parse_args(
         [
@@ -23,46 +32,41 @@ def test_single_maps_sop_parameters() -> None:
             "1,2",
             "--modal",
             "1000",
-            "--risiko",
+            "--margin",
+            "25",
+            "--leverage",
             "2",
             "--sl",
-            "4",
+            "1.5",
             "--target",
+            "1",
+            "--min-turun",
             "3",
             "--jumlah",
             "75",
             "--sinyal",
             "data",
             "--no-fill",
+            "--interval",
+            "5",
         ]
     )
     params = params_from(args)
-    assert args.ranks == [1, 2] and args.no_fill
-    assert (params.capital_usdt, params.risk_pct, params.stop_pct, params.target_pct) == (
+    assert args.ranks == [1, 2] and args.no_fill and args.interval == 5
+    assert (params.capital_usdt, params.margin_pct, params.stop_pct, params.target_pct) == (
         1000,
-        2,
-        4,
-        3,
+        25,
+        1.5,
+        1,
     )
-    assert (params.quantity, params.signal_source) == (75, "data")
-
-
-def test_sop_defaults_match_the_pdf() -> None:
-    params = params_from(build_parser().parse_args(["single"]))
-    assert (params.min_gain_pct, params.min_signs, params.stop_pct, params.target_pct) == (
-        30,
-        2,
-        5,
-        4,
-    )
-    assert (params.risk_pct, params.max_hold_h, params.fee_pct) == (1, 4, 0.5)
+    assert (params.min_crosses, params.quantity, params.signal_source) == (3, 75, "data")
 
 
 def test_leader_and_follower_arguments() -> None:
     parser = build_parser()
-    leader = parser.parse_args(["leader", "--ranks", "1,2,3", "--interval", "5"])
-    assert (leader.ranks, leader.interval, leader.min_naik) == ([1, 2, 3], 5.0, 30)
+    leader = parser.parse_args(["leader", "--interval", "15"])
+    assert (leader.ranks, leader.interval, leader.min_naik) == ([1, 2, 3, 4, 5], 15.0, 0.0)
     follower = parser.parse_args(
-        ["follower", "--hub", "http://10.0.0.2:8765", "--rank", "2", "--modal", "500"]
+        ["follower", "--hub", "http://10.0.0.2:8765", "--rank", "5", "--modal", "500"]
     )
-    assert (follower.hub, follower.rank, follower.modal) == ("http://10.0.0.2:8765", 2, 500)
+    assert (follower.hub, follower.rank, follower.modal) == ("http://10.0.0.2:8765", 5, 500)

@@ -5,8 +5,8 @@ import pytest
 from binance_bot.binance_desktop import BinanceNavigator, layout
 from binance_bot.config import Settings
 from binance_bot.exceptions import AppNotRunningError, SafetyError, ScreenReadError, WindowError
-from binance_bot.macos import Rect
-from fakes import WINDOW, FakeApps, FakeScreen, list_lines, text_lines
+from binance_bot.macos import Rect, TextLine
+from fakes import WINDOW, Clock, FakeApps, FakeScreen, list_lines, text_lines
 
 ASCENDING = list_lines((1, "USUSDT", "-32.21%"), (2, "JCTUSDT", "-30.04%"))
 DESCENDING = list_lines(
@@ -16,8 +16,14 @@ DESCENDING = list_lines(
 
 def make_nav(screen: FakeScreen | None = None, apps: FakeApps | None = None) -> BinanceNavigator:
     screen = screen or FakeScreen()
+    clock = Clock()  # jam tiruan: menunggu berjalan instan
     return BinanceNavigator(
-        Settings(settle_delay_s=0), apps or FakeApps(), screen, screen, sleep=lambda _: None
+        Settings(settle_delay_s=0),
+        apps or FakeApps(),
+        screen,
+        screen,
+        sleep=clock.sleep,
+        clock=clock,
     )
 
 
@@ -161,3 +167,92 @@ def test_capture_chart_uses_chart_area(tmp_path: Path) -> None:
     nav.prepare()
     nav.capture_chart(tmp_path / "c.png")
     assert screen._last == WINDOW.sub(*layout.CHART_AREA)
+
+
+def toolbar(*items: tuple[str, float, float], width: float = 0.0) -> list[TextLine]:
+    """Teks pada CHART_TOOLBAR_AREA di posisi relatif jendela (x, y)."""
+    x0, y0, x1, y1 = layout.CHART_TOOLBAR_AREA
+    return [TextLine(t, (x - x0) / (x1 - x0), (y - y0) / (y1 - y0), width) for t, x, y in items]
+
+
+def chart_area(shift: float = 0.0) -> tuple[float, float, float, float]:
+    x0, y0, x1, y1 = layout.CHART_AREA
+    return x0, y0 + shift, x1, y1 + shift
+
+
+def trade_page_nav(
+    lines: list[TextLine], shift: float = 0.0, chart: list[list[TextLine]] | None = None
+) -> tuple[BinanceNavigator, FakeScreen]:
+    screen = FakeScreen(
+        texts={
+            layout.SYMBOL_AREA: [text_lines("SUSDT Perpetual")],
+            layout.CHART_TOOLBAR_AREA: [lines],
+            chart_area(shift): chart or [text_lines("MA(7) 0,0610")],
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    nav.open_gainer(1)
+    return nav, screen
+
+
+def test_15m_button_is_found_by_ocr_even_when_a_banner_shifts_the_page(tmp_path: Path) -> None:
+    # Uji nyata: banner "project name of S is Sonic" menggeser halaman sekitar 0,04 ke bawah.
+    shift = 0.04
+    nav, screen = trade_page_nav(
+        toolbar(("Grafik", 0.0715, 0.196 + shift), ("15 mnt", 0.1265, 0.2416 + shift)), shift
+    )
+    nav.show_15m_chart()
+    assert clicks(screen)[-2:] == [WINDOW.point_at(0.0715, 0.236), WINDOW.point_at(0.1265, 0.2816)]
+
+    nav.capture_chart(tmp_path / "c.png")
+    x0, y0, x1, y1 = layout.CHART_AREA
+    assert screen._last == WINDOW.sub(x0, y0 + shift, x1, y1 + shift)
+
+
+def test_15m_button_inside_a_merged_ocr_line() -> None:
+    text = "Waktu 1 dtk 15 mnt 1 Jam"
+    nav, screen = trade_page_nav(toolbar((text, 0.15, 0.2416), width=0.3))
+    nav.show_15m_chart()
+    x, _ = clicks(screen)[-1]  # type: ignore[misc]
+    expected_x, _ = WINDOW.point_at(*toolbar_x(text, "15 mnt", 0.15, 0.3), 0.2416)
+    assert abs(x - expected_x) <= 1
+
+
+def toolbar_x(text: str, word: str, center: float, width: float) -> tuple[float]:
+    x0, _, x1, _ = layout.CHART_TOOLBAR_AREA
+    start = text.index(word)
+    rel_center, rel_width = (center - x0) / (x1 - x0), width
+    rel = rel_center - rel_width / 2 + rel_width * (start + len(word) / 2) / len(text)
+    return (x0 + rel * (x1 - x0),)
+
+
+def test_missing_15m_button_is_an_error_not_a_blind_click() -> None:
+    nav, screen = trade_page_nav(toolbar(("Minat Terbuka", 0.2, 0.25)))
+    before = len(clicks(screen))
+    with pytest.raises(ScreenReadError, match="15 mnt"):
+        nav.show_15m_chart()
+    assert len(clicks(screen)) == before
+
+
+def test_futures_tab_is_clicked_again_when_the_list_has_not_loaded() -> None:
+    screen = FakeScreen(texts={layout.FUTURES_LIST_AREA: [[], DESCENDING]})
+    nav = make_nav(screen)
+    nav.prepare()
+    assert nav.open_top_gainers()[0].symbol == "LUMIAUSDT"
+    tab = at(layout.MARKET_FUTURES_TAB)
+    assert clicks(screen).count(tab) == 2
+
+
+def test_chart_capture_waits_until_the_chart_has_loaded() -> None:
+    # Uji nyata: aplikasi lambat, screenshot pertama hanya berisi animasi loading.
+    loading, ready = text_lines("Beli/Long", "Jual/Short"), text_lines("v MA(7) 0,0287")
+    nav, _ = trade_page_nav(toolbar(("15 mnt", 0.1265, 0.2416)), chart=[loading, loading, ready])
+    nav.show_15m_chart()  # tidak error: menunggu sampai MA(7) terbaca
+
+
+def test_chart_that_never_loads_is_an_error() -> None:
+    loading = text_lines("Beli/Long", "Jual/Short")
+    nav, _ = trade_page_nav(toolbar(("15 mnt", 0.1265, 0.2416)), chart=[loading])
+    with pytest.raises(ScreenReadError, match="belum termuat"):
+        nav.show_15m_chart()

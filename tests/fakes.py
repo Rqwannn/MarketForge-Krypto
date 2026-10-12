@@ -4,27 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from binance_bot.analysis import AnalysisRecord, PeakReading
+from binance_bot.analysis import AnalysisRecord, PatternReading
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import DEFAULT_APP_ID
 from binance_bot.exceptions import BotError
 from binance_bot.macos import Rect, TextLine
 from binance_bot.market import Candle, Quote, SymbolRules
-from binance_bot.strategy import OrderPlan, PeakSigns
+from binance_bot.strategy import MaPattern, OrderPlan, candles_needed
 
 BUNDLE = DEFAULT_APP_ID
 WINDOW = Rect(x=0, y=33, width=1470, height=859)
-THREE_SIGNS = PeakSigns(
-    upper_wick=True, failed_new_high=True, volume_declining=True, big_red_after_greens=False
-)
-ONE_SIGN = PeakSigns(
-    upper_wick=True, failed_new_high=False, volume_declining=False, big_red_after_greens=False
-)
+OK = MaPattern(below_count=3, below_now=True)  # berkali-kali di bawah: boleh
+WAIT = MaPattern(below_count=1, below_now=False)  # baru sekali: tunggu
+NEVER = MaPattern(below_count=0, below_now=False)  # selalu di atas: jangan
 
 
-def reading(signs: PeakSigns = THREE_SIGNS) -> PeakReading:
-    return PeakReading(signs, "Lilin terakhir bersumbu atas panjang.")
+def reading(pattern: MaPattern = OK) -> PatternReading:
+    return PatternReading(pattern, "Garis kuning sudah beberapa kali di bawah magenta.")
 
 
 def record(symbol: str = "STRKUSDT", rank: int = 1, analyzed_at: float = 1000.0) -> AnalysisRecord:
@@ -113,23 +110,27 @@ def candle(o: float, h: float, low: float, c: float, v: float, i: int = 0) -> Ca
     return Candle(i * 60_000, o, h, low, c, v, i * 60_000 + 59_999)
 
 
-def rising_candles(n: int = 14) -> list[Candle]:
-    """Naik terus dengan volume naik: tidak ada tanda pucuk."""
-    return [candle(i, i + 1.1, i - 0.1, i + 1, 100 + 10 * i, i) for i in range(n)]
+def ma_candles(drops: int) -> list[Candle]:
+    """Candle 15 menit dengan `drops` kali MA7 turun di bawah MA25 (0..3) dalam 24 jam terakhir.
 
-
-def peak_candles() -> list[Candle]:
-    """3 dari 4 tanda: gagal high baru, volume menurun, lilin merah besar setelah hijau."""
-    closed = [candle(i, i + 1.1, i - 0.1, i + 1, 100 + 10 * i, i) for i in range(7)]
-    closed += [
-        candle(7, 10, 6.9, 8, 300, 7),  # puncak
-        candle(8, 9, 7.9, 8.5, 250, 8),
-        candle(8.5, 9.2, 8.4, 8.8, 200, 9),
-        candle(8.8, 9.3, 8.7, 8.9, 180, 10),
-        candle(8.9, 9.4, 8.85, 9.0, 150, 11),
-        candle(9.0, 9.6, 7.95, 8.0, 120, 12),  # merah besar
+    Pada 3 kali, harga sedang turun sehingga MA7 juga di bawah MA25 di ujung kanan.
+    """
+    need = candles_needed()
+    shapes = {
+        0: [(need, 1.0)],
+        1: [(70, 1.0), (8, -6.0), (need - 78, 1.5)],
+        2: [(40, 1.0), (8, -6.0), (30, 1.5), (8, -6.0), (need - 86, 1.5)],
+        3: [(30, 1.0), (8, -6.0), (25, 1.5), (8, -6.0), (25, 1.5), (need - 96, -3.0)],
+    }
+    closes, price = [], 100.0
+    for count, step in shapes[drops]:
+        for _ in range(count):
+            price += step
+            closes.append(price)
+    return [
+        Candle(i * 900_000, c, c + 0.1, c - 0.1, c, 1.0, i * 900_000 + 899_999)
+        for i, c in enumerate(closes)
     ]
-    return [*closed, candle(8, 8.1, 7.9, 8.05, 10, 13)]  # lilin yang masih berjalan
 
 
 class FakeMarket:
@@ -140,13 +141,14 @@ class FakeMarket:
         rules: SymbolRules | None = None,
     ) -> None:
         self.q = quote or Quote(bid=1.0, ask=1.0005, funding_rate=0.0001, change_pct=50.0)
-        self.candles = candles if candles is not None else peak_candles()
+        self.quotes: dict[str, Quote] = {}
+        self.candles = candles if candles is not None else ma_candles(2)
         self.r = rules or SymbolRules(step=0.1, min_qty=0.1, min_notional=5.0)
         self.minute_candles: list[Candle] = []
         self.funding: list[tuple[int, float]] = []
 
     def quote(self, symbol: str) -> Quote:
-        return self.q
+        return self.quotes.get(symbol, self.q)
 
     def rules(self, symbol: str) -> SymbolRules:
         return self.r
@@ -160,7 +162,7 @@ class FakeMarket:
 
 # --------------------------------------------------------------------------- workflow
 
-SOP_MARGIN = MarginSettings(isolated=True, leverage=1)
+SOP_MARGIN = MarginSettings(isolated=True, leverage=2)
 
 
 class FakeNavigator:
@@ -225,14 +227,19 @@ class FakeGate:
         self.plans.append(plan)
 
 
-class FakePeakAnalyzer:
-    def __init__(self, signs: PeakSigns = THREE_SIGNS) -> None:
-        self.signs = signs
+class FakePatternAnalyzer:
+    """AI tiruan. `patterns` memetakan pair -> pola; selain itu `default`."""
+
+    def __init__(self, default: MaPattern = OK, patterns: dict[str, MaPattern] | None = None):
+        self.default = default
+        self.patterns = patterns or {}
         self.calls: list[Path] = []
 
-    def analyze(self, image: Path) -> PeakReading:
+    def analyze(self, image: Path) -> PatternReading:
         self.calls.append(image)
-        return reading(self.signs)
+        # Nama file: <waktu>_<PAIR>_rank<N>_15m.png. Cocokkan pair utuh (SUSDT != GRASSUSDT).
+        symbol = next((s for s in self.patterns if f"_{s}_" in image.name), None)
+        return reading(self.patterns[symbol] if symbol else self.default)
 
 
 class Clock:

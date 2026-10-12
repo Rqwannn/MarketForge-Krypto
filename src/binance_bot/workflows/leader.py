@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from binance_bot.analysis import AnalysisRecord, PeakAnalyzer
+from binance_bot.analysis import AnalysisRecord, PatternAnalyzer
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class LeaderWorkflow:
-    """Mode banyak, laptop leader: AI menilai tanda pucuk tiap rank SEKALI, lalu dibagikan.
+    """Mode banyak, laptop leader: AI membaca pola garis kuning tiap rank SEKALI, lalu dibagikan.
 
-    Hanya koin yang lolos saringan naik minimal (gratis) yang dianalisis AI. Hasil koin yang
-    sama dipakai ulang selama `analysis_ttl_s` (default 15 menit = satu lilin 15 menit).
+    Bila MIN_NAIK diisi, hanya koin yang lolos saringan itu (gratis) yang dianalisis AI. Hasil
+    koin yang sama dipakai ulang selama `analysis_ttl_s` (default 15 menit = satu lilin).
     Leader tidak mengisi form; setiap follower memutuskan dengan modal dan jurnalnya sendiri.
     """
 
@@ -35,7 +35,7 @@ class LeaderWorkflow:
         params: SopParams,
         navigator: BinanceNavigator,
         market: FuturesMarket,
-        analyzer: PeakAnalyzer,
+        analyzer: PatternAnalyzer,
         store: AnalysisStore,
         hub: HubServer | None,
         ranks: Sequence[int],
@@ -118,9 +118,14 @@ class LeaderWorkflow:
                 continue
             self._store.put(record)
             records.append(record)
-            signs = record.reading.signs
+            pattern = record.reading.pattern
             logger.info(
-                "#%d %s tanda pucuk AI %d/4 | %s", rank, symbol, signs.count, record.reading.summary
+                "#%d %s garis kuning AI: %d kali di bawah MA25 -> %s | %s",
+                rank,
+                symbol,
+                pattern.below_count,
+                pattern.verdict(self._params.min_crosses).upper(),
+                record.reading.summary,
             )
 
         logger.info("Siklus selesai: %d hasil di hub, %d panggilan AI", len(records), ai_calls)

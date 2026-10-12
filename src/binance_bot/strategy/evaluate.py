@@ -22,7 +22,8 @@ def evaluate_short(
     """Tentukan nasib satu short uji kertas dari candle 1 menit setelah waktu masuk.
 
     Bila target dan stop-loss sama-sama tersentuh di candle yang sama, dianggap stop-loss
-    (asumsi terburuk), karena urutan di dalam satu menit tidak diketahui.
+    (asumsi terburuk), karena urutan di dalam satu menit tidak diketahui. Harga tertinggi
+    setelah masuk (seberapa jauh harga melawan posisi) dicatat sampai posisi selesai.
     """
     if entry.status != "open":
         return entry
@@ -30,31 +31,31 @@ def evaluate_short(
     deadline_ms = entry.deadline * 1000
     usable = [c for c in candles if c.open_time < deadline_ms]
 
+    max_price = entry.max_price or entry.entry_price
     for candle in usable:
+        max_price = max(max_price, candle.high)
         if candle.high >= entry.stop_price:
-            return _close(
-                entry, "stop", entry.stop_price, candle.close_time / 1000, funding, fee_pct
-            )
+            return _close(entry, "stop", entry.stop_price, candle, max_price, funding, fee_pct)
         if candle.low <= entry.target_price:
-            return _close(
-                entry, "target", entry.target_price, candle.close_time / 1000, funding, fee_pct
-            )
+            return _close(entry, "target", entry.target_price, candle, max_price, funding, fee_pct)
 
     if now_s >= entry.deadline and usable:
         last = usable[-1]
-        return _close(entry, "timeout", last.close, last.close_time / 1000, funding, fee_pct)
-    return entry
+        return _close(entry, "timeout", last.close, last, max_price, funding, fee_pct)
+    return replace(entry, max_price=max_price)
 
 
 def _close(
     entry: JournalEntry,
     status: str,
     exit_price: float,
-    closed_at: float,
+    candle: Candle,
+    max_price: float,
     funding: Sequence[tuple[int, float]],
     fee_pct: float,
 ) -> JournalEntry:
     assert entry.entry_price and entry.notional is not None
+    closed_at = candle.close_time / 1000
     # Short menerima funding bila rate positif dan membayar bila negatif.
     funding_pct = 100 * sum(
         rate for time_ms, rate in funding if entry.created_at * 1000 <= time_ms <= closed_at * 1000
@@ -65,6 +66,7 @@ def _close(
         status=status,
         exit_price=exit_price,
         closed_at=closed_at,
+        max_price=max_price,
         funding_pct=funding_pct,
         pnl_pct=pnl_pct,
         pnl_usdt=entry.notional * pnl_pct / 100,
@@ -112,11 +114,13 @@ class Stats:
     stops: int
     timeouts: int
     open: int
+    needs_review: int  # posisi terbuka melewati batas tinjau (usulan 1 jam)
     skipped: int
     win_rate: float | None
     breakeven: float
-    net_pct: float
+    net_capital_pct: float  # jumlah hasil bersih dalam persen modal
     net_usdt: float
+    worst_against_pct: float | None  # kenaikan terbesar melawan posisi setelah masuk
     stop_streak: int
     signal_agreement: tuple[int, int]  # (AI dan data sepakat, jumlah yang bisa dibandingkan)
 
@@ -129,27 +133,41 @@ class Stats:
         return "LULUS fase uji" if passed else "TIDAK LULUS: ubah satu aturan, lalu uji ulang"
 
 
-def summarize(entries: Sequence[JournalEntry], params: SopParams) -> Stats:
+def _is_ok(pattern: dict[str, object] | None, min_crosses: int) -> bool | None:
+    if pattern is None:
+        return None
+    count = pattern.get("below_count")
+    return isinstance(count, int) and count >= min_crosses
+
+
+def summarize(entries: Sequence[JournalEntry], params: SopParams, now_s: float) -> Stats:
     closed = [e for e in entries if e.is_closed]
+    opened = [e for e in entries if e.status == "open"]
     wins = sum(1 for e in closed if (e.pnl_pct or 0) > 0)
-    compared = [e for e in entries if e.signs_ai is not None and e.signs_data is not None]
-    agree = sum(
-        (sum(e.signs_ai.values()) >= params.min_signs)  # type: ignore[union-attr]
-        == (sum(e.signs_data.values()) >= params.min_signs)  # type: ignore[union-attr]
-        for e in compared
-    )
+    against = [
+        100 * (e.max_price - e.entry_price) / e.entry_price
+        for e in entries
+        if e.max_price is not None and e.entry_price
+    ]
+    verdicts = [
+        (_is_ok(e.pattern_ai, params.min_crosses), _is_ok(e.pattern_data, params.min_crosses))
+        for e in entries
+    ]
+    compared = [(a, d) for a, d in verdicts if a is not None and d is not None]
     return Stats(
         closed=len(closed),
         wins=wins,
         targets=sum(1 for e in closed if e.status == "target"),
         stops=sum(1 for e in closed if e.status == "stop"),
         timeouts=sum(1 for e in closed if e.status == "timeout"),
-        open=sum(1 for e in entries if e.status == "open"),
+        open=len(opened),
+        needs_review=sum(1 for e in opened if now_s - e.created_at >= params.review_after_h * 3600),
         skipped=sum(1 for e in entries if e.status == "skipped"),
         win_rate=wins / len(closed) if closed else None,
         breakeven=params.breakeven_win_rate,
-        net_pct=sum(e.pnl_pct or 0 for e in closed),
+        net_capital_pct=sum(e.pnl_capital_pct or 0 for e in closed),
         net_usdt=sum(e.pnl_usdt or 0 for e in closed),
+        worst_against_pct=max(against) if against else None,
         stop_streak=stop_streak(entries),
-        signal_agreement=(agree, len(compared)),
+        signal_agreement=(sum(1 for a, d in compared if a == d), len(compared)),
     )

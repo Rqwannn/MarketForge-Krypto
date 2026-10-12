@@ -29,10 +29,15 @@ class MarginSettings:
     isolated: bool | None  # None = tidak terbaca
     leverage: int | None
 
-    @property
-    def is_sop_compliant(self) -> bool:
-        """SOP mensyaratkan Isolated dan leverage 1x."""
-        return self.isolated is True and self.leverage == 1
+    def problems(self, leverage: int) -> list[str]:
+        """Perbedaan dengan SOP V2: leverage wajib sesuai, isolated disarankan (usulan)."""
+        issues = []
+        if self.leverage != leverage:
+            shown = "?" if self.leverage is None else self.leverage
+            issues.append(f"leverage {shown}x, SOP {leverage}x")
+        if self.isolated is not True:
+            issues.append("bukan Isolated (usulan SOP; bila tetap Cross, stop-loss wajib)")
+        return issues
 
     def describe(self) -> str:
         mode = {True: "Isolated", False: "Cross", None: "?"}[self.isolated]

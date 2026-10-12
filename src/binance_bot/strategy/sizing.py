@@ -1,4 +1,8 @@
-"""Ukuran posisi sesuai SOP: modal x %risiko / jarak stop-loss, dibulatkan ke aturan koin."""
+"""Ukuran posisi SOP V2: margin % modal x leverage, dibulatkan ke aturan jumlah koin.
+
+Contoh PDF: modal 10.000.000, margin 50% = 5.000.000, leverage 2x -> nilai posisi 10.000.000
+per koin. Rugi bila stop-loss kena = jarak stop-loss x nilai posisi.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +17,8 @@ from binance_bot.strategy.params import SopParams
 class Sizing:
     quantity: float  # jumlah koin
     quantity_text: str  # seperti yang diketik di kolom "Jumlah", mis. "184,6"
-    notional: float  # nilai posisi dalam USDT (= margin pada leverage 1x)
+    notional: float  # nilai posisi (USDT)
+    margin_usdt: float  # margin yang terpakai = nilai posisi / leverage
     loss_at_stop: float  # rugi bila stop-loss kena, sebelum biaya (USDT)
 
 
@@ -38,22 +43,23 @@ def size_position(
         wanted = params.quantity
     else:
         assert params.capital_usdt is not None
-        risk_usdt = params.capital_usdt * params.risk_pct / 100
-        # Leverage 1x: nilai posisi tidak boleh melebihi modal.
-        notional = min(risk_usdt / (params.stop_pct / 100), params.capital_usdt)
-        wanted = notional / price
+        wanted = params.capital_usdt * params.margin_pct / 100 * params.leverage / price
 
     quantity = floor_to_step(wanted, rules.step)
     notional = float(quantity) * price
+    margin = notional / params.leverage
     if quantity <= 0 or float(quantity) < rules.min_qty:
         return f"jumlah {wanted:.6g} di bawah minimum {rules.min_qty:g} koin"
     if notional < rules.min_notional:
         return f"nilai order {notional:.2f} USDT di bawah minimum {rules.min_notional:g} USDT"
-    if params.capital_usdt is not None and notional > params.capital_usdt * 1.0001:
-        return f"nilai order {notional:.2f} USDT melebihi modal {params.capital_usdt:g} (1x)"
+    if params.capital_usdt is not None:
+        allowed = params.capital_usdt * params.margin_pct / 100
+        if margin > allowed * 1.0001:
+            return f"margin {margin:.2f} USDT melebihi {params.margin_pct:g}% modal ({allowed:.2f})"
     return Sizing(
         quantity=float(quantity),
         quantity_text=format_quantity(quantity, rules.step, decimal_separator),
         notional=notional,
+        margin_usdt=margin,
         loss_at_stop=notional * params.stop_pct / 100,
     )
