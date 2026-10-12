@@ -1,8 +1,9 @@
-# SOP di dalam engine
+# SOP V2 di dalam engine
 
-Engine ini menjalankan **SOP "Short Top Gainers (Futures 1x)"** dari PDF Pak Saputra. Ketiga
-mode (single, leader, follower) memakai algoritma yang sama; bedanya hanya siapa yang memanggil
-AI. Kode intinya ada di `src/binance_bot/workflows/sop.py` dan `src/binance_bot/strategy/`.
+Engine ini menjalankan **SOP V2 "Short Top Gainers (Futures 2x)"** dari PDF Pak Saputra
+(12 Oktober 2026). Ketiga mode (single, leader, follower) memakai algoritma yang sama; bedanya
+hanya siapa yang memanggil AI. Kode intinya ada di `src/binance_bot/workflows/sop.py` dan
+`src/binance_bot/strategy/`.
 
 > **Tahap sekarang: uji kertas.** Tombol Jual/Short tidak pernah ditekan. Setiap keputusan
 > "masuk" dicatat di jurnal lalu dinilai dari candle sungguhan, sesuai fase uji 50 trade di PDF.
@@ -12,95 +13,106 @@ AI. Kode intinya ada di `src/binance_bot/workflows/sop.py` dan `src/binance_bot/
 
 | Langkah PDF | Di engine | Sumber data |
 |---|---|---|
-| 1. Scan top gainers Futures, naik ≥ 30% | Pasar → tab Futures → urutkan "Perubahan 24jam" (diverifikasi OCR) → buka rank → baca pair di halaman trade | Layar Binance + OCR macOS; % naik diverifikasi API publik |
-| 2. Cek tanda pucuk (chart 15 menit, ≥ 2 dari 4) | Klik "15 mnt", screenshot grafik, AI menilai 4 tanda | AI visual (default) atau data candle (`SINYAL=data`) |
-| 3. Cek biaya: funding dan spread | Lewati bila funding terlalu negatif atau spread lebar | API publik Binance |
-| 4. Ukuran posisi | modal × %risiko ÷ jarak stop-loss, dibulatkan ke kelipatan jumlah koin | Rumus PDF + aturan koin dari API publik |
-| 5. Masuk short 1x isolated + target + stop-loss | Isi kolom **Jumlah** (market order), lalu pintu order **dry run** | Layar Binance |
-| 6. Monitor: target / stop-loss / batas waktu | `make jurnal` menilai dari candle 1 menit | API publik Binance |
-| 7. Jurnal: hasil, fee, funding | `journal/sop.jsonl`, satu baris per koin yang dinilai | File lokal |
+| 1. Pantau top 5 Futures | Pasar → Futures → urutkan "Perubahan 24jam" (diverifikasi OCR) → buka rank 1..5 → baca pair di halaman trade | Layar Binance + OCR macOS |
+| 2. Baca garis kuning (MA7) | Tab "Grafik" dan tombol "15 mnt" dicari dengan OCR, tunggu grafik termuat, screenshot, **Haiku menghitung berapa kali MA7 di bawah MA25** | AI visual (default) atau data candle (`SINYAL=data`) |
+| 3. Cek biaya | Lewati bila funding terlalu negatif atau spread lebar | API publik Binance |
+| 4. Cek slot | Maksimal 2 posisi; koin kedua hanya bila posisi pertama tidak sedang rugi | Jurnal + harga terkini |
+| 5. Masuk short 2x, margin 50% | Ukuran posisi, isi kolom **Jumlah**, pintu order **dry run** | Layar Binance |
+| 6. Monitor | `make jurnal`: target / stop-loss / batas waktu dari candle 1 menit; tandai posisi > 1 jam untuk ditinjau | API publik Binance |
+| 7. Catat | `journal/sop.jsonl`: semua isi "Yang dicatat tiap trade" di PDF | File lokal |
 
-Saringan gratis (langkah 1 dan 3) dijalankan **sebelum** AI, jadi koin yang sudah pasti gugur
-tidak memakan biaya AI. API publik Binance tidak butuh API key, akun, atau langganan.
+Saringan yang gratis (biaya, slot) dijalankan **sebelum** AI. Bila slot sudah penuh, engine
+tidak memindai dan tidak memanggil AI sama sekali. Bila kelima koin belum OK, engine tidak masuk.
+
+## Keputusan pola garis kuning
+
+| Hitungan MA7 di bawah MA25 | Keputusan | Arti (PDF) |
+|---|---|---|
+| 0 kali | **JANGAN** | Selalu di atas: harga naik terus, berbahaya di-short |
+| 1 kali | **TUNGGU** | Baru sekali di bawah: masih bisa naik besar |
+| ≥ `MIN_TURUN` (usulan 2) | **OK** | Berkali-kali di bawah: harga cenderung turun |
+
+Haiku hanya **mengamati**: berapa periode terpisah garis kuning berada di bawah garis magenta
+di seluruh grafik yang terlihat, dan apakah di ujung kanan masih di bawah. Keputusannya
+diterapkan engine dari hitungan itu, jadi ambang `MIN_TURUN` bisa diubah tanpa mengubah prompt.
+Jawaban Haiku divalidasi ketat (bilangan bulat 0-50, ya/tidak, ringkasan); bila gambar bukan
+grafik candlestick, Haiku menolak dan koin dilewati.
+
+Versi data menghitung hal yang sama dari candle 15 menit selama 24 jam terakhir (MA7 dan MA25
+dari harga penutupan), dan selalu dicatat sebagai pembanding. **Menghitung adalah kelemahan
+model visual** (benchmark kita: 74% untuk soal menghitung), jadi `make jurnal` menampilkan
+seberapa sering AI dan data sepakat. Angka itu dasar untuk memilih penentu (`SINYAL`).
 
 ## Parameter
 
 | Parameter | Makefile | Default | Asal |
 |---|---|---|---|
-| Arah dan leverage | (tetap) | Short, 1x, isolated | Beliau |
+| Arah | (tetap) | Short | Beliau |
+| Leverage | `LEVERAGE` | 2x | Beliau |
+| Margin per posisi | `MARGIN` | 50% modal (nilai posisi = 100% modal) | Beliau |
+| Posisi bersamaan | `MAKS_POSISI` | 2 | Beliau |
+| Rank yang dipantau | `RANKS` | 1,2,3,4,5 | Beliau |
 | Timeframe | (tetap) | 15 menit | Beliau |
-| Target untung | `TARGET` | 4% | Beliau (3-5%) |
-| Kenaikan minimal 24 jam | `MIN_NAIK` | 30% | Usulan |
-| Tanda pucuk minimal | `MIN_TANDA` | 2 dari 4 | Usulan |
-| Stop-loss | `SL` | 5% di atas harga masuk | Usulan |
-| Risiko per trade | `RISIKO` | 1% modal | Usulan (1-2%) |
-| Batas waktu posisi | `BATAS_JAM` | 4 jam | Usulan (2-4 jam) |
-| Biaya total per trade | `--biaya` | 0,5% | Whiteboard (tafsiran) |
-| Spread maksimal | `--maks-spread` | 0,1% | Usulan engine |
-| Funding minimal | `--min-funding` | -0,05% per periode | Usulan engine |
-| Posisi baru per jalan | `MAKS_POSISI` | 1 | Usulan engine |
-| Berhenti setelah stop-loss beruntun | (tetap) | 3 dalam sehari | Beliau / SOP |
+| Target | `TARGET` | 2% (rentang beliau 1-4%) | Beliau / titik impas PDF |
+| Ambang pola OK | `MIN_TURUN` | 2 kali | Usulan |
+| Stop-loss | `SL` | 2% di atas harga masuk | Riwayat dan usulan |
+| Batas waktu | `BATAS_JAM` | tinjau 1 jam, tutup 4 jam | Usulan |
+| Biaya | `--biaya` | 0,1% per putaran | Riwayat |
+| Kenaikan minimal 24 jam | `MIN_NAIK` | 0 (tidak disaring; V2 tidak mensyaratkan) | Opsional |
+| Spread maksimal / funding minimal | `--maks-spread`, `--min-funding` | 0,1% / -0,05% | Usulan engine |
+| Berhenti setelah stop-loss beruntun | (tetap) | 3 dalam sehari | SOP |
 | Modal | `MODAL` | wajib (USDT) | Pengguna |
-| Jumlah manual | `JUMLAH` | kosong (pakai rumus) | Pengguna |
+| Jumlah manual | `JUMLAH` | kosong (pakai margin × leverage) | Pengguna |
 
-Contoh rumus dari PDF: modal 10.000.000 × 1% ÷ 5% = posisi 2.000.000. Dengan `MODAL=100`
-(USDT): 100 × 1% ÷ 5% = posisi 20 USDT. Pada leverage 1x, posisi tidak boleh melebihi modal.
-
-## Empat tanda pucuk
-
-AI menerima screenshot grafik 15 menit dan menjawab ya/tidak untuk tiap tanda. Versi data
-(dari candle API) selalu dihitung dan dicatat sebagai pembanding, atau menjadi penentu bila
-`SINYAL=data`. Definisi angka versi data adalah usulan, karena PDF hanya menyebut nama tandanya:
-
-| Tanda | Versi data (lilin 15 menit terakhir yang sudah tutup) |
-|---|---|
-| Sumbu atas panjang | sumbu atas ≥ 50% dari panjang lilin |
-| Gagal bikin high baru | puncak 8 lilin terakhir terjadi ≥ 2 lilin sebelum lilin terakhir |
-| Volume menurun | volume 3 lilin terakhir turun berturut-turut |
-| Lilin merah besar setelah hijau | lilin terakhir merah, badan ≥ 1,5× rata-rata 5 lilin sebelumnya, dan ≥ 3 dari 4 lilin sebelumnya hijau |
+Contoh PDF: modal 10.000.000 × margin 50% × 2x = nilai posisi 10.000.000; stop-loss 2% = rugi
+sekitar 200.000 (2% modal). Dengan `MODAL=100` (USDT): margin 50 USDT, nilai posisi 100 USDT.
+Tahap modal kecil di PDF memakai margin 25%: `MARGIN=25`.
 
 ## Menilai uji kertas
 
 - Harga masuk = harga **bid** saat itu (short menjual ke bid).
-- Mulai menit berikutnya, candle 1 menit diperiksa: harga menyentuh stop-loss → `stop`;
-  menyentuh target → `target`. Bila keduanya tersentuh di menit yang sama, dihitung `stop`
-  (asumsi terburuk). Tidak tersentuh sampai batas waktu → `timeout` di harga penutupan terakhir.
-- Hasil bersih = selisih harga − biaya 0,5% + funding (short menerima funding positif dan
-  membayar funding negatif).
-- **Titik impas** = (SL + biaya) ÷ ((target − biaya) + (SL + biaya)). Dengan target 4% dan
-  SL 5% hasilnya 61,1%, sama dengan grafik di PDF.
+- Mulai menit berikutnya, candle 1 menit diperiksa: menyentuh stop-loss → `stop`; menyentuh
+  target → `target`. Bila keduanya di menit yang sama, dihitung `stop` (asumsi terburuk).
+  Tidak tersentuh sampai batas waktu → `timeout` di harga penutupan terakhir.
+- **Harga tertinggi setelah masuk** dicatat sampai posisi selesai (seberapa jauh harga melawan).
+- Hasil bersih = selisih harga − fee 0,1% + funding (short menerima funding positif dan
+  membayar funding negatif), dilaporkan juga dalam **% modal**, bukan ROI aplikasi.
+- **Titik impas** = (SL + biaya) ÷ ((target − biaya) + (SL + biaya)). Target 2%, SL 2%, biaya
+  0,1% → **52,5%** (PDF: sekitar 53%).
 - **Gerbang lulus** (setelah 50 trade selesai): total hasil bersih positif **dan** win rate ≥
-  titik impas + 5 poin persen. Angka 5 poin adalah tafsiran dari "selisih yang jelas" di PDF.
-- Setelah **3 stop-loss berturut-turut** dalam sehari, engine menolak masuk lagi hari itu.
+  titik impas + 5 poin persen (tafsiran "selisih yang jelas").
+- Posisi kedua dibandingkan dengan sisi harga yang sama saat masuk (bid), supaya spread sesaat
+  setelah masuk tidak dihitung sebagai rugi.
 
 ## Pengaman
 
-- Satu-satunya "pintu order" adalah `DryRunOrderGate`, yang hanya mencatat rencana. Tidak ada
-  kode yang menekan tombol order.
-- Navigator menolak klik ke **zona tombol order** di halaman trade (Beli/Long, Jual/Short,
-  dan widget order yang melayang di atas grafik).
-- Modul keyboard hanya bisa mengetik angka dan tanda desimal, **tanpa Enter**. Setelah
-  mengetik, angka di kolom dibaca ulang dengan OCR; bila berbeda, koin dilewati.
-- Mode margin dan leverage dibaca dari layar. Bila bukan **Isolated 1x**, engine memberi
-  peringatan (uji kertas tetap jalan). Ini wajib diubah sebelum order sungguhan.
-- Nama pair dari layar divalidasi sebelum dipakai untuk memanggil API.
+- Satu-satunya "pintu order" adalah `DryRunOrderGate`, yang hanya mencatat rencana (short,
+  jumlah, nilai, margin, leverage, target, stop-loss). Tidak ada kode yang menekan tombol order.
+- Navigator menolak klik ke **zona tombol order** (Beli/Long, Jual/Short, widget order di atas
+  grafik). Modul keyboard hanya bisa mengetik angka, **tanpa Enter**; angka di kolom dibaca
+  ulang dengan OCR.
+- Mode margin dan leverage dibaca dari layar. Bila bukan **2x**, atau bukan Isolated (usulan),
+  engine memberi peringatan. Wajib disesuaikan sebelum order sungguhan.
 
-## Temuan dari uji nyata (11 Okt 2026)
+## Temuan dari uji nyata
 
-- **Peringkat bergeser dalam hitungan detik.** Rank #1 dan #2 sempat sama-sama membuka STRKUSDT.
-  Engine kini menilai setiap pair sekali per run.
-- **AI tidak selalu konsisten.** Pada grafik STRK yang hampir sama (selang 24 detik), AI
-  menilai 1/4 lalu 2/4, sehingga keputusannya berbalik tepat di ambang. Versi data konsisten.
-  Jurnal mencatat keduanya; rekap `make jurnal` menampilkan seberapa sering keduanya sepakat.
-- **Puncak bisa sudah lama lewat.** Puncak STRK terjadi sekitar 7 jam sebelumnya, tetapi 2
-  tanda tetap terpenuhi. PDF tidak mengatur seberapa baru puncak harus terjadi.
+- **Peringkat bergeser dalam hitungan detik**; setiap pair dinilai sekali per putaran.
+- **Koin bernama satu huruf** (S, W) kini terbaca.
+- **Banner di halaman koin tertentu** (mis. "project name of S is Sonic") menggeser tata letak;
+  tombol 15 mnt kini dicari dengan OCR dan area grafik ikut digeser.
+- **Grafik bisa lambat dimuat**; engine menunggu sampai grafik tampil (maksimal 25 detik).
+- 12 Okt 2026: jaringan yang dipakai memblokir domain Binance lewat Internet Positif, sehingga
+  API publik tidak bisa dijangkau. Engine tidak mengakali pemblokiran; koin dilewati dengan
+  alasan yang jelas. Bagian yang butuh API (biaya, aturan jumlah, data candle, penilaian jurnal)
+  hanya berjalan di jaringan yang tidak memblokir.
 
 ## Perlu disepakati dengan beliau
 
-1. Semua angka bertanda **usulan** di tabel parameter.
-2. Seberapa baru puncak harus terjadi agar masih dianggap "pucuk" (lihat temuan di atas).
-3. Penentu tanda pucuk: AI, data, atau keduanya harus sepakat.
-4. Batas "selisih yang jelas" di atas titik impas untuk gerbang lulus (sekarang 5 poin).
+1. Angka pola "OK" (`MIN_TURUN`, usulan 2), stop-loss 2%, dan batas waktu.
+2. Garis pembanding: PDF menyebut "garis lain" (MA25 dan MA99); engine memakai MA25 sesuai
+   kolom "Yang dicatat tiap trade". Perlu dicek apakah MA99 juga diperhitungkan.
+3. Penentu pola: AI, data, atau keduanya harus sepakat.
+4. Target tetap (2%) atau dinamis di rentang 1-4%.
 
-Sebelum order sungguhan: akun Futures harus menyelesaikan kuis Binance, margin diubah ke
-Isolated 1x, dan PDF sendiri mencatat bahwa Binance global setahu mereka tidak berizin OJK.
+Sebelum order sungguhan: kuis Futures Binance selesai, leverage diubah ke 2x (sekarang 20x),
+dan PDF sendiri mencatat bahwa Binance global setahu mereka tidak berizin OJK.

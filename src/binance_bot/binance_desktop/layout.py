@@ -27,8 +27,10 @@ MAX_RANK = 5
 
 # Judul pair (mis. "STRKUSDT Perp") untuk dibaca dengan OCR.
 SYMBOL_AREA = (0.05, 0.05, 0.36, 0.17)
-# Tombol timeframe "15 mnt" di atas grafik.
+# Tombol timeframe "15 mnt" di atas grafik: posisi acuan saja. Navigator mencarinya dengan OCR
+# di CHART_TOOLBAR_AREA karena banner di halaman koin tertentu menggeser tata letak ke bawah.
 TIMEFRAME_15M = (0.1265, 0.2416)
+CHART_TOOLBAR_AREA = (0.05, 0.15, 0.62, 0.40)
 # Grafik: dari baris OHLC/MA sampai sumbu waktu, termasuk panel volume.
 CHART_AREA = (0.0485, 0.2725, 0.6015, 0.7815)
 # Label mode margin dan leverage di atas form (mis. "Cross", "20x").

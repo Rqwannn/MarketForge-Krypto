@@ -88,9 +88,10 @@ def test_record_round_trips_through_dict() -> None:
         lambda d: d.update(rank="1"),
         lambda d: d.update(rank=True),
         lambda d: d.update(analyzed_at="kemarin"),
-        lambda d: d["signs"].update(upper_wick="ya"),
+        lambda d: d.update(ma7_below_ma25_count="tiga"),
+        lambda d: d.update(ma7_below_ma25_now="ya"),
         lambda d: d.update(summary=""),
-        lambda d: d.pop("signs"),
+        lambda d: d.pop("ma7_below_ma25_count"),
     ],
 )
 def test_record_from_untrusted_data_is_validated(mutate: object) -> None:

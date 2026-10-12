@@ -41,11 +41,14 @@ def test_sorted_by_top_gain() -> None:
     assert not is_sorted_by_top_gain([])
 
 
-def test_margin_settings() -> None:
+def test_margin_settings_against_sop_v2() -> None:
     cross = parse_margin(["Cross", "20x", "M"])
-    assert (cross.isolated, cross.leverage, cross.is_sop_compliant) == (False, 20, False)
-    assert cross.describe() == "Cross 20x"
-    assert parse_margin(["Isolated", "1x"]).is_sop_compliant
+    assert (cross.isolated, cross.leverage, cross.describe()) == (False, 20, "Cross 20x")
+    assert cross.problems(leverage=2) == [
+        "leverage 20x, SOP 2x",
+        "bukan Isolated (usulan SOP; bila tetap Cross, stop-loss wajib)",
+    ]
+    assert parse_margin(["Isolated", "2x"]).problems(leverage=2) == []
 
 
 def test_same_number_treats_comma_and_dot_alike() -> None:

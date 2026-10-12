@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from binance_bot import __version__
-from binance_bot.analysis import VikeyPeakAnalyzer
+from binance_bot.analysis import VikeyPatternAnalyzer
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
 from binance_bot.config import Settings, read_dotenv
@@ -33,6 +33,7 @@ from binance_bot.workflows import (
 
 logger = logging.getLogger(__name__)
 _DEFAULTS = SopParams()
+ALL_RANKS = list(range(1, MAX_RANK + 1))  # SOP V2: pantau top 5
 
 
 def parse_number(text: str) -> str:
@@ -61,44 +62,47 @@ def parse_ranks(text: str) -> list[int]:
 
 
 def _sop_options() -> argparse.ArgumentParser:
-    """Parameter SOP. Default = angka di PDF; yang bertanda usulan perlu disepakati."""
+    """Parameter SOP V2. Default = angka di PDF; yang bertanda usulan perlu disepakati."""
+    d = _DEFAULTS
     p = argparse.ArgumentParser(add_help=False)
-    g = p.add_argument_group("parameter SOP")
-    g.add_argument("--modal", type=float, help="Modal USDT untuk rumus ukuran posisi")
-    g.add_argument("--jumlah", type=float, help="Jumlah koin manual (menimpa rumus)")
-    g.add_argument("--risiko", type=float, default=_DEFAULTS.risk_pct, help="%% modal per trade")
+    g = p.add_argument_group("parameter SOP V2")
+    g.add_argument("--modal", type=float, help="Modal USDT")
+    g.add_argument("--jumlah", type=float, help="Jumlah koin manual (menimpa margin x leverage)")
+    g.add_argument("--margin", type=float, default=d.margin_pct, help="Margin %% modal per posisi")
+    g.add_argument("--leverage", type=int, default=d.leverage, help="Leverage")
+    g.add_argument("--sl", type=float, default=d.stop_pct, help="Stop-loss %% di atas harga masuk")
+    g.add_argument("--target", type=float, default=d.target_pct, help="Target %% turun (1-4)")
     g.add_argument(
-        "--sl", type=float, default=_DEFAULTS.stop_pct, help="Stop-loss %% di atas masuk"
+        "--min-turun",
+        type=int,
+        default=d.min_crosses,
+        help="Minimal berapa kali MA7 di bawah MA25 agar pola OK",
     )
     g.add_argument(
-        "--target", type=float, default=_DEFAULTS.target_pct, help="Target %% di bawah masuk"
+        "--min-naik",
+        type=float,
+        default=d.min_gain_pct,
+        help="Naik minimal 24 jam (%%); 0 = tidak disaring",
+    )
+    g.add_argument("--batas-jam", type=float, default=d.max_hold_h, help="Tutup setelah N jam")
+    g.add_argument("--biaya", type=float, default=d.fee_pct, help="Fee per putaran (%%)")
+    g.add_argument(
+        "--maks-spread", type=float, default=d.max_spread_pct, help="Spread maksimal (%%)"
     )
     g.add_argument(
-        "--min-naik", type=float, default=_DEFAULTS.min_gain_pct, help="Naik minimal 24 jam (%%)"
+        "--min-funding", type=float, default=d.min_funding_pct, help="Funding minimal (%%)"
     )
     g.add_argument(
-        "--min-tanda", type=int, default=_DEFAULTS.min_signs, help="Tanda pucuk minimal (dari 4)"
-    )
-    g.add_argument(
-        "--batas-jam", type=float, default=_DEFAULTS.max_hold_h, help="Tutup setelah N jam"
-    )
-    g.add_argument(
-        "--biaya", type=float, default=_DEFAULTS.fee_pct, help="Biaya total per trade (%%)"
-    )
-    g.add_argument(
-        "--maks-spread", type=float, default=_DEFAULTS.max_spread_pct, help="Spread maksimal (%%)"
-    )
-    g.add_argument(
-        "--min-funding", type=float, default=_DEFAULTS.min_funding_pct, help="Funding minimal (%%)"
-    )
-    g.add_argument(
-        "--maks-posisi", type=int, default=_DEFAULTS.max_positions, help="Posisi uji baru per jalan"
+        "--maks-posisi",
+        type=int,
+        default=d.max_open_positions,
+        help="Posisi terbuka maksimal bersamaan",
     )
     g.add_argument(
         "--sinyal",
         choices=SIGNAL_SOURCES,
-        default=_DEFAULTS.signal_source,
-        help="Penentu tanda pucuk: ai (screenshot) atau data (candle)",
+        default=d.signal_source,
+        help="Pembaca pola garis kuning: ai (screenshot) atau data (candle)",
     )
     g.add_argument("--no-fill", action="store_true", help="Jangan isi kolom Jumlah di aplikasi")
     return p
@@ -108,16 +112,17 @@ def params_from(args: argparse.Namespace) -> SopParams:
     return SopParams(
         capital_usdt=args.modal,
         quantity=args.jumlah,
-        risk_pct=args.risiko,
+        margin_pct=args.margin,
+        leverage=args.leverage,
         stop_pct=args.sl,
         target_pct=args.target,
+        min_crosses=args.min_turun,
         min_gain_pct=args.min_naik,
-        min_signs=args.min_tanda,
         max_hold_h=args.batas_jam,
         fee_pct=args.biaya,
         max_spread_pct=args.maks_spread,
         min_funding_pct=args.min_funding,
-        max_positions=args.maks_posisi,
+        max_open_positions=args.maks_posisi,
         signal_source=args.sinyal,
     )
 
@@ -125,7 +130,7 @@ def params_from(args: argparse.Namespace) -> SopParams:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="binance-bot",
-        description="Engine SOP Short Top Gainers (Futures 1x) untuk Binance Desktop. "
+        description="Engine SOP V2 Short Top Gainers (Futures 2x) untuk Binance Desktop. "
         "Tombol order TIDAK pernah ditekan (dry run).",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -136,17 +141,24 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("open", help="Buka aplikasi Binance hanya jika belum berjalan.")
 
     single = sub.add_parser("single", parents=[sop], help="Satu laptop: SOP penuh, AI sendiri.")
-    single.add_argument("--ranks", type=parse_ranks, default=[1, 2, 3], help="Rank, mis. 1,2,3")
+    single.add_argument("--ranks", type=parse_ranks, default=ALL_RANKS, help="Rank, mis. 1,2,3")
+    single.add_argument("--interval", type=float, default=0.0, help="Pantau ulang tiap N menit")
 
     leader = sub.add_parser(
-        "leader", help="Mode banyak: AI tanda pucuk sekali per koin, lewat hub."
+        "leader", help="Mode banyak: AI pola garis kuning sekali per koin, lewat hub."
     )
-    leader.add_argument("--ranks", type=parse_ranks, default=[1, 2, 3], help="Rank, mis. 1,2,3")
+    leader.add_argument("--ranks", type=parse_ranks, default=ALL_RANKS, help="Rank, mis. 1,2,3")
     leader.add_argument(
         "--min-naik",
         type=float,
         default=_DEFAULTS.min_gain_pct,
-        help="Naik minimal 24 jam (%%) agar dianalisis AI",
+        help="Naik minimal 24 jam (%%) agar dianalisis AI; 0 = semua",
+    )
+    leader.add_argument(
+        "--min-turun",
+        type=int,
+        default=_DEFAULTS.min_crosses,
+        help="Ambang pola OK (hanya untuk log leader)",
     )
     leader.add_argument("--interval", type=float, default=0.0, help="Ulangi tiap N menit")
     leader.add_argument("--port", type=int, help="Port hub (menimpa BOT_HUB_PORT)")
@@ -184,10 +196,10 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         store = AnalysisStore()
         return LeaderWorkflow(
             settings,
-            SopParams(min_gain_pct=args.min_naik),
+            SopParams(min_gain_pct=args.min_naik, min_crosses=args.min_turun),
             navigator,
             market,
-            VikeyPeakAnalyzer(settings),
+            VikeyPatternAnalyzer(settings),
             store,
             HubServer(store, settings.hub_token, port=args.port or settings.hub_port),
             args.ranks,
@@ -200,8 +212,10 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     )
     uses_ai = params.signal_source == "ai"
     if args.command == "single":
-        analyzer = VikeyPeakAnalyzer(settings) if uses_ai else None
-        return SingleWorkflow(navigator, trader, analyzer, ranks=args.ranks)
+        analyzer = VikeyPatternAnalyzer(settings) if uses_ai else None
+        return SingleWorkflow(
+            navigator, trader, analyzer, ranks=args.ranks, interval_s=args.interval * 60
+        )
     if args.command == "follower":
         client = HubClient(args.hub or settings.hub_url, settings.hub_token) if uses_ai else None
         return FollowerWorkflow(settings, navigator, trader, client, rank=args.rank)

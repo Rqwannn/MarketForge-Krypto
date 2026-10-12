@@ -1,6 +1,6 @@
 # Mode Banyak (Leader & Follower)
 
-Beberapa laptop di **WiFi yang sama** menjalankan [SOP](SOP.md) bersama. Hanya laptop
+Beberapa laptop di **WiFi yang sama** menjalankan [SOP V2](SOP.md) bersama. Hanya laptop
 **leader** yang memanggil AI, dan setiap koin cukup dinilai **sekali**. Laptop **follower**
 membuka koinnya sendiri sampai halaman trade, mengambil hasil AI dari leader, lalu menjalankan
 sisa SOP (biaya, ukuran posisi, isi kolom Jumlah, uji kertas) dengan **modal dan jurnalnya
@@ -15,10 +15,10 @@ sendiri**.
 ```
                           WiFi yang sama
  ┌────────────────────────────────┐
- │ LEADER                         │   hasil AI tanda pucuk (HTTP + token)
+ │ LEADER                         │   hasil AI pola garis kuning (HTTP + token)
  │ Pasar → Futures → Top Gainers  │ ──────────────┬─────────────────────┬──── ...
- │ rank 1,2,3 → chart 15 menit    │               ▼                     ▼
- │ → AI 4 tanda pucuk, 1x/koin    │  ┌────────────────────────┐ ┌────────────────────────┐
+ │ top 5 → chart 15 menit         │               ▼                     ▼
+ │ → AI hitung MA7<MA25, 1x/koin  │  ┌────────────────────────┐ ┌────────────────────────┐
  │ hub di port 8765               │  │ FOLLOWER A (RANK=1)    │ │ FOLLOWER B (RANK=2)    │
  └────────────────────────────────┘  │ buka koin #1 → biaya → │ │ buka koin #2 → biaya → │
                                      │ ambil AI dari hub →    │ │ ambil AI dari hub →    │
@@ -53,19 +53,19 @@ juga butuh `VIKEY_API_BASE` dan `VIKEY_API_KEY`; follower tidak.
 ### Langkah 1: leader
 
 ```bash
-make leader RANKS=1,2,3              # nilai sekali, hub tetap aktif
-make leader RANKS=1,2,3 INTERVAL=15  # nilai ulang tiap 15 menit (satu lilin)
+make leader                          # top 5, nilai sekali, hub tetap aktif
+make leader INTERVAL=15              # nilai ulang tiap 15 menit (satu lilin)
 ```
 
-Leader hanya memanggil AI untuk koin yang naik ≥ `MIN_NAIK` (default 30%). Ia mencetak alamat
+Leader memanggil AI untuk setiap koin (atau hanya yang naik ≥ `MIN_NAIK` bila diisi). Ia mencetak alamat
 hub; **catat alamat ini** untuk follower:
 
 ```
 INFO | Hub berjalan. Di laptop lain pakai: --hub http://192.168.1.24:8765
 INFO | Top gainers Futures: #1 STRKUSDT +54.45%, #2 LUMIAUSDT +50.33%, #3 CFXUSDT +35.58%, ...
 INFO | Analisis AI STRKUSDT selesai dalam 9.8 detik
-INFO | #1 STRKUSDT tanda pucuk AI 2/4 | Pucuk sudah lewat; harga sideways, volume menurun.
-INFO | Siklus selesai: 3 hasil di hub, 3 panggilan AI
+INFO | #1 STRKUSDT garis kuning AI: 2 kali di bawah MA25 -> OK | Garis kuning kembali turun di bawah magenta.
+INFO | Siklus selesai: 5 hasil di hub, 5 panggilan AI
 INFO | Hub tetap melayani laptop lain. Tekan Ctrl+C untuk berhenti.
 ```
 
@@ -101,7 +101,7 @@ mencatat koin sebagai dilewati.
 
 | Laptop | Perintah |
 |---|---|
-| Leader | `make leader RANKS=1,2,3 INTERVAL=15` |
+| Leader | `make leader INTERVAL=15` |
 | Follower A | `make follower RANK=1 MODAL=100` |
 | Follower B | `make follower RANK=2 MODAL=100` |
 | Follower C | `make follower RANK=3 MODAL=100` |
@@ -155,9 +155,8 @@ curl -H "$H" "http://192.168.1.24:8765/analyses?symbol=STRKUSDT"   # satu pair (
 ```json
 {"now": 1791700420.1,
  "record": {"symbol": "STRKUSDT", "rank": 1, "analyzed_at": 1791700390.5,
-            "signs": {"upper_wick": false, "failed_new_high": true,
-                      "volume_declining": true, "big_red_after_greens": false},
-            "summary": "Pucuk sudah lewat; harga sideways, volume menurun."}}
+            "ma7_below_ma25_count": 2, "ma7_below_ma25_now": true,
+            "summary": "Garis kuning kembali turun di bawah magenta dan tetap di bawah."}}
 ```
 
 `now` adalah jam leader; umur hasil = `now - analyzed_at` (detik).

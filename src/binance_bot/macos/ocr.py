@@ -16,6 +16,7 @@ class TextLine:
     text: str
     x: float
     y: float
+    width: float = 0.0  # lebar relatif; dipakai bila OCR menggabungkan beberapa kata
 
 
 class TextReader(Protocol):
@@ -46,6 +47,7 @@ class MacTextReader:
                     text=obs.topCandidates_(1)[0].string(),
                     x=box.origin.x + box.size.width / 2,
                     y=1.0 - (box.origin.y + box.size.height / 2),
+                    width=box.size.width,
                 )
             )
         return sorted(lines, key=lambda line: (line.y, line.x))

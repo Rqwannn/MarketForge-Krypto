@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from binance_bot.analysis.peak import PeakReading, peak_from_dict
+from binance_bot.analysis.pattern import PatternReading, pattern_from_dict
 from binance_bot.exceptions import AnalysisError
 from binance_bot.market import is_futures_symbol
 
 
 @dataclass(frozen=True, slots=True)
 class AnalysisRecord:
-    """Hasil AI tanda pucuk untuk satu pair Futures, dibagikan leader lewat hub.
+    """Hasil AI pola garis kuning untuk satu pair Futures, dibagikan leader lewat hub.
 
     Kunci berbagi antar laptop adalah `symbol` (mis. "STRKUSDT"), bukan rank, karena
     peringkat Top Gainers bisa bergeser dalam hitungan detik.
@@ -19,17 +19,19 @@ class AnalysisRecord:
     symbol: str
     rank: int
     analyzed_at: float  # epoch detik, waktu panggilan AI
-    reading: PeakReading
+    reading: PatternReading
 
     def age_s(self, now: float) -> float:
         return now - self.analyzed_at
 
     def to_dict(self) -> dict[str, Any]:
+        pattern = self.reading.pattern
         return {
             "symbol": self.symbol,
             "rank": self.rank,
             "analyzed_at": self.analyzed_at,
-            "signs": self.reading.signs.as_dict(),
+            "ma7_below_ma25_count": pattern.below_count,
+            "ma7_below_ma25_now": pattern.below_now,
             "summary": self.reading.summary,
         }
 
@@ -43,12 +45,11 @@ class AnalysisRecord:
             or not isinstance(data.get("rank"), int)
             or isinstance(data.get("rank"), bool)
             or not isinstance(data.get("analyzed_at"), int | float)
-            or not isinstance(data.get("signs"), dict)
         ):
             raise AnalysisError(f"Data hasil analisis tidak sesuai skema: {str(data)[:200]}")
         return cls(
             symbol=data["symbol"],
             rank=data["rank"],
             analyzed_at=float(data["analyzed_at"]),
-            reading=peak_from_dict({**data["signs"], "summary": data.get("summary")}),
+            reading=pattern_from_dict(data),
         )

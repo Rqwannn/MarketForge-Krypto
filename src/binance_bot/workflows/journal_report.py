@@ -12,16 +12,18 @@ from binance_bot.workflows.sop import refresh_journal
 logger = logging.getLogger(__name__)
 
 _RECENT_TRADES = 20
+_ROW = "%-11s %-13s %-8s %-10s %-10s %-10s %-9s %-9s %s"
 
 
-def _fmt(value: float | None, spec: str) -> str:
-    return "-" if value is None else format(value, spec)
+def _fmt(value: float | None, spec: str, suffix: str = "") -> str:
+    return "-" if value is None else format(value, spec) + suffix
 
 
 class JournalWorkflow:
     """Langkah 6-7 SOP: nilai uji kertas yang terbuka, lalu rekap terhadap titik impas.
 
-    Tidak menyentuh aplikasi Binance; hanya membaca candle publik.
+    Tidak menyentuh aplikasi Binance; hanya membaca candle publik. Hasil dilaporkan dalam
+    persen modal, bukan ROI aplikasi (SOP V2).
     """
 
     name = "jurnal"
@@ -40,36 +42,39 @@ class JournalWorkflow:
         self._wall_clock = wall_clock
 
     def run(self) -> None:
-        entries = refresh_journal(
-            self._journal, self._market, self._params.fee_pct, self._wall_clock()
-        )
+        now = self._wall_clock()
+        entries = refresh_journal(self._journal, self._market, self._params.fee_pct, now)
         trades = [e for e in entries if e.status != "skipped"]
         logger.info("Jurnal SOP: %s", self._journal.path)
         logger.info(
-            "%-11s %-14s %-8s %-11s %-11s %-9s %s",
+            _ROW,
             "Waktu",
             "Pair",
             "Status",
             "Masuk",
             "Keluar",
+            "Tertinggi",
             "Hasil",
-            "Tanda AI/data",
+            "% modal",
+            "MA7<MA25 AI/data",
         )
         for entry in trades[-_RECENT_TRADES:]:
             logger.info(
-                "%-11s %-14s %-8s %-11s %-11s %-9s %s",
+                _ROW,
                 datetime.fromtimestamp(entry.created_at).strftime("%d/%m %H:%M"),
                 entry.symbol,
                 entry.status,
                 _fmt(entry.entry_price, ".6g"),
                 _fmt(entry.exit_price, ".6g"),
-                _fmt(entry.pnl_pct, "+.2f") + ("%" if entry.pnl_pct is not None else ""),
-                _signs(entry),
+                _fmt(entry.max_price, ".6g"),
+                _fmt(entry.pnl_pct, "+.2f", "%"),
+                _fmt(entry.pnl_capital_pct, "+.2f", "%"),
+                _crosses(entry),
             )
-        self._report(entries)
+        self._report(entries, now)
 
-    def _report(self, entries: list[JournalEntry]) -> None:
-        stats = summarize(entries, self._params)
+    def _report(self, entries: list[JournalEntry], now: float) -> None:
+        stats = summarize(entries, self._params, now)
         logger.info(
             "Selesai %d (target %d, stop-loss %d, batas waktu %d) | terbuka %d | dilewati %d",
             stats.closed,
@@ -79,17 +84,27 @@ class JournalWorkflow:
             stats.open,
             stats.skipped,
         )
+        if stats.needs_review:
+            logger.warning(
+                "%d posisi terbuka sudah lewat %g jam: tinjau (SOP: tutup paling lambat %g jam)",
+                stats.needs_review,
+                self._params.review_after_h,
+                self._params.max_hold_h,
+            )
         win_rate = "-" if stats.win_rate is None else f"{stats.win_rate:.1%}"
         logger.info(
-            "Win rate %s vs titik impas %.1f%% | hasil bersih %+.2f%% (%+.2f USDT)",
+            "Win rate %s vs titik impas %.1f%% | hasil bersih %+.2f%% modal (%+.2f USDT)",
             win_rate,
             stats.breakeven * 100,
-            stats.net_pct,
+            stats.net_capital_pct,
             stats.net_usdt,
         )
+        worst = "-" if stats.worst_against_pct is None else f"{stats.worst_against_pct:+.2f}%"
         agree, compared = stats.signal_agreement
         logger.info(
-            "Stop-loss berturut-turut: %d | AI dan data sepakat: %d dari %d koin",
+            "Harga paling jauh melawan posisi: %s | stop-loss berturut-turut: %d | "
+            "AI dan data sepakat soal pola OK: %d dari %d koin",
+            worst,
             stats.stop_streak,
             agree,
             compared,
@@ -97,7 +112,7 @@ class JournalWorkflow:
         logger.info("%s", stats.verdict)
 
 
-def _signs(entry: JournalEntry) -> str:
-    ai = sum(entry.signs_ai.values()) if entry.signs_ai else None
-    data = sum(entry.signs_data.values()) if entry.signs_data else None
+def _crosses(entry: JournalEntry) -> str:
+    ai = entry.pattern_ai.get("below_count") if entry.pattern_ai else None
+    data = entry.pattern_data.get("below_count") if entry.pattern_data else None
     return f"{'-' if ai is None else ai}/{'-' if data is None else data}"

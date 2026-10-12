@@ -1,10 +1,9 @@
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from binance_bot.analysis import PeakReading
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
 from binance_bot.exceptions import ScreenReadError
@@ -19,175 +18,214 @@ from binance_bot.workflows import (
     SopTrader,
 )
 from fakes import (
-    ONE_SIGN,
+    NEVER,
+    OK,
+    WAIT,
     Clock,
     FakeGate,
     FakeMarket,
     FakeNavigator,
-    FakePeakAnalyzer,
-    reading,
+    FakePatternAnalyzer,
+    candle,
+    ma_candles,
     record,
-    rising_candles,
 )
 
-NOW = datetime(2026, 10, 11, 16, 0, 0)
+NOW = datetime(2026, 10, 12, 16, 0, 0)
 
 
 def make_trader(
-    tmp_path: Path,
-    nav: FakeNavigator,
-    market: FakeMarket | None = None,
-    **params: object,
-) -> tuple[SopTrader, FakeGate, Journal]:
-    settings = Settings(screenshot_dir=tmp_path / "shots")
+    tmp_path: Path, nav: FakeNavigator, market: FakeMarket | None = None, **params: Any
+) -> tuple[SopTrader, FakeGate, Journal, FakeMarket]:
+    market = market or FakeMarket()
     journal, gate = Journal(tmp_path / "sop.jsonl"), FakeGate()
     trader = SopTrader(
-        settings,
-        SopParams(**{"capital_usdt": 1000.0, **params}),  # type: ignore[arg-type]
+        Settings(screenshot_dir=tmp_path / "shots"),
+        SopParams(**{"capital_usdt": 100.0, **params}),
         nav,  # type: ignore[arg-type]
-        market or FakeMarket(),  # type: ignore[arg-type]
+        market,  # type: ignore[arg-type]
         journal,
         gate,  # type: ignore[arg-type]
         wall_clock=lambda: NOW.timestamp(),
         now=lambda: NOW,
     )
-    return trader, gate, journal
+    return trader, gate, journal, market
 
 
-def ai(signs: object = None) -> tuple[FakePeakAnalyzer, object]:
-    analyzer = FakePeakAnalyzer() if signs is None else FakePeakAnalyzer(signs)  # type: ignore[arg-type]
-    return analyzer, lambda _symbol, chart: analyzer.analyze(chart)
+def source(analyzer: FakePatternAnalyzer) -> Any:
+    return lambda _symbol, chart: analyzer.analyze(chart)
 
 
-# --------------------------------------------------------------------------- inti SOP
+def open_trade(symbol: str, entry_price: float = 1.0) -> JournalEntry:
+    return JournalEntry(
+        id=f"o-{symbol}",
+        created_at=NOW.timestamp() - 60,
+        symbol=symbol,
+        rank=1,
+        status="open",
+        entry_price=entry_price,
+        notional=100.0,
+        target_price=entry_price * 0.98,
+        stop_price=entry_price * 1.02,
+        deadline=NOW.timestamp() + 3 * 3600,
+        capital_usdt=100.0,
+    )
 
 
-def test_coin_passing_all_filters_is_filled_and_paper_traded(tmp_path: Path) -> None:
+# --------------------------------------------------------------------------- inti SOP V2
+
+
+def test_ok_pattern_is_sized_2x_filled_and_paper_traded(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"})
-    trader, gate, journal = make_trader(tmp_path, nav)
-    analyzer, source = ai()
+    trader, gate, journal, _ = make_trader(tmp_path, nav)
+    analyzer = FakePatternAnalyzer(OK)
 
-    entry = trader.trade(1, "STRKUSDT", source)  # type: ignore[arg-type]
+    entry = trader.trade(1, "STRKUSDT", source(analyzer))
 
-    assert entry.status == "open"
-    assert nav.filled == ["200,0"]  # 1000 x 1% / 5% = 200 USDT pada harga bid 1,0
+    assert (entry.status, entry.verdict) == ("open", "ok")
+    assert nav.filled == ["100,0"]  # 100 USDT x margin 50% x 2x = nilai 100 USDT, bid 1,0
     plan = gate.plans[0]
-    assert (plan.side, plan.leverage, plan.margin_mode) == ("SHORT", 1, "ISOLATED")
-    assert plan.target_price == pytest.approx(0.96)
-    assert plan.stop_price == pytest.approx(1.05)
-    assert entry.deadline == pytest.approx(NOW.timestamp() + 4 * 3600)
-    assert entry.signs_ai is not None and entry.signs_data is not None
-    assert len(analyzer.calls) == 1
+    assert (plan.side, plan.leverage, plan.margin_usdt) == ("SHORT", 2, pytest.approx(50.0))
+    assert plan.target_price == pytest.approx(0.98)  # target 2% di bawah
+    assert plan.stop_price == pytest.approx(1.02)  # stop-loss 2% di atas
+    assert entry.pattern_ai == {"below_count": 3, "below_now": True}
+    assert entry.pattern_data == {"below_count": 2, "below_now": False}
+    assert entry.max_price == pytest.approx(1.0)
     assert [e.status for e in journal.load()] == ["open"]
+
+
+@pytest.mark.parametrize(("pattern", "word"), [(NEVER, "JANGAN"), (WAIT, "TUNGGU")])
+def test_pattern_not_ok_means_no_entry(tmp_path: Path, pattern: Any, word: str) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(pattern)))
+    assert entry.status == "skipped" and word in entry.reason
+    assert nav.filled == [] and gate.plans == []
 
 
 @pytest.mark.parametrize(
     ("quote", "reason"),
-    [
-        (Quote(1.0, 1.0005, 0.0001, 12.0), "naik 12.0%"),
-        (Quote(1.0, 1.0005, -0.001, 50.0), "funding"),
-        (Quote(1.0, 1.01, 0.0001, 50.0), "spread"),
-    ],
+    [(Quote(1.0, 1.0005, -0.001, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
 )
-def test_free_filters_skip_before_any_ai_call(tmp_path: Path, quote: Quote, reason: str) -> None:
+def test_cost_filters_skip_before_any_ai_call(tmp_path: Path, quote: Quote, reason: str) -> None:
     nav = FakeNavigator({1: "STRKUSDT"})
-    trader, gate, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
-    analyzer, source = ai()
-
-    entry = trader.trade(1, "STRKUSDT", source)  # type: ignore[arg-type]
-
-    assert entry.status == "skipped"
-    assert reason in entry.reason
-    assert analyzer.calls == []
-    assert nav.filled == [] and gate.plans == []
+    trader, _, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
+    analyzer = FakePatternAnalyzer(OK)
+    entry = trader.trade(1, "STRKUSDT", source(analyzer))
+    assert reason in entry.reason and analyzer.calls == []
 
 
-def test_too_few_peak_signs_from_ai_skips_without_filling(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"})
-    trader, gate, _ = make_trader(tmp_path, nav)
-    _, source = ai(ONE_SIGN)
-
-    entry = trader.trade(1, "STRKUSDT", source)  # type: ignore[arg-type]
-
-    assert entry.status == "skipped"
-    assert "tanda pucuk 1/4" in entry.reason
-    assert entry.signs_data is not None  # data tetap dicatat sebagai pembanding
-    assert nav.filled == [] and gate.plans == []
+def test_min_gain_filter_is_off_by_default_and_optional(tmp_path: Path) -> None:
+    calm = FakeMarket(quote=Quote(1.0, 1.0005, 0.0001, 5.0))
+    trader, _, _, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}), calm)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+    strict, _, _, _ = make_trader(
+        tmp_path / "b", FakeNavigator({1: "STRKUSDT"}), calm, min_gain_pct=30
+    )
+    assert "naik 5.0%" in strict.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).reason
 
 
 def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"})
-    trader, _, _ = make_trader(
-        tmp_path, nav, FakeMarket(candles=rising_candles()), signal_source="data"
+    trader, _, _, _ = make_trader(
+        tmp_path,
+        FakeNavigator({1: "STRKUSDT"}),
+        FakeMarket(candles=ma_candles(1)),
+        signal_source="data",
     )
     entry = trader.trade(1, "STRKUSDT", None)
-    assert entry.status == "skipped"
-    assert "tanda pucuk 0/4" in entry.reason
-    assert entry.signs_ai is None
+    assert entry.verdict == "tunggu" and entry.pattern_ai is None
 
 
-def test_wrong_margin_is_warned_but_paper_trade_continues(tmp_path: Path) -> None:
+def test_margin_differences_are_warned_but_paper_trade_continues(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
-    trader, _, _ = make_trader(tmp_path, nav)
-    entry = trader.trade(1, "STRKUSDT", ai()[1])  # type: ignore[arg-type]
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert (entry.status, entry.margin) == ("open", "Cross 20x")
 
 
-def test_same_pair_is_not_entered_twice_while_open(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"})
-    trader, _, _ = make_trader(tmp_path, nav)
-    assert trader.trade(1, "STRKUSDT", ai()[1]).status == "open"  # type: ignore[arg-type]
-    second = trader.trade(1, "STRKUSDT", ai()[1])  # type: ignore[arg-type]
-    assert "masih terbuka" in second.reason
+# --------------------------------------------------------------------------- slot (langkah 4)
 
 
-def test_manual_quantity_is_typed_as_given(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"})
-    trader, _, _ = make_trader(tmp_path, nav, capital_usdt=None, quantity=75.0)
-    trader.trade(1, "STRKUSDT", ai()[1])  # type: ignore[arg-type]
-    assert nav.filled == ["75,0"]
+def test_no_third_position_while_two_are_open(tmp_path: Path) -> None:
+    trader, gate, journal, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}))
+    journal.append(open_trade("CFXUSDT"))
+    journal.append(open_trade("MBLUSDT"))
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert "sudah 2 posisi terbuka" in entry.reason and gate.plans == []
+
+
+def test_second_coin_only_when_first_is_not_losing(tmp_path: Path) -> None:
+    trader, _, journal, market = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}))
+    journal.append(open_trade("CFXUSDT", entry_price=1.0))
+    market.quotes["CFXUSDT"] = Quote(bid=1.009, ask=1.01, funding_rate=0.0, change_pct=40.0)
+    losing = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert "CFXUSDT sedang rugi" in losing.reason
+
+    market.quotes["CFXUSDT"] = Quote(bid=0.99, ask=0.991, funding_rate=0.0, change_pct=40.0)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
 
 
 def test_three_stop_losses_today_halts_the_engine(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"})
-    trader, _, journal = make_trader(tmp_path, nav)
-    stop = JournalEntry(
-        id="x",
-        created_at=NOW.timestamp() - 600,
-        symbol="CFXUSDT",
-        rank=1,
-        status="stop",
-        closed_at=NOW.timestamp() - 60,
-    )
-    for _ in range(3):
-        journal.append(stop)
-    analyzer, _ = ai()
-
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    for i in range(3):
+        journal.append(
+            JournalEntry(
+                id=f"s{i}",
+                created_at=NOW.timestamp() - 600,
+                symbol="CFXUSDT",
+                rank=1,
+                status="stop",
+                closed_at=NOW.timestamp() - 60 + i,
+            )
+        )
+    analyzer = FakePatternAnalyzer(OK)
     SingleWorkflow(nav, trader, analyzer, ranks=[1]).run()  # type: ignore[arg-type]
-
-    assert nav.calls == []
-    assert analyzer.calls == []
+    assert nav.calls == [] and analyzer.calls == []
 
 
 # --------------------------------------------------------------------------- mode single
 
 
-def test_single_stops_after_max_positions_and_skips_low_gain_ranks(tmp_path: Path) -> None:
-    rows = [
-        GainerRow(1, "STRKUSDT", 54.0),
-        GainerRow(2, "CFXUSDT", 12.0),
-        GainerRow(3, "MBLUSDT", 40.0),
-        GainerRow(4, "ZKUSDT", 35.0),
-    ]
-    nav = FakeNavigator({1: "STRKUSDT", 2: "CFXUSDT", 3: "MBLUSDT", 4: "ZKUSDT"}, rows=rows)
-    trader, _, journal = make_trader(tmp_path, nav, max_positions=1)
-    analyzer, _ = ai()
+def test_single_watches_top5_and_fills_up_to_two_slots(tmp_path: Path) -> None:
+    symbols = {1: "STRKUSDT", 2: "LUMIAUSDT", 3: "CFXUSDT", 4: "GRASSUSDT", 5: "SUSDT"}
+    nav = FakeNavigator(symbols)  # type: ignore[arg-type]
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    analyzer = FakePatternAnalyzer(NEVER, {"CFXUSDT": OK, "SUSDT": OK, "LUMIAUSDT": WAIT})
 
-    SingleWorkflow(nav, trader, analyzer, ranks=[2, 1, 3]).run()  # type: ignore[arg-type]
+    SingleWorkflow(nav, trader, analyzer, ranks=[1, 2, 3, 4, 5]).run()  # type: ignore[arg-type]
 
-    assert "open_gainer:2" not in nav.calls  # naik 12% < 30%: tidak dibuka sama sekali
-    assert "open_gainer:3" not in nav.calls  # batas 1 posisi sudah tercapai di rank 1
-    assert [e.symbol for e in journal.load()] == ["STRKUSDT"]
+    opened = [e.symbol for e in journal.load() if e.status == "open"]
+    assert opened == ["CFXUSDT", "SUSDT"]
+    assert len(analyzer.calls) == 5
+
+
+def test_single_does_not_enter_when_none_of_the_five_is_ok(tmp_path: Path) -> None:
+    nav = FakeNavigator({r: f"C{r}USDT" for r in range(1, 6)})  # type: ignore[arg-type]
+    trader, gate, journal, _ = make_trader(tmp_path, nav)
+    workflow = SingleWorkflow(nav, trader, FakePatternAnalyzer(WAIT), ranks=[1, 2, 3, 4, 5])  # type: ignore[arg-type]
+    workflow.run()
+    assert gate.plans == [] and nav.filled == []
+    assert {e.status for e in journal.load()} == {"skipped"}
+
+
+def test_single_skips_scanning_entirely_when_slots_are_full(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    journal.append(open_trade("CFXUSDT"))
+    journal.append(open_trade("MBLUSDT"))
+    analyzer = FakePatternAnalyzer(OK)
+    SingleWorkflow(nav, trader, analyzer, ranks=[1]).run()  # type: ignore[arg-type]
+    assert nav.calls == [] and analyzer.calls == []
+
+
+def test_single_evaluates_a_pair_once_when_ranks_shift_onto_it(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT", 2: "STRKUSDT", 3: "CFXUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    analyzer = FakePatternAnalyzer(WAIT)
+    SingleWorkflow(nav, trader, analyzer, ranks=[1, 2, 3]).run()  # type: ignore[arg-type]
+    assert len(analyzer.calls) == 2
+    assert [e.symbol for e in journal.load()] == ["STRKUSDT", "CFXUSDT"]
 
 
 def test_single_continues_after_a_rank_fails_to_open(tmp_path: Path) -> None:
@@ -195,27 +233,50 @@ def test_single_continues_after_a_rank_fails_to_open(tmp_path: Path) -> None:
         {1: ScreenReadError("tidak terbaca"), 2: "CFXUSDT"},
         rows=[GainerRow(1, "STRKUSDT", 50), GainerRow(2, "CFXUSDT", 40)],
     )
-    trader, _, journal = make_trader(tmp_path, nav)
-    SingleWorkflow(nav, trader, ai()[0], ranks=[1, 2]).run()  # type: ignore[arg-type]
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    SingleWorkflow(nav, trader, FakePatternAnalyzer(OK), ranks=[1, 2]).run()  # type: ignore[arg-type]
     assert [e.symbol for e in journal.load()] == ["CFXUSDT"]
+
+
+def test_single_interval_repeats_monitoring(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 2:
+            raise KeyboardInterrupt
+
+    workflow = SingleWorkflow(
+        nav,
+        trader,
+        FakePatternAnalyzer(WAIT),
+        ranks=[1],  # type: ignore[arg-type]
+        interval_s=300,
+        sleep=sleep,
+    )
+    with pytest.raises(KeyboardInterrupt):
+        workflow.run()
+    assert nav.calls.count("prepare") == 2 and sleeps == [300, 300]
 
 
 # --------------------------------------------------------------------------- mode banyak
 
 
 def make_leader(
-    tmp_path: Path, nav: FakeNavigator, clock: Clock, market: FakeMarket | None = None
-) -> tuple[LeaderWorkflow, FakePeakAnalyzer, AnalysisStore]:
-    analyzer, store = FakePeakAnalyzer(), AnalysisStore()
+    tmp_path: Path, nav: FakeNavigator, clock: Clock
+) -> tuple[LeaderWorkflow, FakePatternAnalyzer, AnalysisStore]:
+    analyzer, store = FakePatternAnalyzer(OK), AnalysisStore()
     leader = LeaderWorkflow(
         Settings(screenshot_dir=tmp_path / "shots"),
         SopParams(),
         nav,  # type: ignore[arg-type]
-        market or FakeMarket(),  # type: ignore[arg-type]
+        FakeMarket(),
         analyzer,
         store,
         None,
-        [1, 2],
+        [1, 2],  # type: ignore[arg-type]
         wall_clock=clock,
         now=lambda: NOW,
     )
@@ -229,21 +290,20 @@ def test_leader_analyzes_each_pair_once_and_reuses_within_ttl(tmp_path: Path) ->
 
     leader.run_cycle()
     clock.now += 600
-    nav.symbols = {1: "CFXUSDT", 2: "STRKUSDT"}  # peringkat bertukar, pair sama
+    nav.symbols = {1: "CFXUSDT", 2: "STRKUSDT"}
     leader.run_cycle()
 
     assert len(analyzer.calls) == 2
     cfx = store.get("CFXUSDT")
     assert cfx is not None and (cfx.rank, cfx.analyzed_at) == (1, 1000.0)
-    assert list((tmp_path / "shots").glob("*_15m.json"))
+    assert cfx.reading.pattern == OK
 
 
-def test_leader_skips_ai_for_pairs_below_min_gain(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT", 2: "CFXUSDT"})
-    market = FakeMarket(quote=Quote(1.0, 1.0005, 0.0001, 10.0))
-    leader, analyzer, store = make_leader(tmp_path, nav, Clock(1000.0), market)
-    assert leader.run_cycle() == []
-    assert analyzer.calls == [] and store.all() == []
+def test_leader_evaluates_a_pair_once_per_cycle_when_ranks_shift(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT", 2: "STRKUSDT"})
+    leader, analyzer, _ = make_leader(tmp_path, nav, Clock(1000.0))
+    leader.run_cycle()
+    assert len(analyzer.calls) == 1
 
 
 class FakeClient:
@@ -258,7 +318,7 @@ class FakeClient:
         self.polls += 1
         if self.polls <= self.appears_after_polls:
             return None
-        return SharedAnalysis(replace(record(symbol, 2), reading=reading()), 60.0)
+        return SharedAnalysis(record(symbol, 2), 60.0)
 
 
 def make_follower(
@@ -266,15 +326,15 @@ def make_follower(
 ) -> tuple[FollowerWorkflow, FakeNavigator, Journal]:
     clock = Clock()
     nav = FakeNavigator({2: "CFXUSDT"})
-    trader, _, journal = make_trader(tmp_path, nav)
+    trader, _, journal, _ = make_trader(tmp_path, nav)
     follower = FollowerWorkflow(
         Settings(screenshot_dir=tmp_path / "shots", follower_wait_s=wait_s),
-        nav,  # type: ignore[arg-type]
+        nav,
         trader,
-        client,  # type: ignore[arg-type]
+        client,
         rank=2,
         sleep=clock.sleep,
-        clock=clock,
+        clock=clock,  # type: ignore[arg-type]
     )
     return follower, nav, journal
 
@@ -282,29 +342,23 @@ def make_follower(
 def test_follower_runs_sop_with_hub_reading_and_no_ai(tmp_path: Path) -> None:
     follower, nav, _ = make_follower(tmp_path, FakeClient(appears_after_polls=2))
     follower.run()
-
     assert follower.result is not None
-    assert follower.result.status == "open"
-    assert follower.result.ai_summary == reading().summary
-    assert nav.filled == ["200,0"]
-    assert "open_gainer:2" in nav.calls
+    assert (follower.result.status, follower.result.verdict) == ("open", "ok")
+    assert nav.filled == ["100,0"]
 
 
 def test_follower_records_skip_when_hub_never_has_the_pair(tmp_path: Path) -> None:
-    follower, nav, journal = make_follower(tmp_path, FakeClient(10**6), wait_s=30)
+    follower, nav, _ = make_follower(tmp_path, FakeClient(10**6), wait_s=30)
     follower.run()
     assert follower.result is not None and follower.result.status == "skipped"
     assert "Hub belum punya analisis untuk CFXUSDT" in follower.result.reason
     assert nav.filled == []
-    assert journal.load()[0].reason == follower.result.reason
 
 
 # --------------------------------------------------------------------------- jurnal
 
 
-def test_journal_report_closes_finished_trades(tmp_path: Path) -> None:
-    from fakes import candle
-
+def test_journal_report_closes_finished_trades_with_capital_pct(tmp_path: Path) -> None:
     journal = Journal(tmp_path / "sop.jsonl")
     journal.append(
         JournalEntry(
@@ -313,39 +367,18 @@ def test_journal_report_closes_finished_trades(tmp_path: Path) -> None:
             symbol="STRKUSDT",
             rank=1,
             status="open",
+            capital_usdt=100.0,
             entry_price=1.0,
-            notional=200.0,
-            target_price=0.96,
-            stop_price=1.05,
+            notional=100.0,
+            target_price=0.98,
+            stop_price=1.02,
             deadline=4 * 3600.0,
         )
     )
     market = FakeMarket()
-    market.minute_candles = [candle(1.0, 1.0, 0.95, 0.96, 1, 5)]
+    market.minute_candles = [candle(1.0, 1.005, 0.979, 0.98, 1, 5)]
     JournalWorkflow(SopParams(), journal, market, wall_clock=lambda: 3600.0).run()  # type: ignore[arg-type]
-    assert journal.load()[0].status == "target"
-
-
-def test_reading_type_is_shared_between_ai_and_hub() -> None:
-    assert isinstance(record().reading, PeakReading)
-
-
-def test_single_evaluates_a_pair_once_when_ranks_shift_onto_it(tmp_path: Path) -> None:
-    # Uji nyata: rank #1 dan #2 sama-sama membuka STRKUSDT karena peringkat bergeser.
-    nav = FakeNavigator({1: "STRKUSDT", 2: "STRKUSDT", 3: "CFXUSDT"})
-    trader, _, journal = make_trader(tmp_path, nav, max_positions=3)
-    analyzer, _ = ai(ONE_SIGN)
-
-    SingleWorkflow(nav, trader, analyzer, ranks=[1, 2, 3]).run()  # type: ignore[arg-type]
-
-    assert len(analyzer.calls) == 2  # STRKUSDT sekali, CFXUSDT sekali
-    assert [e.symbol for e in journal.load()] == ["STRKUSDT", "CFXUSDT"]
-
-
-def test_leader_evaluates_a_pair_once_per_cycle_when_ranks_shift(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT", 2: "STRKUSDT"})
-    leader, analyzer, store = make_leader(tmp_path, nav, Clock(1000.0))
-    leader.run_cycle()
-    assert len(analyzer.calls) == 1
-    stored = store.get("STRKUSDT")
-    assert stored is not None and stored.rank == 1
+    done = journal.load()[0]
+    assert done.status == "target"
+    assert done.pnl_capital_pct == pytest.approx(1.9)
+    assert done.max_price == pytest.approx(1.005)
