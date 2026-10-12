@@ -14,6 +14,8 @@ from binance_bot.strategy import MaPattern, OrderPlan, candles_needed
 
 BUNDLE = "com.binance.BinanceDesktop"
 WINDOW = Rect(x=0, y=33, width=1470, height=859)
+# Area layar MacBook Air 13" M4 tanpa menu bar dan Dock (tempat ukuran kalibrasi diukur).
+AREA = Rect(x=0, y=33, width=1470, height=862)
 OK = MaPattern(below_count=3, below_now=True)  # berkali-kali di bawah: boleh
 WAIT = MaPattern(below_count=1, below_now=False)  # baru sekali: tunggu
 NEVER = MaPattern(below_count=0, below_now=False)  # selalu di atas: jangan
@@ -71,14 +73,22 @@ class FakeScreen:
         self,
         rect: Rect = WINDOW,
         texts: dict[tuple[float, float, float, float], list[list[TextLine]]] | None = None,
+        *,
+        resizable: bool = True,
     ) -> None:
         self.rect = rect
+        self.resizable = resizable
         self.events: list[tuple[str, object]] = []
         self._last: Rect | None = None
         self._texts = {rect.sub(*area): list(answers) for area, answers in (texts or {}).items()}
 
     def bounds(self, app_name: str) -> Rect:
         return self.rect
+
+    def set_bounds(self, app_name: str, rect: Rect) -> None:
+        self.events.append(("set_bounds", rect))
+        if self.resizable:
+            self.rect = rect
 
     def click(self, x: int, y: int) -> None:
         self.events.append(("click", (x, y)))

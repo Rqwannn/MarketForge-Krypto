@@ -9,6 +9,7 @@ description = "Desktop automation bot untuk aplikasi Binance di macOS."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "pyobjc-framework-Cocoa>=10; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
     "pyobjc-framework-Vision>=10; sys_platform == 'darwin'",
 ]
@@ -47,5 +48,5 @@ strict = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["Quartz", "Vision", "Foundation"]
+module = ["AppKit", "Quartz", "Vision", "Foundation"]
 ignore_missing_imports = true

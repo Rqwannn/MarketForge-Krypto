@@ -3,7 +3,7 @@
 import json
 import logging
 
-from binance_bot.binance_desktop.layout import window_size_problem
+from binance_bot.binance_desktop.layout import window_ready, window_size_problem, window_target
 from binance_bot.cli import build_parser
 from binance_bot.config import Settings
 from binance_bot.exceptions import MarketDataError
@@ -11,7 +11,7 @@ from binance_bot.logging_setup import JsonLinesFormatter, event
 from binance_bot.macos import Rect
 from binance_bot.market import Quote
 from binance_bot.workflows import ReadinessWorkflow
-from fakes import FakeApps, FakeMarket, FakeScreen
+from fakes import AREA, FakeApps, FakeMarket, FakeScreen
 
 SECRET = "sk-rahasia-jangan-tercetak"
 
@@ -32,6 +32,14 @@ def test_json_lines_include_message_and_optional_event() -> None:
     assert with_event["event"] == {"type": "hub", "url": "http://x"}
 
 
+def test_window_target_uses_the_top_left_of_a_screen_that_fits() -> None:
+    small, big = Rect(0, 25, 1440, 790), Rect(1440, 0, 1920, 1055)
+    assert window_target(Rect(10, 30, 900, 600), [small, big]) == Rect(1440, 0, 1470, 859)
+    assert window_target(Rect(10, 30, 900, 600), [small]) is None
+    assert window_ready(Rect(0, 33, 1470, 859), [AREA])
+    assert not window_ready(Rect(300, 33, 1470, 859), [AREA])
+
+
 def test_window_size_tolerance() -> None:
     assert window_size_problem(1470, 859) is None
     assert window_size_problem(1490, 850) is None  # dalam 2%
@@ -50,6 +58,7 @@ def readiness(
     screen: FakeScreen | None = None,
     market: FakeMarket | None = None,
     settings: Settings | None = None,
+    areas: list[Rect] | None = None,
 ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     out: list[str] = []
     ReadinessWorkflow(
@@ -59,6 +68,7 @@ def readiness(
         market or FakeMarket(),  # type: ignore[arg-type]
         accessibility=lambda: True,
         screen_capture=lambda: True,
+        screens=lambda: areas or [AREA],
         output=out.append,
     ).run()
     assert SECRET not in out[0]
@@ -72,9 +82,19 @@ def test_readiness_all_ok() -> None:
     assert all(c["ok"] for c in checks.values())
 
 
+def test_readiness_accepts_a_wrong_window_size_that_the_bot_will_fix() -> None:
+    screen = FakeScreen(rect=Rect(200, 100, 1200, 700))
+    _, checks = readiness(screen=screen)
+    assert checks["window"]["ok"] is True
+    assert "otomatis" in str(checks["window"]["pesan"])
+    assert screen.events == []  # cek tidak mengubah apa pun
+
+
 def test_readiness_reports_each_problem_without_clicking() -> None:
-    screen = FakeScreen(rect=Rect(0, 0, 1200, 700))
-    result, checks = readiness(screen=screen, market=BlockedMarket(), settings=Settings())
+    screen = FakeScreen(rect=Rect(0, 25, 1440, 790))
+    result, checks = readiness(
+        screen=screen, market=BlockedMarket(), settings=Settings(), areas=[Rect(0, 25, 1440, 790)]
+    )
     assert result["ok"] is False
     assert checks["binance"]["ok"] is True
     assert checks["window"]["ok"] is False
@@ -86,7 +106,10 @@ def test_readiness_reports_each_problem_without_clicking() -> None:
 def test_readiness_when_binance_is_closed() -> None:
     _, checks = readiness(running=False)
     assert checks["binance"]["ok"] is False
+    assert checks["window"]["ok"] is True  # layar cukup; jendela diatur saat bot mulai
+    _, checks = readiness(running=False, areas=[Rect(0, 25, 1440, 790)])
     assert checks["window"]["ok"] is False
+    assert "terlalu kecil" in str(checks["window"]["pesan"])
 
 
 def test_cli_app_arguments() -> None:

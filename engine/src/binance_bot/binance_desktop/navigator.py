@@ -10,7 +10,7 @@ import logging
 import re
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from binance_bot.binance_desktop import layout
@@ -39,6 +39,7 @@ from binance_bot.macos import (
     wait_for_window,
     wait_until_frontmost,
 )
+from binance_bot.macos.screens import visible_areas
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class BinanceNavigator:
         *,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        screens: Callable[[], Sequence[Rect]] = visible_areas,
     ) -> None:
         self._settings = settings
         self._apps = apps
@@ -66,6 +68,7 @@ class BinanceNavigator:
         self._reader = reader
         self._sleep = sleep
         self._clock = clock
+        self._screens = screens
         self._rect: Rect | None = None
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
@@ -96,10 +99,39 @@ class BinanceNavigator:
             sleep=self._sleep,
             clock=self._clock,
         )
+        self._rect = self._fit_window(rect)
+
+    def _fit_window(self, rect: Rect) -> Rect:
+        """Atur jendela Binance ke ukuran kalibrasi posisi klik, di dalam area layar.
+
+        Binance mengubah susunan tampilannya mengikuti ukuran jendela, jadi posisi klik hanya
+        benar pada ukuran kalibrasi. Bila layar terlalu kecil, berhenti tanpa mengklik.
+        """
+        areas = self._screens()
+        if layout.window_ready(rect, areas):
+            return rect
+        target = layout.window_target(rect, areas)
+        if target is None:
+            raise WindowError(layout.screen_too_small(areas))
+        app = self._settings.app_name
+        logger.info(
+            "Jendela %s diatur dari %dx%d ke %dx%d",
+            app,
+            rect.width,
+            rect.height,
+            target.width,
+            target.height,
+        )
+        self._window.set_bounds(app, target)
+        self._sleep(self._settings.settle_delay_s)
+        rect = self._window.bounds(app)
         problem = layout.window_size_problem(rect.width, rect.height)
         if problem:
-            raise WindowError(problem)
-        self._rect = rect
+            raise WindowError(
+                f"{problem} Pengaturan otomatis tidak berhasil; keluarkan Binance dari mode "
+                "layar penuh lalu coba lagi."
+            )
+        return rect
 
     def open_top_gainers(self) -> list[GainerRow]:
         """Pasar -> tab Futures -> urutkan "Perubahan 24jam" dari kenaikan tertinggi.

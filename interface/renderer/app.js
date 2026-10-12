@@ -514,7 +514,7 @@ const CHECKS = {
   accessibility: ['Izin mengendalikan laptop', 'Buka Pengaturan Sistem › Privasi & Keamanan › Aksesibilitas.'],
   screen: ['Izin melihat layar', 'Buka Pengaturan Sistem › Privasi & Keamanan › Perekaman Layar.'],
   binance: ['Aplikasi Binance', 'Buka Binance dan pastikan sudah login.'],
-  window: ['Ukuran jendela Binance', 'Kembalikan ukuran jendela Binance seperti semula.'],
+  window: ['Ukuran jendela Binance', 'Layar terlalu kecil. Pilih "Lebih Banyak Ruang" di Pengaturan Sistem › Layar, atau sembunyikan Dock otomatis.'],
   api: ['Data harga Binance', 'Jaringan ini memblokir Binance. Coba jaringan lain.'],
   ai_key: ['Pembaca grafik (AI)', 'Belum diatur di laptop ini. Hubungi admin.'],
   hub_token: ['Kerja sama antar laptop', 'Hanya perlu untuk Pemimpin dan Pengikut.'],
@@ -534,11 +534,14 @@ async function loadChecks() {
     $('ready-bar').parentElement.className = `meter wide ${result.ok ? 'green' : 'violet'}`;
     $('checks').replaceChildren(...result.checks.map((c) => {
       const [title, fix] = CHECKS[c.id] || [c.id, 'Belum siap.'];
-      const waiting = c.id === 'window' && !binanceOpen;
-      const needed = !c.ok && c.wajib && !waiting;
+      const needed = !c.ok && c.wajib;
       const kind = c.ok ? 'ok' : needed ? 'no' : '';
       const [label, tag] = c.ok ? ['Siap', 'ok'] : needed ? ['Perlu tindakan', 'jangan'] : ['Opsional', ''];
-      const detail = c.ok ? 'Sudah beres.' : waiting ? 'Dicek setelah Binance dibuka.' : fix;
+      let detail = c.ok ? 'Sudah beres.' : fix;
+      if (c.id === 'window' && c.ok) detail = 'Diatur otomatis saat bot mulai.';
+      if (c.id === 'window' && !c.ok && /tidak terlihat/.test(c.pesan)) {
+        detail = binanceOpen ? 'Jendela Binance sedang diperkecil atau tersembunyi. Tampilkan jendelanya.' : fix;
+      }
       return el('div', { class: `card check ${kind}` },
         el('span', { class: 'icon' }, icon(c.ok ? 'check' : needed ? 'cross' : 'dash')),
         el('div', {}, el('strong', { textContent: title }), el('span', { textContent: detail })),

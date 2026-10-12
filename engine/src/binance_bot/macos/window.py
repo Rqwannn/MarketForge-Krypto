@@ -38,6 +38,14 @@ class Rect:
         """Titik pada posisi relatif (0..1) di dalam persegi ini."""
         return round(self.x + self.width * fx), round(self.y + self.height * fy)
 
+    def contains(self, other: Rect) -> bool:
+        return (
+            self.x <= other.x
+            and self.y <= other.y
+            and other.x + other.width <= self.x + self.width
+            and other.y + other.height <= self.y + self.height
+        )
+
     def sub(self, x0: float, y0: float, x1: float, y1: float) -> Rect:
         """Sub-persegi dari dua sudut relatif (0..1), mis. untuk memotong area grafik."""
         left, top = self.point_at(x0, y0)
@@ -47,6 +55,8 @@ class Rect:
 
 class WindowController(Protocol):
     def bounds(self, app_name: str) -> Rect: ...
+
+    def set_bounds(self, app_name: str, rect: Rect) -> None: ...
 
     def click(self, x: int, y: int) -> None: ...
 
@@ -85,6 +95,18 @@ class MacWindowController:
         except ValueError as exc:
             raise WindowError(f"Format posisi jendela tidak dikenal: {out.strip()!r}") from exc
         return Rect(x, y, width, height)
+
+    def set_bounds(self, app_name: str, rect: Rect) -> None:
+        """Pindahkan dan ubah ukuran jendela pertama aplikasi (lewat Accessibility)."""
+        script = "\n".join(
+            [
+                f'tell application "System Events" to tell process "{app_name}" to tell window 1',
+                f"set position to {{{rect.x}, {rect.y}}}",
+                f"set size to {{{rect.width}, {rect.height}}}",
+                "end tell",
+            ]
+        )
+        self._osascript(script, f"Tidak bisa mengatur ukuran jendela {app_name}")
 
     def click(self, x: int, y: int) -> None:
         logger.info("Klik di (%d, %d)", x, y)

@@ -74,10 +74,10 @@ token: ## Buat token acak untuk BOT_HUB_TOKEN (pakai yang sama di semua laptop)
 fix-hidden: ## Perbaiki error "No module named binance_bot" (flag hidden macOS)
 	@chflags -R nohidden $(VENV) src 2>/dev/null || true
 
-window-size: ## Cek ukuran jendela Binance di laptop ini (harus 1470x859 pt)
+window-size: ## Lihat ukuran jendela Binance (bot mengaturnya otomatis ke 1470x859 pt)
 	@open -b com.binance.BinanceDesktop && sleep 1
 	@osascript -e 'tell application "System Events" to tell process "Binance" to get size of window 1' \
-	| awk -F', ' '{ ok = ($$1 >= 1441 && $$1 <= 1499 && $$2 >= 842 && $$2 <= 876) ? "OK" : "BERBEDA, sesuaikan ukuran jendela"; \
+	| awk -F', ' '{ ok = ($$1 >= 1441 && $$1 <= 1499 && $$2 >= 842 && $$2 <= 876) ? "OK" : "BERBEDA (diatur otomatis saat bot mulai)"; \
 	  printf "Jendela Binance: %sx%s pt (harus 1470x859): %s\n", $$1, $$2, ok }'
 
 hub-health: ## Cek koneksi laptop ini ke hub leader (HUB=http://IP:8765)

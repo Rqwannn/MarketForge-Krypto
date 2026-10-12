@@ -4,6 +4,10 @@ Diukur dari Binance Desktop 2.6.0 bahasa Indonesia, jendela 1470x859 pt, halaman
 bertata letak "Pro". Jika tata letak, bahasa, atau ukuran jendela berubah, ukur ulang file ini.
 """
 
+from collections.abc import Sequence
+
+from binance_bot.macos.window import Rect
+
 EXPECTED_WINDOW = (1470, 859)
 WINDOW_TOLERANCE = 0.02
 
@@ -19,6 +23,39 @@ def window_size_problem(width: float, height: float) -> str | None:
         f"Ukuran jendela {width:g}x{height:g} berbeda dari {want_w}x{want_h} "
         "yang dipakai untuk mengukur posisi klik. Atur ulang ukuran jendela Binance "
         "atau ukur ulang posisi di binance_desktop/layout.py."
+    )
+
+
+def window_ready(window: Rect, areas: Sequence[Rect]) -> bool:
+    """Ukuran sesuai kalibrasi dan jendela utuh di dalam satu area layar."""
+    size_ok = window_size_problem(window.width, window.height) is None
+    return size_ok and any(area.contains(window) for area in areas)
+
+
+def window_target(window: Rect, areas: Sequence[Rect]) -> Rect | None:
+    """Tempat jendela Binance: ukuran kalibrasi di kiri atas area layar. None bila tak muat.
+
+    Layar tempat jendela berada didahulukan, supaya Binance tidak pindah layar tanpa perlu.
+    """
+    want_w, want_h = EXPECTED_WINDOW
+    center_x, center_y = window.x + window.width // 2, window.y + window.height // 2
+
+    def holds_center(area: Rect) -> bool:
+        return area.contains(Rect(center_x, center_y, 0, 0))
+
+    for area in sorted(areas, key=lambda a: not holds_center(a)):
+        if area.width >= want_w and area.height >= want_h:
+            return Rect(area.x, area.y, want_w, want_h)
+    return None
+
+
+def screen_too_small(areas: Sequence[Rect]) -> str:
+    want_w, want_h = EXPECTED_WINDOW
+    biggest = max(areas, key=lambda a: a.width * a.height, default=None)
+    have = f"{biggest.width}x{biggest.height}" if biggest else "tidak terbaca"
+    return (
+        f"Layar terlalu kecil untuk jendela Binance {want_w}x{want_h} (area layar {have}). "
+        "Pilih 'More Space' di System Settings > Displays, atau sembunyikan Dock otomatis."
     )
 
 

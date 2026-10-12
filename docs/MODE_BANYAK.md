@@ -39,7 +39,7 @@ sendiri**.
 ## 2. Persiapan (sekali)
 
 Setiap laptop mengikuti bagian **Prasyarat** di [Mode Single](MODE_SINGLE.md#1-prasyarat)
-(termasuk `make window-size` OK dan `make uji-isi` untuk follower). Lalu buat **satu** token:
+(termasuk `make cek` dan `make uji-isi` untuk follower). Lalu buat **satu** token:
 
 ```bash
 make token        # contoh keluaran: 3f9c1e...(32 karakter)
@@ -181,7 +181,7 @@ Pesan lain (Binance, izin macOS, ukuran jendela, kolom Jumlah, saringan SOP) sam
 Leader dan follower versi SOP baru teruji lewat tes otomatis (termasuk hub sungguhan di
 localhost); belum dijalankan di Binance sungguhan. Saat pertama memakai dua laptop:
 
-1. Di kedua laptop: `make window-size` OK, token sama di `.env`.
+1. Di kedua laptop: `make cek` tanpa masalah ukuran jendela, token sama di `.env`.
 2. Leader: `make leader RANKS=1,2` (izinkan Python bila diminta).
 3. Follower: `make hub-health HUB=<alamat>` → `{"status": "ok"}`.
 4. Follower: `make follower HUB=<alamat> RANK=1 MODAL=100`. Pastikan pair di log sama dengan

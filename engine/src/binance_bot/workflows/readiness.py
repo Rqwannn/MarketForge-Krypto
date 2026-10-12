@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 
-from binance_bot.binance_desktop.layout import window_size_problem
+from binance_bot.binance_desktop.layout import (
+    EXPECTED_WINDOW,
+    screen_too_small,
+    window_ready,
+    window_target,
+)
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
-from binance_bot.macos import AppController, WindowController
+from binance_bot.macos import AppController, Rect, WindowController
 from binance_bot.market import FuturesMarket
 
 _PRIVACY = "System Settings > Privacy & Security"
@@ -38,6 +43,7 @@ class ReadinessWorkflow:
         *,
         accessibility: Callable[[], bool],
         screen_capture: Callable[[], bool],
+        screens: Callable[[], Sequence[Rect]],
         output: Callable[[str], None] = print,
     ) -> None:
         self._settings = settings
@@ -46,6 +52,7 @@ class ReadinessWorkflow:
         self._market = market
         self._accessibility = accessibility
         self._screen_capture = screen_capture
+        self._screens = screens
         self._output = output
 
     def run(self) -> None:
@@ -92,23 +99,33 @@ class ReadinessWorkflow:
 
     def _binance_checks(self) -> list[Check]:
         s = self._settings
+        areas = self._screens()
+        auto = "Jendela Binance diatur otomatis ke ukuran yang dibutuhkan saat bot mulai."
         if not self._apps.is_running(s.app_bundle_id):
+            fits = any(
+                a.width >= EXPECTED_WINDOW[0] and a.height >= EXPECTED_WINDOW[1] for a in areas
+            )
             return [
                 Check("binance", False, "Binance belum dibuka. Buka dan login dulu."),
-                Check("window", False, "Ukuran jendela dicek setelah Binance dibuka."),
+                Check("window", fits, auto if fits else screen_too_small(areas)),
             ]
         running = Check("binance", True, "Binance berjalan.")
         try:
             rect = self._window.bounds(s.app_name)
-        except BotError as exc:
-            return [running, Check("window", False, f"Jendela Binance tidak terbaca: {exc}")]
-        problem = window_size_problem(rect.width, rect.height)
-        if problem:
-            return [running, Check("window", False, problem)]
-        return [
-            running,
-            Check("window", True, f"Ukuran jendela {rect.width}x{rect.height} sesuai."),
-        ]
+        except BotError:
+            hidden = (
+                "Jendela Binance tidak terlihat (diperkecil, disembunyikan, atau di Desktop lain). "
+                "Bot akan menampilkannya saat mulai; bila tetap gagal, buka jendelanya manual."
+            )
+            return [running, Check("window", False, hidden)]
+        if window_ready(rect, areas):
+            return [
+                running,
+                Check("window", True, f"Ukuran jendela {rect.width}x{rect.height} sesuai."),
+            ]
+        if window_target(rect, areas) is None:
+            return [running, Check("window", False, screen_too_small(areas))]
+        return [running, Check("window", True, auto)]
 
     def _api_check(self) -> Check:
         try:

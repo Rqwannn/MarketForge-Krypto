@@ -18,6 +18,7 @@ from binance_bot.logging_setup import setup_logging
 from binance_bot.macos import MacAppController, MacTextReader, MacWindowController
 from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.macos.permissions import accessibility_allowed, screen_capture_allowed
+from binance_bot.macos.screens import visible_areas
 from binance_bot.market import FuturesMarket
 from binance_bot.strategy import DryRunOrderGate, Journal, SopParams
 from binance_bot.strategy.params import SIGNAL_SOURCES
@@ -206,6 +207,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             market,
             accessibility=accessibility_allowed,
             screen_capture=screen_capture_allowed,
+            screens=visible_areas,
         )
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":

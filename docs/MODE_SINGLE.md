@@ -20,7 +20,8 @@ Lakukan sekali per laptop (langkah lengkap di bagian **Setup** pada [README](../
 - [ ] VS Code/Terminal punya izin **Accessibility** dan **Screen & System Audio Recording**.
 - [ ] Binance Desktop terbuka dan login, bahasa **Indonesia**, akun **Futures aktif**.
 - [ ] Halaman Futures memakai tata letak **Pro**.
-- [ ] `make window-size` menampilkan **OK** (jendela Binance 1470x859 pt).
+- [ ] `make cek`: ukuran jendela **ok**. Bot mengatur jendela Binance ke 1470x859 pt sendiri;
+      layar hanya perlu cukup besar (di luar menu bar dan Dock).
 - [ ] Jaringan bisa menjangkau API publik Binance (`fapi.binance.com`). Bila diblokir
       (Internet Positif), semua koin akan dilewati dengan alasan "Data pasar Binance tidak bisa
       diambil".
@@ -104,5 +105,6 @@ Belum cukup data: 12/50 trade uji selesai
 | `Margin di aplikasi: leverage 20x, SOP 2x` | Leverage aplikasi belum diubah | Ubah ke 2x sebelum order sungguhan |
 | `Klik ke zona tombol order ditolak` | Pengaman bekerja | Jangan diabaikan; posisi di `layout.py` perlu dicek |
 | `... stop-loss berturut-turut hari ini` | Aturan SOP | Berhenti hari itu dan tinjau jurnal |
-| `Ukuran jendela ... berbeda dari 1470x859` | Jendela diubah ukurannya | Sesuaikan sampai `make window-size` OK |
+| `Layar terlalu kecil untuk jendela Binance 1470x859` | Area layar di luar menu bar dan Dock kurang dari 1470x859 | Pilih "More Space" di System Settings > Displays, atau sembunyikan Dock otomatis |
+| `Pengaturan otomatis tidak berhasil` | Binance dalam mode layar penuh | Keluarkan Binance dari layar penuh |
 | `No module named 'binance_bot'` | Flag hidden macOS | `make fix-hidden` (perintah `make` lain sudah menjalankannya otomatis) |

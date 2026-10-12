@@ -6,7 +6,7 @@ from binance_bot.binance_desktop import BinanceNavigator, layout
 from binance_bot.config import Settings
 from binance_bot.exceptions import AppNotRunningError, SafetyError, ScreenReadError, WindowError
 from binance_bot.macos import Rect, TextLine
-from fakes import WINDOW, Clock, FakeApps, FakeScreen, list_lines, text_lines
+from fakes import AREA, WINDOW, Clock, FakeApps, FakeScreen, list_lines, text_lines
 
 ASCENDING = list_lines((1, "USUSDT", "-32.21%"), (2, "JCTUSDT", "-30.04%"))
 DESCENDING = list_lines(
@@ -14,7 +14,11 @@ DESCENDING = list_lines(
 )
 
 
-def make_nav(screen: FakeScreen | None = None, apps: FakeApps | None = None) -> BinanceNavigator:
+def make_nav(
+    screen: FakeScreen | None = None,
+    apps: FakeApps | None = None,
+    areas: list[Rect] | None = None,
+) -> BinanceNavigator:
     screen = screen or FakeScreen()
     clock = Clock()  # jam tiruan: menunggu berjalan instan
     return BinanceNavigator(
@@ -24,6 +28,7 @@ def make_nav(screen: FakeScreen | None = None, apps: FakeApps | None = None) -> 
         screen,
         sleep=clock.sleep,
         clock=clock,
+        screens=lambda: areas or [AREA],
     )
 
 
@@ -43,9 +48,52 @@ def test_prepare_refuses_when_binance_not_running() -> None:
     assert screen.events == []
 
 
-def test_prepare_refuses_window_size_that_differs_from_calibration() -> None:
-    with pytest.raises(WindowError, match="1200x700"):
-        make_nav(FakeScreen(Rect(0, 33, 1200, 700))).prepare()
+def resizes(screen: FakeScreen) -> list[object]:
+    return [where for kind, where in screen.events if kind == "set_bounds"]
+
+
+def test_prepare_keeps_a_window_that_already_fits() -> None:
+    screen = FakeScreen()
+    make_nav(screen).prepare()
+    assert resizes(screen) == []
+
+
+def test_prepare_resizes_window_to_calibration_size_on_a_bigger_screen() -> None:
+    # MacBook Pro 16": area 1728x1084; jendela Binance sedang 1200x700 di tengah layar.
+    screen = FakeScreen(Rect(260, 200, 1200, 700))
+    nav = make_nav(screen, areas=[Rect(0, 33, 1728, 1084)])
+    nav.prepare()
+    assert resizes(screen) == [Rect(0, 33, 1470, 859)]
+    assert nav.rect == Rect(0, 33, 1470, 859)
+    assert clicks(screen) == []
+
+
+def test_prepare_moves_a_window_hanging_off_the_screen() -> None:
+    screen = FakeScreen(Rect(400, 33, 1470, 859))  # ukuran benar, tapi sebagian di luar layar
+    make_nav(screen).prepare()
+    assert resizes(screen) == [Rect(0, 33, 1470, 859)]
+
+
+def test_prepare_keeps_binance_on_the_screen_it_is_on() -> None:
+    external = Rect(1470, 0, 1920, 1055)
+    screen = FakeScreen(Rect(1600, 100, 1000, 600))
+    make_nav(screen, areas=[AREA, external]).prepare()
+    assert resizes(screen) == [Rect(1470, 0, 1470, 859)]
+
+
+def test_prepare_stops_without_clicking_when_the_screen_is_too_small() -> None:
+    # MacBook Air 13" M1 (1440x900): jendela 1470 point tidak muat.
+    screen = FakeScreen(Rect(0, 25, 1440, 790))
+    with pytest.raises(WindowError, match=r"terlalu kecil.*1440x790"):
+        make_nav(screen, areas=[Rect(0, 25, 1440, 790)]).prepare()
+    assert screen.events == []
+
+
+def test_prepare_stops_when_the_window_cannot_be_resized() -> None:
+    screen = FakeScreen(Rect(0, 0, 1470, 956), resizable=False)  # mis. mode layar penuh
+    with pytest.raises(WindowError, match="layar penuh"):
+        make_nav(screen).prepare()
+    assert clicks(screen) == []
 
 
 def test_navigation_before_prepare_is_an_error() -> None:

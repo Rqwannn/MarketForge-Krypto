@@ -34,7 +34,9 @@ Lalu:
    **Accessibility** dan **Screen & System Audio Recording**, lalu restart aplikasinya.
 2. `make open` untuk membuka Binance (tidak mengganggu sesi login yang sudah ada), lalu login.
 3. Buka menu Futures sekali dan pilih tata letak **Pro**.
-4. `make window-size` harus menampilkan **OK**.
+4. Layar harus menyisakan minimal 1470x859 pt di luar menu bar dan Dock (MacBook Air 13" M2 ke
+   atas, Air 15", Pro 14"/16", atau monitor eksternal). Jendela Binance diatur otomatis ke ukuran
+   itu saat bot mulai; `make cek` memberi tahu bila layarnya terlalu kecil.
 5. `make uji-isi RANK=1 JUMLAH=1`: bot membuka top gainer #1 dan mengisi kolom Jumlah dengan 1.
    Pastikan log berakhir `BERHASIL`, lalu kosongkan kolom itu.
 
@@ -105,9 +107,12 @@ aplikasi hanya mengatur siapa yang memanggil AI dan bagaimana hasilnya ditampilk
 ## Kalibrasi
 
 Posisi klik ada di `engine/src/binance_bot/binance_desktop/layout.py`, diukur dari Binance Desktop
-2.6.0 bahasa Indonesia, jendela 1470x859 pt, Futures tata letak Pro. Jika ukuran jendela
-berbeda lebih dari 2%, bot berhenti tanpa mengklik. Jika tata letak, bahasa, atau ukuran layar
-berbeda, ukur ulang file itu lalu uji dengan `make uji-isi` dan `make single ... NO_FILL=1`.
+2.6.0 bahasa Indonesia, jendela 1470x859 pt, Futures tata letak Pro. Binance mengubah susunan
+tampilannya mengikuti ukuran jendela, jadi setiap kali mulai bot mengatur jendela Binance ke
+1470x859 di kiri atas layar tempat Binance berada (layar lain dicoba bila tidak muat). Bila tidak
+ada layar yang cukup (mis. MacBook Air 13" M1 dengan tampilan bawaan 1440x900), bot berhenti
+tanpa mengklik dan menyarankan "More Space" di System Settings > Displays. Jika tata letak atau
+bahasa berbeda, ukur ulang file itu lalu uji dengan `make uji-isi` dan `make single ... NO_FILL=1`.
 
 ## Pengembangan
 
