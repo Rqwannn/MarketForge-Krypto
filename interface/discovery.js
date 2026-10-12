@@ -36,10 +36,28 @@ function computerName(platform = process.platform) {
   return laptopName();
 }
 
+const MAX_ACTIVITY = 90;
+const COIN = /^([A-Z0-9]{1,20}USD[TC])\|(ok|tunggu|jangan|)\|(open|skipped|analyzed)$/;
+
+/**
+ * Aktivitas terakhir laptop lain (mis. "Membuka top 2: RSRUSDT") dan hasil koin terakhirnya.
+ * Hanya dari laptop dengan token hub yang sama (TXT bertanda tangan cocok).
+ */
+function activityFrom(txt, verified) {
+  if (!verified || typeof txt.act !== 'string' || !txt.act) return null;
+  const coin = COIN.exec(txt.coin || '');
+  return {
+    text: txt.act.slice(0, MAX_ACTIVITY),
+    coin: coin ? { symbol: coin[1], verdict: coin[2], status: coin[3] } : null,
+    at: Number(txt.at) > 0 ? Number(txt.at) * 1000 : 0,
+  };
+}
+
 /** Layanan Bonjour -> data laptop. Isinya dari jaringan: dibatasi dan divalidasi. */
 function peerFrom(service, selfId, token = '') {
   const txt = service.txt || {};
   if (typeof txt.id !== 'string' || !/^[0-9a-f-]{8,40}$/.test(txt.id)) return null;
+  const team = teamFieldsFrom(txt, token);
   return {
     id: txt.id,
     name: String(txt.name || service.host || 'Laptop').slice(0, MAX_NAME),
@@ -48,7 +66,8 @@ function peerFrom(service, selfId, token = '') {
     os: OS_NAMES[txt.os] || 'Lainnya',
     address: lanAddress(service),
     self: txt.id === selfId,
-    team: teamFieldsFrom(txt, token),
+    team,
+    activity: activityFrom(txt, team.verified),
   };
 }
 
@@ -193,6 +212,7 @@ class Discovery extends EventEmitter {
       address: localAddress(),
       self: true,
       team: teamFieldsFrom({}, ''),
+      activity: null,
     };
     return sortPeers([self, ...this.peers.values()]);
   }
@@ -211,4 +231,4 @@ class Discovery extends EventEmitter {
   }
 }
 
-module.exports = { Discovery, SERVICE_TYPE, computerName, laptopName, localAddress, peerFrom };
+module.exports = { COIN, Discovery, MAX_ACTIVITY, SERVICE_TYPE, computerName, laptopName, localAddress, peerFrom };

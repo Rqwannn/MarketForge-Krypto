@@ -195,7 +195,10 @@ function render() {
   $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
   $('ranks-note').textContent = multi ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih` : 'Pilih satu';
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
-  if (state === 'stopped') $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
+  if (state === 'stopped') {
+    $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
+    if (!flow.done && flow.step < 0) resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
+  }
   window.bot.setRole(form.mode).then(applyTeam).catch(() => {}); // peran untuk daftar laptop di WiFi
   saveForm();
 }
@@ -305,6 +308,7 @@ async function toggleRun() {
   emptyCoins('Menyiapkan Binance…');
   emptyFeed('Menunggu aktivitas pertama…');
   setState('running', 'Sedang memantau', 'Menyiapkan aplikasi Binance…');
+  resetFlow(form.mode, 'Menyiapkan aplikasi Binance…');
 }
 
 function addFeed(item, ts) {
@@ -328,18 +332,121 @@ function addCoin(e) {
   if (e.status === 'open') counts.open += 1;
   setCounts();
 
-  const [label, css] = e.status === 'open' ? ['Posisi uji', 'opened'] : VERDICT[e.verdict] || ['Dilewati', ''];
-  let note;
-  if (e.status === 'open') note = `Masuk ${price(e.entry_price)} · target ${price(e.target_price)} · batas rugi ${price(e.stop_price)}`;
-  else if (e.status === 'analyzed') note = 'Dibagikan ke laptop pengikut';
-  else note = plain(e.reason);
+  const [label, css] = VERDICT[e.verdict] || ['Tidak dibaca', ''];
+  const act = actionOf(e);
   $('coins').querySelector('.empty-row')?.remove();
   $('coins').append(el('tr', {},
     el('td', { class: 'rank' }, el('span', { class: 'rank-badge', textContent: String(e.rank) })),
     el('td', { class: 'sym', textContent: e.symbol }),
     el('td', {}, dips(e.count_ai ?? e.count_data)),
     el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
-    el('td', { class: 'why' }, note, e.summary ? el('small', { textContent: e.summary }) : null)));
+    el('td', { class: 'why' },
+      el('strong', { class: `act ${act.css}`, textContent: act.text }),
+      el('span', { textContent: act.note }),
+      e.summary ? el('small', { textContent: `Haiku: ${e.summary}` }) : null)));
+}
+
+/** Akibat keputusan Haiku untuk satu koin (kolom Tindakan). */
+function actionOf(e) {
+  if (e.status === 'open') {
+    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · target ${price(e.target_price)} · batas rugi ${price(e.stop_price)}` };
+  }
+  if (e.status === 'analyzed') {
+    return e.verdict === 'ok'
+      ? { text: 'Pengikut boleh short (uji)', css: 'pos', note: 'Hasil dibagikan; pengikut mengecek biaya lalu membuka posisi uji.' }
+      : { text: 'Tidak ada tindakan', css: '', note: 'Hasil dibagikan; pengikut tidak masuk koin ini.' };
+  }
+  if (e.verdict === 'tunggu' || e.verdict === 'jangan') {
+    return { text: 'Tidak ada tindakan', css: '', note: plain(e.reason) };
+  }
+  if (e.verdict === 'ok') return { text: 'Batal masuk', css: 'warn', note: plain(e.reason) };
+  return { text: 'Dilewati', css: 'warn', note: plain(e.reason) };
+}
+
+// --------------------------------------------------------------------------- alur putaran
+
+const FLOW = {
+  single: ['Buka top gainers', 'Cek biaya & slot', 'Haiku baca grafik', 'Catat posisi uji'],
+  leader: ['Buka top gainers', 'Haiku baca grafik', 'Keputusan', 'Bagikan ke pengikut'],
+  follower: ['Buka koin bagiannya', 'Cek biaya & slot', 'Ambil hasil pemimpin', 'Catat posisi uji'],
+};
+const flow = { mode: 'single', step: -1, done: false, symbol: '', nextAt: 0 };
+
+function setFlow(step, sub, done = false) {
+  flow.step = step;
+  flow.done = done;
+  $('flow-sub').textContent = sub;
+  renderFlow();
+}
+
+function renderFlow() {
+  const names = FLOW[flow.mode] || FLOW.single;
+  $('steps').replaceChildren(...names.map((name, i) => {
+    const kind = flow.done || i < flow.step ? 'done' : i === flow.step ? 'active' : '';
+    return el('li', { class: `step ${kind}` },
+      el('span', { class: 'step-no' }, kind === 'done' ? icon('check') : String(i + 1)),
+      el('span', { textContent: name }));
+  }));
+}
+
+/** Langkah putaran dari satu baris log engine. */
+function advanceFlow(entry) {
+  const e = entry.event;
+  const m = entry.message || '';
+  const leader = flow.mode === 'leader';
+  const follower = flow.mode === 'follower';
+  if (e?.type === 'cycle' && e.phase === 'start') {
+    flow.nextAt = 0;
+    setFlow(0, 'Membuka daftar top gainers Futures di Binance');
+    return;
+  }
+  const opened = m.match(/^Top gainer #(\d+): (\S+)/);
+  if (opened) {
+    flow.symbol = opened[2];
+    setFlow(1, leader ? `Top ${opened[1]}: ${opened[2]} · membuka grafik 15 menit`
+      : `Top ${opened[1]}: ${opened[2]} · cek funding, spread, dan slot posisi`);
+    return;
+  }
+  if (/_15m\.png/.test(m) && !follower) {
+    setFlow(leader ? 1 : 2, `Haiku membaca garis kuning ${flow.symbol} di grafik 15 menit`);
+    return;
+  }
+  const waiting = m.match(/^Menunggu leader menganalisis (\S+)/);
+  if (waiting) {
+    setFlow(2, `Menunggu hasil Haiku dari pemimpin untuk ${waiting[1].replace(/\.+$/, '')}`);
+    return;
+  }
+  const shared = m.match(/^Hasil AI dari hub untuk (\S+)/);
+  if (shared) {
+    setFlow(2, `Hasil pemimpin untuk ${shared[1]} diterima`);
+    return;
+  }
+  if (e?.type === 'coin') {
+    const verdict = (VERDICT[e.verdict] || ['tidak dibaca'])[0];
+    setFlow(3, leader ? `${e.symbol}: ${verdict} · dibagikan ke pengikut` : `${e.symbol}: ${actionOf(e).text.toLowerCase()}`);
+    return;
+  }
+  if (e?.type === 'cycle' && e.phase === 'done') {
+    flow.nextAt = e.next_in_s > 0 ? Date.now() + e.next_in_s * 1000 : 0;
+    let sub = 'Putaran selesai.';
+    if (flow.nextAt) sub += ' Menunggu putaran berikutnya.';
+    else if (leader) sub += ' Hasil tetap dibagikan ke pengikut sampai Hentikan.';
+    setFlow(FLOW[flow.mode].length, sub, true);
+  }
+}
+
+function tickFlow() {
+  const tag = $('flow-next');
+  const left = Math.round((flow.nextAt - Date.now()) / 1000);
+  tag.hidden = !(state === 'running' && flow.nextAt && left > 0);
+  if (!tag.hidden) tag.textContent = `Putaran berikutnya ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+}
+setInterval(tickFlow, 1000);
+
+function resetFlow(mode, sub) {
+  flow.mode = mode;
+  flow.nextAt = 0;
+  setFlow(-1, sub);
 }
 
 window.bot.onLog((entry) => {
@@ -350,12 +457,18 @@ window.bot.onLog((entry) => {
   }
   if (e?.type === 'coin') addCoin(e);
   if (e?.type === 'hub') $('share').hidden = false;
+  advanceFlow(entry);
   if (e?.type === 'cycle' && e.phase === 'done') {
     $('cycle-info').textContent = `Selesai ${clock(entry.ts || Date.now() / 1000)}`;
     if ($('coins').querySelector('.empty-row')) emptyCoins('Tidak ada koin yang bisa dinilai di putaran ini.');
   }
   const item = activity(entry);
-  if (item) addFeed(item, entry.ts || Date.now() / 1000);
+  if (item) {
+    addFeed(item, entry.ts || Date.now() / 1000);
+    // Laptop lain (mis. pemimpin) bisa melihat aktivitas terakhir laptop ini.
+    const coin = e?.type === 'coin' ? `${e.symbol}|${e.verdict || ''}|${e.status}` : '';
+    window.bot.reportActivity({ text: item.text, coin }).catch(() => {});
+  }
 });
 
 window.bot.onExit(({ code, signal }) => {
@@ -363,7 +476,12 @@ window.bot.onExit(({ code, signal }) => {
   if (code === 0) setState('stopped', 'Selesai', 'Putaran selesai. Rekap ada di Hasil uji.');
   else if (stopped) setState('stopped', 'Dihentikan', 'Bot berhenti atas permintaan.');
   else setState('stopped', 'Berhenti karena kendala', 'Buka Cek laptop lalu coba lagi.');
-  addFeed({ text: code === 0 ? 'Bot selesai' : stopped ? 'Bot dihentikan' : 'Bot berhenti karena kendala', css: code === 0 || stopped ? '' : 'bad' }, Date.now() / 1000);
+  const text = code === 0 ? 'Bot selesai' : stopped ? 'Bot dihentikan' : 'Bot berhenti karena kendala';
+  addFeed({ text, css: code === 0 || stopped ? '' : 'bad' }, Date.now() / 1000);
+  window.bot.reportActivity({ text }).catch(() => {});
+  flow.nextAt = 0;
+  if (!flow.done) setFlow(flow.step, text);
+  tickFlow();
 });
 
 $('toggle').addEventListener('click', toggleRun);
@@ -647,13 +765,48 @@ function peerRow(p, leading) {
   } else if (leading) {
     actions = peerActions(p);
   }
-  return el('li', { class: `peer ${p.self ? 'self' : ''}` },
+  const open = !p.self && expandedPeers.has(p.id);
+  const row = el('li', { class: `peer ${p.self ? 'self' : 'clickable'} ${open ? 'open' : ''}` },
     el('span', { class: 'icon' }, icon('laptop')),
     el('div', { class: 'peer-info' },
       el('strong', { textContent: p.self ? `${p.name} (laptop ini)` : p.name }),
-      el('span', { textContent: meta })),
+      el('span', { textContent: p.self ? meta : `${meta} · klik untuk detail` })),
     tags,
-    el('div', { class: 'peer-actions' }, ...actions));
+    el('div', { class: 'peer-actions' }, ...actions),
+    open ? peerDetail(p) : null);
+  if (!p.self) {
+    row.addEventListener('click', (ev) => {
+      if (ev.target.closest('button, select')) return;
+      if (expandedPeers.has(p.id)) expandedPeers.delete(p.id);
+      else expandedPeers.add(p.id);
+      window.bot.peersNow().then(renderPeers).catch(() => {});
+    });
+  }
+  return row;
+}
+
+const expandedPeers = new Set();
+
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  return s < 60 ? `${s} detik lalu` : `${Math.round(s / 60)} menit lalu`;
+}
+
+/** Apa yang sedang dikerjakan laptop lain (diumumkan lewat Bonjour, ditandatangani token). */
+function peerDetail(p) {
+  const a = p.activity;
+  if (!a) {
+    return el('div', { class: 'peer-detail empty' },
+      'Aktivitas belum terlihat. Pastikan laptop itu memakai MarketForge terbaru dan token hub yang sama.');
+  }
+  const coin = a.coin
+    ? `${a.coin.symbol} · ${(VERDICT[a.coin.verdict] || ['tidak dibaca'])[0]} · ${a.coin.status === 'open' ? 'posisi uji dibuka' : a.coin.status === 'analyzed' ? 'dibagikan' : 'tidak masuk'}`
+    : 'Belum ada';
+  const item = (label, value) => el('div', {}, el('span', { textContent: label }), el('strong', { textContent: value }));
+  return el('div', { class: 'peer-detail' },
+    item('Sedang', a.text),
+    item('Koin terakhir', coin),
+    item('Diperbarui', a.at ? ago(a.at) : '–'));
 }
 
 /** Aksi pemimpin untuk satu laptop: ajak, batalkan ajakan, atau lepas pengikut. */
@@ -748,6 +901,7 @@ window.bot.team.onStarted(({ leaderName, rank }) => {
   emptyCoins('Menyiapkan Binance…');
   emptyFeed('Menunggu aktivitas pertama…');
   setState('running', 'Mengikuti pemimpin', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
+  resetFlow('follower', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
 });
 window.bot.team.state().then(applyTeam).catch(() => {});
 
@@ -759,6 +913,7 @@ render();
 setState('stopped');
 setCounts();
 emptyCoins('Belum ada koin yang dinilai. Tekan Mulai memantau.');
+resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
 emptyFeed('Aktivitas bot akan muncul di sini.');
 window.bot.status().then(({ running }) => {
   if (running) setState('running', 'Sedang memantau', 'Bot sedang bekerja.');

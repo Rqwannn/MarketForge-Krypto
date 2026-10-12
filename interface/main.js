@@ -8,7 +8,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const engine = require('./engine');
-const { Discovery } = require('./discovery');
+const { COIN, Discovery, MAX_ACTIVITY } = require('./discovery');
 const { Team } = require('./team');
 
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
@@ -21,12 +21,36 @@ let team = null; // kelompok pemimpin-pengikut (team.js)
 let uiRole = 'single'; // peran yang dipilih di halaman Pantau
 let runningMode = null; // mode engine yang sedang berjalan
 const invitations = new Map(); // id pemimpin -> ajakan yang belum dijawab
+// Aktivitas terakhir laptop ini, diumumkan ke laptop lain (hanya bila token hub diatur).
+let activity = { text: '', coin: '', at: 0 };
+let activityTimer = null;
+const ACTIVITY_THROTTLE_MS = 4000; // tiap pengumuman ulang = goodbye + announce: jangan terlalu sering
+
+function activityFields() {
+  if (!team?.enabled || !activity.text) return {};
+  const fields = { act: activity.text, at: String(Math.floor(activity.at / 1000)) };
+  if (activity.coin) fields.coin = activity.coin;
+  return fields;
+}
+
+function reportActivity({ text, coin }) {
+  activity = {
+    text: String(text || '').slice(0, MAX_ACTIVITY),
+    coin: COIN.test(String(coin || '')) ? String(coin) : activity.coin,
+    at: Date.now(),
+  };
+  if (activityTimer) return;
+  activityTimer = setTimeout(() => {
+    activityTimer = null;
+    syncPresence();
+  }, ACTIVITY_THROTTLE_MS);
+}
 
 /** Umumkan peran, status bot, dan data kelompok laptop ini. */
 function syncPresence() {
   if (!discovery) return;
   const role = team.membership ? 'follower' : uiRole;
-  discovery.update({ role, running: proc.running, extra: team.fields(role) });
+  discovery.update({ role, running: proc.running, extra: { ...team.fields(role), ...activityFields() } });
   send('peers:changed');
 }
 
@@ -180,6 +204,10 @@ handle('peers:list', async () => {
   return (await discovery.list()).map((peer) => team.describe(peer));
 });
 handle('peers:now', () => peersNow());
+handle('presence:activity', (update) => {
+  reportActivity(update || {});
+  return true;
+});
 handle('team:state', () => teamState());
 handle('team:invite', (peerId, rank) => {
   if (!team?.enabled) throw new Error('Token hub belum diatur di laptop ini. Hubungi admin.');

@@ -132,3 +132,14 @@ test('berhenti: pengumuman dicabut', () => {
   discovery.stop();
   assert.equal(bonjour.destroyed, true);
 });
+
+test('aktivitas laptop lain hanya dari tanda tangan yang cocok, dan divalidasi', () => {
+  const txt = { id: ATTA, name: 'Pengikut', role: 'follower', state: 'running', os: 'win32', act: 'Membuka top 2: RSRUSDT', coin: 'RSRUSDT|tunggu|skipped', at: '1800000000' };
+  const peer = peerFrom({ txt: { ...txt, sig: sign(TOKEN, txt) } }, SELF, TOKEN);
+  assert.deepEqual(peer.activity, { text: 'Membuka top 2: RSRUSDT', coin: { symbol: 'RSRUSDT', verdict: 'tunggu', status: 'skipped' }, at: 1800000000000 });
+  assert.equal(peerFrom({ txt: { ...txt, sig: sign('token-lain', txt) } }, SELF, TOKEN).activity, null);
+  const bad = { ...txt, coin: '<img>|ok|open', act: 'x'.repeat(300) };
+  const odd = peerFrom({ txt: { ...bad, sig: sign(TOKEN, bad) } }, SELF, TOKEN).activity;
+  assert.equal(odd.coin, null);
+  assert.equal(odd.text.length, 90);
+});

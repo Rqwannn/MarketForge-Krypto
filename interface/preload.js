@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('bot', {
   summary: () => call('engine:summary'),
   peers: () => call('peers:list'),
   peersNow: () => call('peers:now'),
+  reportActivity: (update) => call('presence:activity', update),
   onPeersChanged: (callback) => listen('peers:changed', callback),
   setRole: (role) => call('presence:update', role),
   team: {

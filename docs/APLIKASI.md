@@ -10,7 +10,7 @@ detailnya tetap tersimpan di `engine/logs/bot.log` untuk admin.
 
 | Halaman | Isi |
 |---|---|
-| **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Hasil tiap koin tampil di tabel "Putaran ini" beserta aktivitas bot. |
+| **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Kartu **Alur putaran** menyorot langkah yang sedang berjalan (mis. Haiku baca grafik) dan hitung mundur ke putaran berikutnya. Tabel "Putaran ini" menampilkan keputusan Haiku dan **tindakan**-nya (mis. Tunggu = tidak ada tindakan; Layak short = pengikut boleh membuka posisi uji). |
 | **Hasil uji** | Progres 50 trade uji, tingkat menang dibanding titik impas, hasil bersih dalam % modal, dan trade terakhir. |
 | **Cek laptop** | Daftar kesiapan: izin macOS, Binance terbuka, ukuran jendela, koneksi data Binance, AI, dan kerja sama antar laptop. Tombol **Lihat laptop** menampilkan laptop lain di WiFi yang sama yang sedang membuka MarketForge (nama, OS, peran, status bot). |
 
