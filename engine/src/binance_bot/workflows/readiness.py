@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 
@@ -16,6 +17,10 @@ from binance_bot.macos import AppController, Rect, WindowController
 from binance_bot.market import FuturesMarket
 
 _PRIVACY = "System Settings > Privacy & Security"
+_SCREEN_BLOCKED = (
+    "Binance memblokir tangkapan layar. Matikan perlindungan layar di aplikasi Binance "
+    "(jangan klik 'Aktifkan perlindungan layar' pada banner keamanan)."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +81,9 @@ class ReadinessWorkflow:
                 "screen",
                 self._screen_capture(),
                 "Izin rekam layar aktif.",
-                f"Izin rekam layar belum aktif. Aktifkan di {_PRIVACY} > "
+                _SCREEN_BLOCKED
+                if sys.platform == "win32"
+                else f"Izin rekam layar belum aktif. Aktifkan di {_PRIVACY} > "
                 "Screen & System Audio Recording.",
             ),
             *self._binance_checks(),

@@ -6,7 +6,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { EngineProcess, InputError, buildArgs, engineEnv, parseLine, readAppEnv } = require('../engine');
+const {
+  EngineProcess, InputError, botFor, buildArgs, engineEnv, findBot, parseLine, readAppEnv,
+} = require('../engine');
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mf-'));
@@ -73,19 +75,45 @@ test('interface/.env: hanya kunci yang diizinkan diteruskan ke engine', () => {
   assert.deepEqual(readAppEnv(path.join(tempDir(), 'tidak-ada')), {});
 });
 
-test('proses engine: log per baris, lingkungan dari .env, berhenti dengan SIGINT', async () => {
-  const dir = tempDir();
-  const bot = path.join(dir, 'fake-bot');
-  // Engine tiruan: cetak satu event dan variabel dari .env, lalu tunggu sampai dihentikan.
-  fs.writeFileSync(bot, [
-    '#!/bin/sh',
-    'trap "echo berhenti >&2; exit 130" INT',
-    `echo '{"ts":1,"level":"INFO","logger":"t","message":"mulai","event":{"type":"cycle","phase":"start"}}'`,
-    'echo "hub=$BOT_HUB_URL"',
-    'while true; do sleep 0.1; done',
-  ].join('\n'), { mode: 0o755 });
+test('perintah engine: python -m binance_bot dari virtualenv di semua OS', () => {
+  assert.deepEqual(botFor('/v', 'darwin'), {
+    command: path.join('/v', 'bin', 'python'),
+    args: ['-m', 'binance_bot'],
+  });
+  assert.deepEqual(botFor('C:\\v', 'win32'), {
+    command: path.join('C:\\v', 'Scripts', 'python.exe'),
+    args: ['-m', 'binance_bot'],
+  });
+});
 
-  const proc = new EngineProcess({ bot: [bot], cwd: dir, env: () => ({ PATH: process.env.PATH, BOT_HUB_URL: 'http://h:1' }) });
+test('virtualenv dicari di engine/.venv lalu di root repo', () => {
+  const exists = (wanted) => (file) => file === wanted;
+  const rootBot = botFor(path.resolve(__dirname, '..', '..', '.venv'), 'win32');
+  assert.equal(findBot(exists(rootBot.command), 'win32').command, rootBot.command);
+  const engineBot = botFor(path.resolve(__dirname, '..', '..', 'engine', '.venv'), 'win32');
+  assert.equal(findBot(exists(engineBot.command), 'win32').command, engineBot.command);
+  // tidak ada satu pun: kembali ke lokasi engine/.venv agar pesan "belum terpasang" masuk akal
+  assert.equal(findBot(() => false, 'win32').command, engineBot.command);
+});
+
+test('proses engine: log per baris, lingkungan dari .env, berhenti', async () => {
+  const dir = tempDir();
+  const script = path.join(dir, 'fake-bot.js');
+  // Engine tiruan (Node, jalan di semua OS): cetak satu event dan variabel dari .env, lalu
+  // tunggu sampai dihentikan. Di Unix berhenti lewat SIGINT dengan kode 130.
+  fs.writeFileSync(script, [
+    "process.on('SIGINT', () => { console.error('berhenti'); process.exit(130); });",
+    `console.log(JSON.stringify({ ts: 1, level: 'INFO', logger: 't', message: 'mulai', event: { type: 'cycle', phase: 'start' } }));`,
+    "console.log('hub=' + process.env.BOT_HUB_URL + ' arg=' + process.argv.slice(2).join(','));",
+    'setInterval(() => {}, 100);',
+  ].join('\n'));
+
+  const proc = new EngineProcess({
+    bot: process.execPath,
+    botArgs: [script],
+    cwd: dir,
+    env: () => ({ ...process.env, BOT_HUB_URL: 'http://h:1' }),
+  });
   const logs = [];
   proc.on('log', (entry) => logs.push(entry));
   const exited = new Promise((resolve) => proc.once('exit', resolve));
@@ -94,10 +122,12 @@ test('proses engine: log per baris, lingkungan dari .env, berhenti dengan SIGINT
 
   while (logs.length < 2) await new Promise((r) => setTimeout(r, 20));
   assert.equal(logs[0].event.type, 'cycle');
-  assert.equal(logs[1].message, 'hub=http://h:1');
+  assert.equal(logs[1].message, 'hub=http://h:1 arg=single');
   proc.stop();
   const { code } = await exited;
-  assert.equal(code, 130);
   assert.equal(proc.running, false);
-  assert.ok(logs.some((l) => l.level === 'ERROR' && l.message === 'berhenti'));
+  if (process.platform !== 'win32') {
+    assert.equal(code, 130);
+    assert.ok(logs.some((l) => l.level === 'ERROR' && l.message === 'berhenti'));
+  }
 });

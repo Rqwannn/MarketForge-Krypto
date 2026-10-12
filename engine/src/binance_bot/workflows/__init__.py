@@ -9,6 +9,7 @@ from binance_bot.workflows.open_app import OpenBinanceWorkflow
 from binance_bot.workflows.readiness import ReadinessWorkflow
 from binance_bot.workflows.single import SingleWorkflow
 from binance_bot.workflows.sop import SopTrader
+from binance_bot.workflows.window_size import WindowSizeWorkflow
 
 __all__ = [
     "FillTestWorkflow",
@@ -19,5 +20,6 @@ __all__ = [
     "ReadinessWorkflow",
     "SingleWorkflow",
     "SopTrader",
+    "WindowSizeWorkflow",
     "Workflow",
 ]

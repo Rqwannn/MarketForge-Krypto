@@ -2,12 +2,19 @@
 
 Diukur dari Binance Desktop 2.6.0 bahasa Indonesia, jendela 1470x859 pt, halaman Futures
 bertata letak "Pro". Jika tata letak, bahasa, atau ukuran jendela berubah, ukur ulang file ini.
+
+Nilai di file ini adalah profil macOS. Di Windows, `layout_windows.py` menimpanya. Profil bisa
+dipaksa lewat variabel lingkungan `BOT_LAYOUT=mac|windows` (dipakai tes agar tidak bergantung OS).
 """
 
+import os
+import sys
 from collections.abc import Sequence
 
 from binance_bot.macos.window import Rect
 
+# True: ukuran jendela diatur dengan men-maximize (bukan mengubah ukurannya). Dipakai di Windows.
+WINDOW_MAXIMIZED = False
 EXPECTED_WINDOW = (1470, 859)
 WINDOW_TOLERANCE = 0.02
 
@@ -55,7 +62,8 @@ def screen_too_small(areas: Sequence[Rect]) -> str:
     have = f"{biggest.width}x{biggest.height}" if biggest else "tidak terbaca"
     return (
         f"Layar terlalu kecil untuk jendela Binance {want_w}x{want_h} (area layar {have}). "
-        "Pilih 'More Space' di System Settings > Displays, atau sembunyikan Dock otomatis."
+        "Pakai resolusi layar yang lebih besar (macOS: 'More Space' di Displays) atau "
+        "sembunyikan Dock/taskbar otomatis."
     )
 
 
@@ -65,6 +73,11 @@ def screen_too_small(areas: Sequence[Rect]) -> str:
 SIDEBAR_MARKET = (0.023, 0.173)
 # Tab "Futures" pada daftar pasar (sub-tab USDⓈ-M terpilih secara default).
 MARKET_FUTURES_TAB = (0.267, 0.388)
+# Gulir halaman Pasar setelah tab Futures dibuka (0 = tidak perlu), di titik gulir ini.
+FUTURES_LIST_SCROLL_NOTCHES = 0
+FUTURES_LIST_SCROLL_POINT = (0.5, 0.7)
+# Sub-tab USD-M bila perlu dipilih eksplisit (setelah tergulir). None = sudah terpilih bawaan.
+FUTURES_USDM_TAB: tuple[float, float] | None = None
 # Judul kolom "Perubahan 24jam": klik pertama = turun terdalam, klik kedua = naik tertinggi.
 FUTURES_CHANGE_HEADER = (0.5325, 0.5133)
 # Area OCR daftar: kolom nama pair dan perubahan 24 jam, baris 1..6.
@@ -94,7 +107,7 @@ ORDER_QTY_AREA = (0.812, 0.268, 0.992, 0.318)
 
 # Zona tombol order di halaman trade (x0, y0, x1, y1). Klik ke sini SELALU ditolak oleh
 # navigator: beli/short belum boleh dijalankan oleh bot.
-ORDER_BUTTON_ZONES = (
+ORDER_BUTTON_ZONES: tuple[tuple[float, float, float, float], ...] = (
     (0.80, 0.47, 1.00, 0.55),  # Beli/Long dan Jual/Short pada tab Pasar
     (0.80, 0.59, 1.00, 0.67),  # Beli/Long dan Jual/Short pada tab Limit
     (0.05, 0.38, 0.30, 0.45),  # widget Beli/Long-Jual/Short yang melayang di atas grafik
@@ -116,3 +129,7 @@ def trade_icon(rank: int) -> tuple[float, float]:
 def rank_at(window_y: float) -> int:
     """Nomor baris daftar Futures untuk posisi vertikal (relatif jendela)."""
     return round((window_y - FUTURES_FIRST_ROW_Y) / FUTURES_ROW_STEP) + 1
+
+
+if (os.environ.get("BOT_LAYOUT") or ("windows" if sys.platform == "win32" else "mac")) == "windows":
+    from binance_bot.binance_desktop.layout_windows import *  # noqa: F403

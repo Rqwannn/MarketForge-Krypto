@@ -1,6 +1,6 @@
 'use strict';
 
-// Penghubung aplikasi ke engine Python lewat CLI `binance-bot`. Tidak bergantung pada Electron,
+// Penghubung aplikasi ke engine Python lewat CLI `binance_bot`. Tidak bergantung pada Electron,
 // jadi bisa dites dengan `node --test`. Argumen selalu dikirim sebagai array (tanpa shell).
 //
 // Pengaturan teknis (kunci AI, token dan alamat hub) diisi admin di `interface/.env`, lalu
@@ -11,13 +11,35 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ENGINE_DIR = path.resolve(__dirname, '..', 'engine');
+const REPO_DIR = path.resolve(__dirname, '..');
+const ENGINE_DIR = path.join(REPO_DIR, 'engine');
 const ENGINE_SRC = path.join(ENGINE_DIR, 'src');
-const PYTHON = path.join(ENGINE_DIR, '.venv', 'bin', 'python');
-// `python -m binance_bot` dengan PYTHONPATH ke source, bukan skrip `binance-bot`: instalasi
-// editable bergantung pada file .pth yang bisa diberi flag "hidden" oleh macOS lalu diabaikan.
-const BOT = [PYTHON, '-m', 'binance_bot'];
 const APP_ENV_FILE = path.join(__dirname, '.env');
+const IS_WINDOWS = process.platform === 'win32';
+
+/**
+ * Perintah untuk menjalankan engine dari satu virtualenv: `python -m binance_bot` di semua OS,
+ * dengan PYTHONPATH ke `engine/src` (lihat engineEnv).
+ * - Windows: skrip `binance-bot.exe` hanyalah peluncur yang memulai proses Python lain, sehingga
+ *   menghentikannya tidak menghentikan engine.
+ * - macOS: skrip `binance-bot` bergantung pada file .pth instalasi editable, yang bisa diberi
+ *   flag "hidden" oleh macOS lalu diabaikan Python (No module named 'binance_bot').
+ */
+function botFor(venv, platform = process.platform) {
+  return platform === 'win32'
+    ? { command: path.join(venv, 'Scripts', 'python.exe'), args: ['-m', 'binance_bot'] }
+    : { command: path.join(venv, 'bin', 'python'), args: ['-m', 'binance_bot'] };
+}
+
+/** Virtualenv pertama yang ada: `engine/.venv`, lalu `.venv` di root repo. */
+function findBot(exists = fs.existsSync, platform = process.platform) {
+  const venvs = [path.join(ENGINE_DIR, '.venv'), path.join(REPO_DIR, '.venv')];
+  const found = venvs.map((venv) => botFor(venv, platform)).find((bot) => exists(bot.command));
+  return found || botFor(venvs[0], platform);
+}
+
+const DEFAULT_BOT = findBot();
+const BOT = DEFAULT_BOT.command;
 
 const MODES = ['single', 'leader', 'follower'];
 const MAX_RANK = 5;
@@ -103,6 +125,11 @@ function engineEnv(base = process.env, file = APP_ENV_FILE) {
   const env = { ...base, ...readAppEnv(file) };
   env.PYTHONPATH = base.PYTHONPATH ? `${ENGINE_SRC}${path.delimiter}${base.PYTHONPATH}` : ENGINE_SRC;
   delete env.ELECTRON_RUN_AS_NODE;
+  if (IS_WINDOWS) {
+    // Konsol Windows memakai cp1252: tanpa ini log berbahasa Indonesia bisa gagal dicetak.
+    env.PYTHONUTF8 = '1';
+    env.PYTHONIOENCODING = 'utf-8';
+  }
   return env;
 }
 
@@ -120,17 +147,18 @@ function onLines(stream, callback) {
   });
 }
 
-function assertInstalled([program]) {
-  if (!fs.existsSync(program)) {
+function assertInstalled(bot) {
+  if (!fs.existsSync(bot)) {
     throw new InputError('Mesin bot belum terpasang di laptop ini. Hubungi admin.');
   }
 }
 
 /** Satu proses engine yang berjalan lama (single/leader/follower). */
 class EngineProcess extends EventEmitter {
-  constructor({ bot = BOT, cwd = ENGINE_DIR, env = engineEnv } = {}) {
+  constructor({ bot = BOT, botArgs, cwd = ENGINE_DIR, env = engineEnv } = {}) {
     super();
     this.bot = bot;
+    this.botArgs = botArgs ?? (bot === BOT ? DEFAULT_BOT.args : []);
     this.cwd = cwd;
     this.env = env;
     this.child = null;
@@ -143,8 +171,12 @@ class EngineProcess extends EventEmitter {
   start(args) {
     if (this.child) throw new InputError('Bot sudah berjalan. Hentikan dulu.');
     assertInstalled(this.bot);
-    const [program, ...prefix] = this.bot;
-    const child = spawn(program, [...prefix, ...args], { cwd: this.cwd, env: this.env(), stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(this.bot, [...this.botArgs, ...args], {
+      cwd: this.cwd,
+      env: this.env(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
     this.child = child;
     onLines(child.stdout, (line) => this.emit('log', parseLine(line)));
     onLines(child.stderr, (line) => this.emit('log', parseLine(line, 'ERROR')));
@@ -156,10 +188,17 @@ class EngineProcess extends EventEmitter {
     });
   }
 
-  /** Berhenti seperti Ctrl+C. Bila engine tidak berhenti, dipaksa setelah beberapa detik. */
+  /**
+   * Berhenti seperti Ctrl+C. Bila engine tidak berhenti, dipaksa setelah beberapa detik.
+   * Windows tidak punya SIGINT untuk proses anak: pohon prosesnya dihentikan langsung.
+   */
   stop() {
     const child = this.child;
     if (!child) return;
+    if (IS_WINDOWS) {
+      execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
+      return;
+    }
     child.kill('SIGINT');
     this.killTimer = setTimeout(() => {
       if (this.child === child) child.kill('SIGKILL');
@@ -168,12 +207,21 @@ class EngineProcess extends EventEmitter {
 }
 
 /** Jalankan perintah singkat yang mencetak satu JSON di stdout (`cek`, `jurnal --json`). */
-function runJson(args, { bot = BOT, cwd = ENGINE_DIR, env = engineEnv, timeoutMs = 90000 } = {}) {
+function runJson(
+  args,
+  { bot = BOT, botArgs, cwd = ENGINE_DIR, env = engineEnv, timeoutMs = 90000 } = {},
+) {
   assertInstalled(bot);
+  const prefix = botArgs ?? (bot === BOT ? DEFAULT_BOT.args : []);
   return new Promise((resolve, reject) => {
-    const options = { cwd, env: env(), timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 };
-    const [program, ...prefix] = bot;
-    execFile(program, [...prefix, ...args], options, (err, stdout) => {
+    const options = {
+      cwd,
+      env: env(),
+      timeout: timeoutMs,
+      maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
+    };
+    execFile(bot, [...prefix, ...args], options, (err, stdout) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {
@@ -189,8 +237,10 @@ module.exports = {
   ENGINE_DIR,
   EngineProcess,
   InputError,
+  botFor,
   buildArgs,
   engineEnv,
+  findBot,
   parseLine,
   readAppEnv,
   runJson,

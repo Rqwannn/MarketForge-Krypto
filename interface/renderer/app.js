@@ -520,6 +520,14 @@ const CHECKS = {
   hub_token: ['Kerja sama antar laptop', 'Hanya perlu untuk Pemimpin dan Pengikut.'],
 };
 
+// Petunjuk yang berbeda di Windows (tidak ada izin Accessibility/Perekaman Layar per aplikasi;
+// yang perlu dicek adalah Binance memblokir screenshot atau tidak).
+if (window.bot.platform === 'win32') {
+  CHECKS.accessibility = ['Kendali mouse dan keyboard', 'Jalankan aplikasi ini tanpa mode Administrator, kecuali Binance juga dijalankan sebagai Administrator.'];
+  CHECKS.screen = ['Binance boleh di-screenshot', 'Matikan perlindungan layar di Binance (jangan klik "Aktifkan perlindungan layar" pada banner keamanan), lalu coba lagi.'];
+  CHECKS.window = ['Ukuran jendela Binance', 'Layar terlalu kecil. Butuh layar 1920x1080 (jendela Binance di-maximize), atau sembunyikan taskbar otomatis.'];
+}
+
 async function loadChecks() {
   $('ready-text').textContent = 'Memeriksa laptop…';
   $('ready-refresh').disabled = true;

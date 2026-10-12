@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from binance_bot.config import Settings, read_dotenv
+from binance_bot.config import DEFAULT_APP_ID, Settings, read_dotenv
 
 
 def test_read_dotenv_parses_values_and_ignores_comments(tmp_path: Path) -> None:
@@ -27,7 +27,7 @@ def test_gateway_credentials_come_from_unprefixed_env() -> None:
 
 def test_defaults_when_env_empty() -> None:
     settings = Settings.from_env({})
-    assert settings.app_bundle_id == "com.binance.BinanceDesktop"
+    assert settings.app_bundle_id == DEFAULT_APP_ID
     assert settings.launch_timeout_s == 20.0
     assert settings.log_dir == Path("logs")
 

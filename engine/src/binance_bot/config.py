@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
 ENV_PREFIX = "BOT_"
+# macOS: bundle id. Windows: nama file exe.
+DEFAULT_APP_ID = "Binance.exe" if sys.platform == "win32" else "com.binance.BinanceDesktop"
 
 
 def read_dotenv(path: Path) -> dict[str, str]:
@@ -30,7 +33,7 @@ def read_dotenv(path: Path) -> dict[str, str]:
 class Settings:
     # Aplikasi
     app_name: str = "Binance"
-    app_bundle_id: str = "com.binance.BinanceDesktop"
+    app_bundle_id: str = DEFAULT_APP_ID
     launch_timeout_s: float = 20.0
     poll_interval_s: float = 0.5
     settle_delay_s: float = 2.0

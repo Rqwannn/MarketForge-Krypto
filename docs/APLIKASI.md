@@ -45,6 +45,10 @@ Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
 5. Izin macOS (Accessibility dan Screen Recording) diberikan ke aplikasi yang membuka
    MarketForge. Saat dijalankan lewat `make app` dari Terminal/VS Code, izinkan aplikasi itu.
 
+> **Windows:** `make` tidak tersedia. Pasang dan buka aplikasi dengan `npm ci` lalu `npm start` di
+> folder `interface`, dan siapkan engine mengikuti [WINDOWS.md](WINDOWS.md). Izin macOS diganti
+> syarat Windows di sana (izinkan screenshot di Binance, layar 1920x1080).
+
 ## Cara kerja
 
 ```

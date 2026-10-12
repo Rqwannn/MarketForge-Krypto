@@ -1,10 +1,10 @@
 import pytest
 
-from binance_bot.config import Settings
+from binance_bot.config import DEFAULT_APP_ID, Settings
 from binance_bot.exceptions import AppTimeoutError
 from binance_bot.workflows import OpenBinanceWorkflow as OpenBinanceTask
 
-BUNDLE = "com.binance.BinanceDesktop"
+BUNDLE = DEFAULT_APP_ID
 
 
 class FakeController:

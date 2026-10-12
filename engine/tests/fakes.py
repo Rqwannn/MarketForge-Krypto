@@ -7,12 +7,13 @@ from pathlib import Path
 from binance_bot.analysis import AnalysisRecord, PatternReading
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
+from binance_bot.config import DEFAULT_APP_ID
 from binance_bot.exceptions import BotError
 from binance_bot.macos import Rect, TextLine
 from binance_bot.market import Candle, Quote, SymbolRules
 from binance_bot.strategy import MaPattern, OrderPlan, candles_needed
 
-BUNDLE = "com.binance.BinanceDesktop"
+BUNDLE = DEFAULT_APP_ID
 WINDOW = Rect(x=0, y=33, width=1470, height=859)
 # Area layar MacBook Air 13" M4 tanpa menu bar dan Dock (tempat ukuran kalibrasi diukur).
 AREA = Rect(x=0, y=33, width=1470, height=862)
@@ -95,6 +96,9 @@ class FakeScreen:
 
     def scroll_up(self, x: int, y: int) -> None:
         self.events.append(("scroll_up", (x, y)))
+
+    def scroll_down(self, x: int, y: int, notches: int) -> None:
+        self.events.append(("scroll_down", (x, y, notches)))
 
     def clear_field(self) -> None:
         self.events.append(("clear", None))

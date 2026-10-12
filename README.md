@@ -1,7 +1,7 @@
 # Binance Bot
 
 Engine untuk menjalankan **SOP V2 "Short Top Gainers (Futures 2x)"** milik Pak Saputra di
-Binance Desktop (macOS). Bot memantau 5 Top Gainers Futures, membaca pola garis kuning (MA7)
+Binance Desktop (macOS dan Windows). Bot memantau 5 Top Gainers Futures, membaca pola garis kuning (MA7)
 terhadap MA25 di chart 15 menit dengan AI visual (default Claude Haiku 5.5), mengecek biaya dan
 slot (maksimal 2 posisi), menghitung ukuran posisi (margin 50% × 2x), mengisi kolom **Jumlah**,
 lalu mencatat posisi **uji kertas** di jurnal.
@@ -15,12 +15,13 @@ lalu mencatat posisi **uji kertas** di jurnal.
 |---|---|
 | [docs/SOP.md](docs/SOP.md) | Pemetaan PDF V2 ke engine: langkah, pola garis kuning, parameter, titik impas, pengaman, hal yang perlu disepakati |
 | [docs/MODE_SINGLE.md](docs/MODE_SINGLE.md) | Satu laptop menjalankan SOP penuh |
+| [docs/WINDOWS.md](docs/WINDOWS.md) | Setup, kalibrasi, dan perintah di Windows (tanpa `make`) |
 | [docs/MODE_BANYAK.md](docs/MODE_BANYAK.md) | Beberapa laptop di satu WiFi; AI dipanggil sekali per koin oleh leader |
 | [docs/APLIKASI.md](docs/APLIKASI.md) | Aplikasi desktop (Electron) untuk pengguna non-teknis, dan langkah admin |
 
 ## Setup (sekali per laptop)
 
-Butuh macOS, Python 3.11+, dan Binance Desktop (bahasa Indonesia, akun Futures aktif).
+Butuh macOS (atau Windows, lihat [docs/WINDOWS.md](docs/WINDOWS.md)), Python 3.11+, dan Binance Desktop (bahasa Indonesia, akun Futures aktif).
 
 ```bash
 make install       # buat engine/.venv dan pasang bot

@@ -20,7 +20,7 @@ def wait_until_frontmost(
     """Tunggu sampai aplikasi menjadi jendela aktif, atau lempar `AppTimeoutError`."""
     deadline = clock() + timeout_s
     while clock() < deadline:
-        if controller.frontmost_bundle_id() == bundle_id:
+        if (controller.frontmost_bundle_id() or "").casefold() == bundle_id.casefold():
             return
         sleep(interval_s)
     raise AppTimeoutError(f"{bundle_id} tidak menjadi jendela aktif dalam {timeout_s:g} detik")

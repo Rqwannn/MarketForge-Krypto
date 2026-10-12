@@ -26,6 +26,7 @@ from binance_bot.binance_desktop.screen_text import (
 from binance_bot.config import Settings
 from binance_bot.exceptions import (
     AppNotRunningError,
+    AppTimeoutError,
     SafetyError,
     ScreenReadError,
     WindowError,
@@ -44,6 +45,10 @@ from binance_bot.macos.screens import visible_areas
 logger = logging.getLogger(__name__)
 
 _SORT_ATTEMPTS = 4
+_VERIFY_ATTEMPTS = 4
+_FRONT_ATTEMPTS = 5
+_FRONT_WAIT_S = 3.0
+_VERIFY_RETRY_DELAY_S = 0.4
 _CHART_TAB = re.compile(r"\bGrafik\b")
 _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
 _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
@@ -141,6 +146,7 @@ class BinanceNavigator:
         self._click(layout.SIDEBAR_MARKET)
         self._on_trade_page = False
         self._click(layout.MARKET_FUTURES_TAB)
+        self._scroll_futures_list()
         rows: list[GainerRow] = []
         for _ in range(_SORT_ATTEMPTS):
             self._click(layout.FUTURES_CHANGE_HEADER)
@@ -149,11 +155,30 @@ class BinanceNavigator:
                 return rows
             if not rows:
                 # Daftar Futures belum tampil (halaman lambat dimuat, klik tab hilang): ulangi.
-                self._click(layout.MARKET_FUTURES_TAB)
+                self._reopen_futures_tab()
         raise ScreenReadError(
             f"Daftar Futures tidak terurut dari kenaikan tertinggi setelah {_SORT_ATTEMPTS} "
             f"klik (terbaca: {[(r.symbol, r.change_pct) for r in rows[:3]]})"
         )
+
+    def _scroll_futures_list(self) -> None:
+        """Gulir halaman Pasar bila tata letak butuh (agar 5 baris pertama terlihat)."""
+        if layout.FUTURES_LIST_SCROLL_NOTCHES:
+            self._window.scroll_down(
+                *self.rect.point_at(*layout.FUTURES_LIST_SCROLL_POINT),
+                layout.FUTURES_LIST_SCROLL_NOTCHES,
+            )
+            self._sleep(self._settings.settle_delay_s)
+        if layout.FUTURES_USDM_TAB:
+            self._click(layout.FUTURES_USDM_TAB)
+
+    def _reopen_futures_tab(self) -> None:
+        if layout.FUTURES_LIST_SCROLL_NOTCHES:
+            # Halaman sudah tergulir: tab Futures tidak lagi di tempat semula. Muat ulang
+            # halaman Pasar agar posisi gulir kembali ke awal.
+            self._click(layout.SIDEBAR_MARKET)
+        self._click(layout.MARKET_FUTURES_TAB)
+        self._scroll_futures_list()
 
     def read_top_gainers(self) -> list[GainerRow]:
         area = layout.FUTURES_LIST_AREA
@@ -220,11 +245,19 @@ class BinanceNavigator:
             raise SafetyError("Kolom Jumlah hanya diisi di halaman trade")
         self._click(layout.ORDER_TAB_MARKET)
         self._click(layout.ORDER_QTY_FIELD)
+        self._ensure_front()  # ketikan angka hanya boleh masuk ke Binance
         self._window.clear_field()
         self._window.type_number(text)
         self._sleep(self._settings.settle_delay_s / 2)
-        shown = self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA))
-        if not any(same_number(value, text) for value in shown):
+        shown: list[str] = []
+        for attempt in range(_VERIFY_ATTEMPTS):
+            shown = self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA))
+            if any(same_number(value, text) for value in shown):
+                break
+            if attempt + 1 < _VERIFY_ATTEMPTS:
+                # Kursor berkedip di samping angka dan sesekali mengganggu OCR: baca ulang.
+                self._sleep(_VERIFY_RETRY_DELAY_S)
+        else:
             raise ScreenReadError(f"Kolom Jumlah menampilkan {shown}, bukan {text}")
         logger.info("Kolom Jumlah terisi: %s", text)
 
@@ -260,10 +293,38 @@ class BinanceNavigator:
     def _click(self, target: tuple[float, float]) -> None:
         if self._on_trade_page and layout.in_order_button_zone(target):
             raise SafetyError(f"Klik ke zona tombol order ditolak: {target}")
+        self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
         self._sleep(self._settings.settle_delay_s)
 
+    def _ensure_front(self) -> None:
+        """Pastikan Binance jendela aktif. Klik, ketikan, dan tangkapan layar hanya berarti bila
+        Binance di depan; aplikasi lain bisa merebut fokus di tengah jalan."""
+        bundle = self._settings.app_bundle_id
+        if (self._apps.frontmost_bundle_id() or "").casefold() == bundle.casefold():
+            return
+        logger.warning("%s tidak di depan, dibawa ke depan lagi", self._settings.app_name)
+        # Aplikasi lain (atau pengguna yang sedang memakai laptop) bisa merebut fokus lagi
+        # segera setelah Binance dibawa ke depan, jadi dicoba beberapa kali.
+        for attempt in range(_FRONT_ATTEMPTS):
+            self._apps.launch(bundle)
+            try:
+                wait_until_frontmost(
+                    self._apps,
+                    bundle,
+                    timeout_s=_FRONT_WAIT_S,
+                    interval_s=self._settings.poll_interval_s,
+                    sleep=self._sleep,
+                    clock=self._clock,
+                )
+                break
+            except AppTimeoutError:
+                if attempt + 1 == _FRONT_ATTEMPTS:
+                    raise
+        self._sleep(0.5)
+
     def _capture(self, area: Rect, path: Path) -> Path:
+        self._ensure_front()
         path.parent.mkdir(parents=True, exist_ok=True)
         self._window.capture(area, path)
         logger.info("Tangkapan layar disimpan: %s", path)
@@ -272,6 +333,7 @@ class BinanceNavigator:
     def _read_lines(self, area: Rect) -> list[TextLine]:
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp) / "ocr.png"
+            self._ensure_front()
             self._window.capture(area, image)
             return self._reader.read_lines(image)
 
