@@ -105,10 +105,30 @@ def parse_margin(texts: Iterable[str]) -> MarginSettings:
     return MarginSettings(isolated, leverage)
 
 
+def _readings(shown: str) -> set[float]:
+    """Nilai yang mungkin dimaksud teks di kolom.
+
+    Binance Indonesia menampilkan angka besar dengan titik ribuan ("3.367,2"), sedangkan yang
+    diketik bot memakai koma desimal ("3367,2"). Titik tunggal bisa titik ribuan atau desimal,
+    jadi kedua tafsiran dicoba: "." ribuan + "," desimal, dan "," ribuan + "." desimal.
+    """
+    text = re.sub(r"[^0-9.,]", "", shown)
+    values: set[float] = set()
+    for candidate in (text.replace(".", "").replace(",", "."), text.replace(",", "")):
+        try:
+            values.add(float(candidate))
+        except ValueError:
+            continue
+    return values
+
+
 def same_number(shown: str, typed: str) -> bool:
-    """Apakah teks di kolom sama dengan angka yang diketik (koma dan titik dianggap setara)."""
+    """Apakah teks di kolom bernilai sama dengan angka yang diketik.
 
-    def norm(value: str) -> str:
-        return re.sub(r"[^0-9.,]", "", value).replace(",", ".")
-
-    return norm(shown) != "" and norm(shown) == norm(typed)
+    Pemisah ribuan dan angka nol di belakang koma diabaikan ("3.367,2" = "3367,2", "41" = "41,0").
+    """
+    try:
+        wanted = float(re.sub(r"[^0-9.,]", "", typed).replace(",", "."))
+    except ValueError:
+        return False
+    return wanted in _readings(shown)

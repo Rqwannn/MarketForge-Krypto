@@ -64,3 +64,17 @@ def test_single_letter_coin_is_read() -> None:
     assert parse_futures_symbol(texts) == "SUSDT"
     rows = parse_gainer_rows(list_lines((4, "SUSDT", "+21.9%")), layout.FUTURES_LIST_AREA)
     assert [(r.rank, r.symbol) for r in rows] == [(4, "SUSDT")]
+
+
+def test_same_number_ignores_thousands_separator_and_trailing_zero() -> None:
+    from binance_bot.binance_desktop.screen_text import same_number
+
+    assert same_number("3.367,2", "3367,2")  # Binance Indonesia: titik ribuan
+    assert same_number("41", "41,0")  # nol di belakang koma tidak ditampilkan
+    assert same_number("184,6", "184,6")
+    assert same_number("184.6", "184,6")
+    assert same_number("3.367", "3,367")  # titik tunggal sebagai desimal
+    assert not same_number("33672", "3367,2")  # angka lain
+    assert not same_number("184,4", "184,6")
+    assert not same_number("", "1")
+    assert not same_number("W", "1")
