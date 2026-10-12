@@ -69,6 +69,7 @@ test('interface/.env: hanya kunci yang diizinkan diteruskan ke engine', () => {
   assert.equal(env.PATH, '/usr/bin');
   assert.equal(env.VIKEY_API_KEY, 'sk-uji');
   assert.equal(env.ELECTRON_RUN_AS_NODE, undefined);
+  assert.ok(env.PYTHONPATH.endsWith(path.join('engine', 'src'))); // engine dari source, tanpa .pth
   assert.deepEqual(readAppEnv(path.join(tempDir(), 'tidak-ada')), {});
 });
 
@@ -84,7 +85,7 @@ test('proses engine: log per baris, lingkungan dari .env, berhenti dengan SIGINT
     'while true; do sleep 0.1; done',
   ].join('\n'), { mode: 0o755 });
 
-  const proc = new EngineProcess({ bot, cwd: dir, env: () => ({ PATH: process.env.PATH, BOT_HUB_URL: 'http://h:1' }) });
+  const proc = new EngineProcess({ bot: [bot], cwd: dir, env: () => ({ PATH: process.env.PATH, BOT_HUB_URL: 'http://h:1' }) });
   const logs = [];
   proc.on('log', (entry) => logs.push(entry));
   const exited = new Promise((resolve) => proc.once('exit', resolve));

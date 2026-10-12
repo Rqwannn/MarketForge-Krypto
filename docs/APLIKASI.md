@@ -49,15 +49,19 @@ Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
 
 ```
 interface/ (Electron)                       engine/ (Python)
-renderer  --IPC-->  main.js  --spawn-->  binance-bot --events single|leader|follower
-                    engine.js            binance-bot cek          (JSON kesiapan)
-                                         binance-bot jurnal --json (rekap)
+renderer  --IPC-->  main.js  --spawn-->  python -m binance_bot --events single|leader|follower
+                    engine.js            python -m binance_bot cek          (JSON kesiapan)
+                                         python -m binance_bot jurnal --json (rekap)
 ```
 
 - Argumen dibangun dan divalidasi di `interface/engine.js` (tanpa shell). Parameter SOP
   memakai default V2 di engine; perubahan angka SOP dilakukan admin lewat Makefile/CLI.
 - Engine menulis satu JSON per baris (`--events`). Event `coin`, `cycle`, dan `hub`
   dipakai untuk tabel dan status; pesan lain diterjemahkan ke bahasa sehari-hari.
+- Engine dijalankan dari `engine/src` (PYTHONPATH), bukan skrip `binance-bot`, supaya tidak
+  terpengaruh flag "hidden" macOS pada file `.pth` instalasi editable.
+- Saat bot mulai, jendela aplikasi diperkecil agar tidak menutupi Binance (bot membaca layar),
+  lalu ditampilkan lagi saat bot selesai.
 - Tombol Hentikan mengirim SIGINT (sama dengan Ctrl+C).
 - Debugging tetap lewat terminal: `make single MODAL=100`, `make cek`, `make jurnal`.
 

@@ -12,7 +12,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ENGINE_DIR = path.resolve(__dirname, '..', 'engine');
-const BOT = path.join(ENGINE_DIR, '.venv', 'bin', 'binance-bot');
+const ENGINE_SRC = path.join(ENGINE_DIR, 'src');
+const PYTHON = path.join(ENGINE_DIR, '.venv', 'bin', 'python');
+// `python -m binance_bot` dengan PYTHONPATH ke source, bukan skrip `binance-bot`: instalasi
+// editable bergantung pada file .pth yang bisa diberi flag "hidden" oleh macOS lalu diabaikan.
+const BOT = [PYTHON, '-m', 'binance_bot'];
 const APP_ENV_FILE = path.join(__dirname, '.env');
 
 const MODES = ['single', 'leader', 'follower'];
@@ -97,6 +101,7 @@ function readAppEnv(file = APP_ENV_FILE) {
 /** Lingkungan proses engine: lingkungan aplikasi + pengaturan dari interface/.env. */
 function engineEnv(base = process.env, file = APP_ENV_FILE) {
   const env = { ...base, ...readAppEnv(file) };
+  env.PYTHONPATH = base.PYTHONPATH ? `${ENGINE_SRC}${path.delimiter}${base.PYTHONPATH}` : ENGINE_SRC;
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
 }
@@ -115,8 +120,8 @@ function onLines(stream, callback) {
   });
 }
 
-function assertInstalled(bot) {
-  if (!fs.existsSync(bot)) {
+function assertInstalled([program]) {
+  if (!fs.existsSync(program)) {
     throw new InputError('Mesin bot belum terpasang di laptop ini. Hubungi admin.');
   }
 }
@@ -138,7 +143,8 @@ class EngineProcess extends EventEmitter {
   start(args) {
     if (this.child) throw new InputError('Bot sudah berjalan. Hentikan dulu.');
     assertInstalled(this.bot);
-    const child = spawn(this.bot, args, { cwd: this.cwd, env: this.env(), stdio: ['ignore', 'pipe', 'pipe'] });
+    const [program, ...prefix] = this.bot;
+    const child = spawn(program, [...prefix, ...args], { cwd: this.cwd, env: this.env(), stdio: ['ignore', 'pipe', 'pipe'] });
     this.child = child;
     onLines(child.stdout, (line) => this.emit('log', parseLine(line)));
     onLines(child.stderr, (line) => this.emit('log', parseLine(line, 'ERROR')));
@@ -166,7 +172,8 @@ function runJson(args, { bot = BOT, cwd = ENGINE_DIR, env = engineEnv, timeoutMs
   assertInstalled(bot);
   return new Promise((resolve, reject) => {
     const options = { cwd, env: env(), timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 };
-    execFile(bot, args, options, (err, stdout) => {
+    const [program, ...prefix] = bot;
+    execFile(program, [...prefix, ...args], options, (err, stdout) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {

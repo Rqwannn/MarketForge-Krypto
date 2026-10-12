@@ -20,7 +20,14 @@ function send(channel, payload) {
 }
 
 proc.on('log', (entry) => send('engine:log', entry));
-proc.on('exit', (info) => send('engine:exit', info));
+proc.on('exit', (info) => {
+  send('engine:exit', info);
+  // Bot selesai: tampilkan lagi jendela aplikasi.
+  if (win && !win.isDestroyed()) {
+    win.restore();
+    win.focus();
+  }
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -59,6 +66,8 @@ function handle(channel, fn) {
 
 handle('engine:start', (mode, params) => {
   proc.start(engine.buildArgs(mode, params));
+  // Bot memakai layar Binance: jendela aplikasi jangan menutupinya (screenshot dan OCR).
+  win?.minimize();
   return true;
 });
 handle('engine:stop', () => {
