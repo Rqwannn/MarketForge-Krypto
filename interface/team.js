@@ -21,6 +21,8 @@ const CYCLE_FRESH_MS = 2 * 60 * 1000; // sinyal putaran lebih tua dari ini tidak
 const HUB_PORT = 8765;
 
 const shortId = (id) => String(id).slice(0, SHORT_ID);
+// Perintah Sell dari pemimpin: "<waktu ms>:<id pengikut|*>:<PAIR|*>"
+const CLOSE = /^(\d{10,16}):([0-9a-f]{8}|\*):([A-Z0-9]{1,20}USD[TC]|\*)$/;
 
 /** Teks yang ditandatangani: semua field kecuali tanda tangan itu sendiri. */
 function canonical(fields, skip = ['sig']) {
@@ -59,14 +61,18 @@ function decodeInvites(text) {
 
 /** Field kelompok dari TXT laptop lain; hanya bila tanda tangannya cocok dengan token kita. */
 function teamFieldsFrom(txt, token) {
-  if (!isSigned(token, txt)) return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0 };
+  if (!isSigned(token, txt)) {
+    return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, close: null };
+  }
   const rank = Number(txt.rank);
+  const close = CLOSE.exec(txt.cls || '');
   return {
     verified: true,
     invites: decodeInvites(txt.inv),
     leader: /^[0-9a-f]{8}$/.test(txt.leader || '') ? txt.leader : '',
     rank: Number.isInteger(rank) && rank >= 1 && rank <= 5 ? rank : null,
     cycle: Number.isFinite(Number(txt.cycle)) ? Number(txt.cycle) : 0,
+    close: close ? { seq: Number(close[1]), target: close[2], symbol: close[3] } : null,
   };
 }
 
@@ -79,9 +85,11 @@ class Team extends EventEmitter {
     this.now = now;
     this.invites = new Map(); // pemimpin: id pengikut -> top
     this.cycle = 0; // pemimpin: waktu mulai putaran terakhir
+    this.closeCommand = null; // pemimpin: perintah Sell terakhir { seq, target, symbol }
     this.membership = null; // pengikut: { leaderId, leaderName, rank, modal }
     this.answered = new Set(); // ajakan yang sudah dijawab atau sedang ditampilkan
     this.lastCycle = 0;
+    this.lastClose = 0; // pengikut: perintah Sell terakhir yang sudah dijalankan
   }
 
   get enabled() {
@@ -96,6 +104,8 @@ class Team extends EventEmitter {
     const fields = {};
     if (this.invites.size) fields.inv = encodeInvites(this.invites);
     if (this.cycle) fields.cycle = String(this.cycle);
+    const c = this.closeCommand;
+    if (c) fields.cls = `${c.seq}:${c.target}:${c.symbol}`;
     return fields;
   }
 
@@ -107,6 +117,11 @@ class Team extends EventEmitter {
     this.invites.delete(peerId);
   }
 
+  /** Pemimpin: tutup posisi pengikut. target = id pengikut atau '*'; symbol = pair atau '*'. */
+  requestClose(target, symbol) {
+    this.closeCommand = { seq: this.now(), target: target === '*' ? '*' : shortId(target), symbol };
+  }
+
   startCycle() {
     this.cycle = this.now();
   }
@@ -115,6 +130,7 @@ class Team extends EventEmitter {
     this.membership = { leaderId, leaderName, rank, modal };
     this.invites.clear();
     this.lastCycle = 0;
+    this.lastClose = this.now(); // perintah Sell sebelum bergabung tidak berlaku
   }
 
   decline(leaderId, rank) {
@@ -136,6 +152,7 @@ class Team extends EventEmitter {
    * - 'invite' {leaderId, leaderName, rank}: ada ajakan baru untuk laptop ini
    * - 'start' {leaderName, rank, modal, hub}: pemimpin memulai putaran baru
    * - 'removed' {leaderName}: pemimpin mengeluarkan laptop ini dari kelompok
+   * - 'close' {leaderName, symbol}: pemimpin menutup posisi laptop ini (symbol '*' = semua)
    * Mengembalikan true bila pengumuman laptop ini perlu diperbarui.
    */
   evaluate(peers) {
@@ -167,6 +184,12 @@ class Team extends EventEmitter {
             modal: member.modal,
             hub: `http://${peer.address}:${HUB_PORT}`,
           });
+        }
+        const close = peer.team.close;
+        if (close && close.seq > this.lastClose && this.now() - close.seq < CYCLE_FRESH_MS
+          && (close.target === '*' || close.target === me)) {
+          this.lastClose = close.seq;
+          this.emit('close', { leaderName: peer.name, symbol: close.symbol });
         }
       } else if (rank && !member && !this.answered.has(`${peer.id}:${rank}`)) {
         this.answered.add(`${peer.id}:${rank}`);

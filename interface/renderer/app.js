@@ -27,7 +27,9 @@ const STATUS = {
   target: ['Target tercapai', 'target'],
   stop: ['Kena batas rugi', 'stop'],
   timeout: ['Waktu habis', 'timeout'],
+  manual: ['Ditutup (Sell)', 'manual'],
 };
+const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin' };
 const ICONS = {
   play: ['M8 5v14l11-7z'],
   stop: ['M7 7h10v10H7z'],
@@ -573,6 +575,7 @@ function donut(s) {
     ['Target tercapai', s.targets, 'var(--green)'],
     ['Kena batas rugi', s.stops, 'var(--red)'],
     ['Waktu habis', s.timeouts, 'var(--amber)'],
+    ['Ditutup (Sell)', s.manual ?? 0, 'var(--accent)'],
     ['Masih berjalan', s.open, 'var(--accent-2)'],
   ];
   const total = parts.reduce((sum, [, n]) => sum + n, 0);
@@ -634,13 +637,14 @@ async function loadJournal() {
       return el('tr', {},
         el('td', { textContent: new Date(t.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
         el('td', { class: 'sym', textContent: t.symbol }),
+        el('td', { textContent: ROLE_NAME[t.role] || 'Sendiri' }),
         el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
         el('td', { class: 'num', textContent: price(t.entry_price) }),
         el('td', { class: 'num', textContent: price(t.exit_price) }),
         el('td', { class: `num ${signClass(t.pnl_capital_pct)}`, textContent: percent(t.pnl_capital_pct) }));
     });
     $('trades').replaceChildren(...(rows.length ? rows
-      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 6, textContent: 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
+      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
   } catch (err) {
     notice.hidden = false;
     notice.className = 'notice bad';
@@ -651,6 +655,124 @@ async function loadJournal() {
 }
 loaders.journal = loadJournal;
 $('journal-refresh').addEventListener('click', loadJournal);
+
+// --------------------------------------------------------------------------- posisi (Sell)
+
+function currentRole() {
+  return teamInfo.membership ? 'follower' : form.mode;
+}
+
+function posNotice(text, css = '') {
+  const notice = $('pos-notice');
+  notice.hidden = !text;
+  notice.className = `notice ${css}`;
+  notice.textContent = text || '';
+}
+
+async function loadPositions() {
+  const role = currentRole();
+  const leading = role === 'leader' && teamInfo.canLead;
+  $('pos-own').hidden = leading;
+  $('pos-team').hidden = !leading;
+  $('pos-close-all').hidden = !(leading || role === 'single');
+  $('pos-lede').textContent = leading
+    ? 'Tutup posisi para pengikut. Sell baru aktif bila semua pengikut tersambung.'
+    : role === 'single'
+      ? 'Tutup posisi uji kertas kapan saja. Tombol Binance tidak ditekan.'
+      : 'Laptop ini pengikut: posisinya hanya bisa ditutup oleh pemimpin.';
+  $('pos-refresh').disabled = true;
+  try {
+    if (leading) await loadTeamPositions();
+    else await loadOwnPositions(role === 'single');
+  } catch (err) {
+    posNotice(err.message, 'bad');
+  } finally {
+    $('pos-refresh').disabled = false;
+  }
+}
+loaders.positions = loadPositions;
+
+async function loadOwnPositions(canSell) {
+  const result = await window.bot.positions.list();
+  posNotice(result.warning ? 'Harga Binance belum bisa diambil di jaringan ini; hasil sementara tidak tampil.' : '', 'warn');
+  $('pos-close-all').disabled = !result.positions.length;
+  const rows = result.positions.map((p) => el('tr', {},
+    el('td', {}, el('strong', { class: 'sym', textContent: p.symbol }), el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
+    el('td', { class: 'num', textContent: price(p.entry_price) }),
+    el('td', { class: 'num', textContent: price(p.price) }),
+    el('td', { class: `num ${signClass(p.pnl_capital_pct)}`, textContent: p.pnl_capital_pct === null ? '–' : `${percent(p.pnl_capital_pct)} modal` }),
+    el('td', { class: 'num', textContent: `${price(p.target_price)} / ${price(p.stop_price)}` }),
+    el('td', { class: 'num' }, canSell
+      ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol) })
+      : el('span', { class: 'locked', textContent: 'Ditutup pemimpin' }))));
+  $('pos-table').replaceChildren(...(rows.length ? rows
+    : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 6, textContent: 'Tidak ada posisi yang terbuka.' }))]));
+}
+
+async function sellOwn(symbol) {
+  const label = symbol === 'semua' ? 'semua posisi' : `posisi ${symbol}`;
+  if (!window.confirm(`Tutup ${label}? (uji kertas, tombol Binance tidak ditekan)`)) return;
+  try {
+    const result = await window.bot.positions.close(symbol);
+    const text = result.closed.map((c) => `${c.symbol} ${percent(c.pnl_capital_pct)} modal`).join(', ');
+    window.bot.reportActivity({ text: text ? `Sell: ${text}` : 'Sell: tidak ada posisi' }).catch(() => {});
+    await loadOwnPositions(true);
+    posNotice(text ? `Ditutup: ${text}` : 'Tidak ada posisi yang ditutup.', 'good');
+  } catch (err) {
+    posNotice(err.message, 'bad');
+  }
+}
+
+async function loadTeamPositions() {
+  const { followers, allConnected } = await window.bot.team.followers();
+  $('pos-close-all').disabled = !allConnected;
+  if (!followers.length) {
+    posNotice('Belum ada pengikut. Ajak laptop lain lewat Cek laptop › Lihat laptop.', 'warn');
+  } else if (!allConnected) {
+    const missing = followers.filter((f) => !f.connected).map((f) => f.name).join(', ');
+    posNotice(`Sell dikunci: belum semua pengikut tersambung (${missing}).`, 'warn');
+  } else {
+    posNotice('Semua pengikut tersambung. Sell siap dijalankan.', 'good');
+  }
+  $('team-list').replaceChildren(...(followers.length ? followers.map((f) => followerCard(f, allConnected))
+    : [el('li', { class: 'peer-empty', textContent: 'Belum ada pengikut.' })]));
+}
+
+function followerCard(f, allConnected) {
+  const [state, css] = f.connected ? ['Tersambung', 'ok'] : f.accepted ? ['Terputus', 'jangan'] : ['Belum menerima ajakan', 'tunggu'];
+  const positions = f.positions.length
+    ? f.positions.map((p) => el('div', { class: 'f-pos' },
+      el('strong', { class: 'sym', textContent: p.symbol }),
+      el('span', { class: signClass(p.pnl), textContent: p.pnl === null ? '–' : `${percent(p.pnl)} modal` }),
+      el('button', { class: 'sell', textContent: 'Sell', disabled: !allConnected, onclick: () => sellTeam(f.id, p.symbol, `${p.symbol} milik ${f.name}`) })))
+    : [el('div', { class: 'f-pos none', textContent: 'Tidak ada posisi terbuka' })];
+  return el('li', { class: 'follower' },
+    el('div', { class: 'f-head' },
+      el('span', { class: 'icon' }, icon('laptop')),
+      el('div', {}, el('strong', { textContent: f.name }), el('span', { textContent: `Top ${f.rank}${f.activity ? ` · ${f.activity}` : ''}` })),
+      el('span', { class: `tag ${css}`, textContent: state })),
+    el('div', { class: 'f-positions' }, ...positions));
+}
+
+async function sellTeam(target, symbol, label) {
+  if (!window.confirm(`Tutup ${label}? Pengikut menutupnya sendiri (uji kertas, tombol Binance tidak ditekan).`)) return;
+  try {
+    await window.bot.team.close(target, symbol);
+    posNotice('Perintah Sell dikirim. Pengikut menutup posisinya dalam beberapa detik.', 'good');
+    setTimeout(() => { if (!$('page-positions').hidden) loadPositions(); }, 8000);
+  } catch (err) {
+    posNotice(err.message, 'bad');
+  }
+}
+
+$('pos-refresh').addEventListener('click', loadPositions);
+$('pos-close-all').addEventListener('click', () => {
+  if (currentRole() === 'leader') sellTeam('*', '*', 'semua posisi semua pengikut');
+  else sellOwn('semua');
+});
+window.bot.positions.onChanged(() => {
+  if (!$('page-positions').hidden) loadPositions();
+});
 
 // --------------------------------------------------------------------------- cek laptop
 

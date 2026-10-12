@@ -52,6 +52,17 @@ function sealedFields(sealed) {
   return fields;
 }
 
+const PAIR = /^[A-Z0-9]{1,20}USD[TC]$/;
+const MAX_POSITIONS = 4;
+
+/** Posisi terbuka laptop lain: [[PAIR, hasil % modal | null], ...] -> [{symbol, pnl}]. */
+function positionsFrom(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_POSITIONS)
+    .filter((p) => Array.isArray(p) && PAIR.test(String(p[0])))
+    .map(([symbol, pnl]) => ({ symbol, pnl: Number.isFinite(pnl) ? pnl : null }));
+}
+
 /**
  * Aktivitas terakhir laptop lain (mis. "Membuka top 2: RSRUSDT") dan hasil koin terakhirnya.
  * Dienkripsi ke kunci pemimpin: hanya laptop pemimpin yang bisa membacanya.
@@ -63,12 +74,13 @@ function activityFrom(txt, verified, leaderKeys) {
   const plain = openAsLeader(leaderKeys, sealed);
   if (!plain) return null;
   try {
-    const [text, coinText, at] = JSON.parse(plain);
+    const [text, coinText, at, positions] = JSON.parse(plain);
     const coin = COIN.exec(String(coinText || ''));
     return {
       text: String(text || '').slice(0, MAX_ACTIVITY),
       coin: coin ? { symbol: coin[1], verdict: coin[2], status: coin[3] } : null,
       at: Number(at) > 0 ? Number(at) * 1000 : 0,
+      positions: positionsFrom(positions),
     };
   } catch {
     return null;
@@ -227,6 +239,7 @@ class Discovery extends EventEmitter {
       leaderKeys: this.leaderKeys,
     });
     if (!peer || peer.self) return;
+    peer.seenAt = Date.now(); // dipakai pemimpin untuk menilai pengikut masih tersambung
     this.peers.set(peer.id, peer);
     this.emit('peers', this.snapshot());
   }
@@ -260,10 +273,13 @@ class Discovery extends EventEmitter {
     return this.snapshot();
   }
 
-  stop() {
+  /** Pamit di jaringan, lalu tutup. Koneksi baru ditutup setelah paket pamit terkirim. */
+  stop(done = () => {}) {
     this.browser?.stop?.();
-    this.bonjour.unpublishAll();
-    this.bonjour.destroy();
+    this.bonjour.unpublishAll(() => {
+      this.bonjour.destroy();
+      done();
+    });
   }
 }
 

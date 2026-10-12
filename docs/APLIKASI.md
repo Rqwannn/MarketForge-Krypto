@@ -11,7 +11,8 @@ detailnya tetap tersimpan di `engine/logs/bot.log` untuk admin.
 | Halaman | Isi |
 |---|---|
 | **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Kartu **Alur putaran** menyorot langkah yang sedang berjalan (mis. AI baca grafik) dan hitung mundur ke putaran berikutnya. Tabel "Putaran ini" menampilkan keputusan AI dan **tindakan**-nya (mis. Tunggu = tidak ada tindakan; Layak short = pengikut boleh membuka posisi uji). |
-| **Hasil uji** | Progres 50 trade uji, tingkat menang dibanding titik impas, hasil bersih dalam % modal, dan trade terakhir. |
+| **Posisi** (Sell) | Posisi uji kertas yang terbuka. **Sendiri**: tombol Sell per posisi dan Tutup semua. **Pengikut**: hanya melihat; posisinya ditutup oleh pemimpin. **Pemimpin**: posisi semua pengikut; Sell hanya aktif bila **semua** pengikut tersambung (terdengar dalam 60 detik), lalu pengikut menutup posisinya sendiri. Sell juga uji kertas: ditutup di harga ask saat itu, tombol Binance tidak ditekan. |
+| **Hasil uji** | Riwayat per peran (Sendiri/Pengikut) dan progres 50 trade uji, tingkat menang dibanding titik impas, hasil bersih dalam % modal, dan trade terakhir. |
 | **Cek laptop** | Daftar kesiapan: izin macOS, Binance terbuka, ukuran jendela, koneksi data Binance, AI, dan kerja sama antar laptop. Tombol **Lihat laptop** menampilkan laptop lain di WiFi yang sama yang sedang membuka MarketForge (nama, OS, peran, status bot). |
 
 Arti keputusan di tabel:

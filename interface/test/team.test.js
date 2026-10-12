@@ -23,7 +23,7 @@ function leaderPeer(extra = {}, token = TOKEN, leaderVerified = true) {
 function follower() {
   const team = new Team({ myId: ME, token: TOKEN, now: () => NOW });
   const events = [];
-  for (const name of ['invite', 'start', 'removed']) team.on(name, (e) => events.push([name, e]));
+  for (const name of ['invite', 'start', 'removed', 'close']) team.on(name, (e) => events.push([name, e]));
   return { team, events };
 }
 
@@ -97,4 +97,34 @@ test('daftar pemimpin: status diajak dan sudah menjadi pengikut', () => {
   const txt = { id: ME, name: 'Laptop', role: 'follower', state: 'idle', os: 'win32', leader: 'aaaaaaaa', rank: '4' };
   const peer = { id: ME, name: 'Laptop', role: 'follower', self: false, team: teamFieldsFrom({ ...txt, sig: sign(TOKEN, txt) }, TOKEN) };
   assert.deepEqual([team.describe(peer).invitedRank, team.describe(peer).followerRank], [4, 4]);
+});
+
+test('perintah Sell pemimpin: hanya untuk pengikutnya, sekali, masih baru, dan bukan dari sebelum bergabung', () => {
+  const leader = new Team({ myId: LEADER, token: TOKEN, now: () => NOW });
+  leader.requestClose(ME, 'CKBUSDT');
+  assert.equal(leader.fields('leader').cls, `${NOW}:11111111:CKBUSDT`);
+  leader.requestClose('*', '*');
+  assert.equal(leader.fields('leader').cls, `${NOW}:*:*`);
+
+  const { team, events } = follower();
+  team.accept({ leaderId: LEADER, leaderName: 'P', rank: 2, modal: '100' });
+  const closes = () => events.filter(([name]) => name === 'close');
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 5000}:11111111:CKBUSDT` })]);
+  assert.equal(closes().length, 0); // dikirim sebelum laptop ini bergabung
+  team.lastClose = 0;
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 1000}:11111111:CKBUSDT` })]);
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 1000}:11111111:CKBUSDT` })]); // sama: sekali
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 900}:22222222:WUSDT` })]); // pengikut lain
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - CYCLE_FRESH_MS - 1}:*:*` })]); // basi
+  assert.deepEqual(closes(), [['close', { leaderName: 'MacBook Pemimpin', symbol: 'CKBUSDT' }]]);
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 500}:*:*` })]);
+  assert.deepEqual(closes().at(-1), ['close', { leaderName: 'MacBook Pemimpin', symbol: '*' }]);
+});
+
+test('perintah Sell dari laptop tanpa kunci pemimpin diabaikan', () => {
+  const { team, events } = follower();
+  team.accept({ leaderId: LEADER, leaderName: 'P', rank: 2, modal: '100' });
+  team.lastClose = 0;
+  team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 1000}:*:*` }, TOKEN, false)]);
+  assert.deepEqual(events.filter(([name]) => name === 'close'), []);
 });

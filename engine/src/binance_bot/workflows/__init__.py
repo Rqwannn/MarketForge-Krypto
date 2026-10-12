@@ -6,6 +6,7 @@ from binance_bot.workflows.follower import FollowerWorkflow
 from binance_bot.workflows.journal_report import JournalWorkflow
 from binance_bot.workflows.leader import LeaderWorkflow
 from binance_bot.workflows.open_app import OpenBinanceWorkflow
+from binance_bot.workflows.positions import PositionsWorkflow
 from binance_bot.workflows.readiness import ReadinessWorkflow
 from binance_bot.workflows.single import SingleWorkflow
 from binance_bot.workflows.sop import SopTrader
@@ -17,6 +18,7 @@ __all__ = [
     "JournalWorkflow",
     "LeaderWorkflow",
     "OpenBinanceWorkflow",
+    "PositionsWorkflow",
     "ReadinessWorkflow",
     "SingleWorkflow",
     "SopTrader",

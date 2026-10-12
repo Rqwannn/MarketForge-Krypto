@@ -34,28 +34,46 @@ def evaluate_short(
     max_price = entry.max_price or entry.entry_price
     for candle in usable:
         max_price = max(max_price, candle.high)
+        closed_at = candle.close_time / 1000
         if candle.high >= entry.stop_price:
-            return _close(entry, "stop", entry.stop_price, candle, max_price, funding, fee_pct)
+            return _close(entry, "stop", entry.stop_price, closed_at, max_price, funding, fee_pct)
         if candle.low <= entry.target_price:
-            return _close(entry, "target", entry.target_price, candle, max_price, funding, fee_pct)
+            return _close(
+                entry, "target", entry.target_price, closed_at, max_price, funding, fee_pct
+            )
 
     if now_s >= entry.deadline and usable:
         last = usable[-1]
-        return _close(entry, "timeout", last.close, last, max_price, funding, fee_pct)
+        return _close(
+            entry, "timeout", last.close, last.close_time / 1000, max_price, funding, fee_pct
+        )
     return replace(entry, max_price=max_price)
+
+
+def close_short_now(
+    entry: JournalEntry,
+    ask: float,
+    now_s: float,
+    funding: Sequence[tuple[int, float]],
+    fee_pct: float,
+) -> JournalEntry:
+    """Tutup short uji kertas sekarang (menu Sell): beli kembali di harga ask saat ini."""
+    if entry.status != "open":
+        return entry
+    max_price = max(entry.max_price or entry.entry_price or ask, ask)
+    return _close(entry, "manual", ask, now_s, max_price, funding, fee_pct)
 
 
 def _close(
     entry: JournalEntry,
     status: str,
     exit_price: float,
-    candle: Candle,
+    closed_at: float,
     max_price: float,
     funding: Sequence[tuple[int, float]],
     fee_pct: float,
 ) -> JournalEntry:
     assert entry.entry_price and entry.notional is not None
-    closed_at = candle.close_time / 1000
     # Short menerima funding bila rate positif dan membayar bila negatif.
     funding_pct = 100 * sum(
         rate for time_ms, rate in funding if entry.created_at * 1000 <= time_ms <= closed_at * 1000
@@ -113,6 +131,7 @@ class Stats:
     targets: int
     stops: int
     timeouts: int
+    manual: int  # ditutup lewat menu Sell
     open: int
     needs_review: int  # posisi terbuka melewati batas tinjau (usulan 1 jam)
     skipped: int
@@ -160,6 +179,7 @@ def summarize(entries: Sequence[JournalEntry], params: SopParams, now_s: float) 
         targets=sum(1 for e in closed if e.status == "target"),
         stops=sum(1 for e in closed if e.status == "stop"),
         timeouts=sum(1 for e in closed if e.status == "timeout"),
+        manual=sum(1 for e in closed if e.status == "manual"),
         open=len(opened),
         needs_review=sum(1 for e in opened if now_s - e.created_at >= params.review_after_h * 3600),
         skipped=sum(1 for e in entries if e.status == "skipped"),

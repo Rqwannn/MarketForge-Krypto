@@ -26,12 +26,14 @@ from binance_bot.workflows import (
     JournalWorkflow,
     LeaderWorkflow,
     OpenBinanceWorkflow,
+    PositionsWorkflow,
     ReadinessWorkflow,
     SingleWorkflow,
     SopTrader,
     WindowSizeWorkflow,
     Workflow,
 )
+from binance_bot.workflows.positions import ALL
 
 logger = logging.getLogger(__name__)
 _DEFAULTS = SopParams()
@@ -186,6 +188,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     jurnal.add_argument("--json", action="store_true", help="Cetak rekap sebagai JSON di stdout")
 
+    positions = sub.add_parser(
+        "posisi", parents=[sop], help="Posisi uji kertas terbuka (JSON); --tutup untuk Sell."
+    )
+    positions.add_argument(
+        "--tutup", help="Tutup (uji kertas) posisi pair ini, atau 'semua'", metavar="PAIR"
+    )
+
     sub.add_parser(
         "cek", help="Cek kesiapan laptop (izin, Binance, jendela, API, .env) dalam JSON."
     )
@@ -223,6 +232,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
         return JournalWorkflow(params_from(args), journal, market, as_json=args.json)
+    if args.command == "posisi":
+        target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
+        return PositionsWorkflow(params_from(args), journal, market, close=target)
 
     navigator = BinanceNavigator(settings, apps, window, system.reader, screens=system.screens)
     if args.command == "uji-isi":
@@ -243,7 +255,14 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
 
     params = params_from(args)
     trader = SopTrader(
-        settings, params, navigator, market, journal, DryRunOrderGate(), fill_form=not args.no_fill
+        settings,
+        params,
+        navigator,
+        market,
+        journal,
+        DryRunOrderGate(),
+        fill_form=not args.no_fill,
+        role="follower" if args.command == "follower" else "single",
     )
     uses_ai = params.signal_source == "ai"
     if args.command == "single":

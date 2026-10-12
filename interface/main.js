@@ -33,11 +33,81 @@ const leaderKeys = loadLeaderKey(engine.appSetting('BOT_LEADER_KEY'));
 const leaderPublic = leaderKeys?.public ?? loadLeaderPublic(engine.appSetting('BOT_LEADER_PUBLIC'));
 const LEADER_ONLY = 'Peran Pemimpin hanya untuk laptop yang memegang kunci pemimpin. Hubungi admin.';
 
-/** Aktivitas terenkripsi ke pemimpin: hanya laptop pemimpin yang bisa memantaunya. */
+let ownPositions = []; // posisi terbuka laptop ini (`posisi`), diumumkan ke pemimpin
+const PAIR = /^[A-Z0-9]{1,20}USD[TC]$/;
+const HEARTBEAT_MS = 20 * 1000; // pengikut mengumumkan ulang posisinya (tanda masih tersambung)
+const FOLLOWER_FRESH_MS = 3 * HEARTBEAT_MS; // terputus bila 3 detak terlewat
+
+/** Aktivitas dan posisi terenkripsi ke pemimpin: hanya laptop pemimpin yang bisa memantaunya. */
 function activityFields() {
-  if (!team?.enabled || !leaderPublic || leaderKeys || !activity.text) return {};
-  const payload = JSON.stringify([activity.text, activity.coin, Math.floor(activity.at / 1000)]);
+  if (!team?.enabled || !leaderPublic || leaderKeys) return {};
+  if (!activity.text && !team.membership) return {};
+  const positions = ownPositions.slice(0, 4).map((p) => [
+    p.symbol,
+    Number.isFinite(p.pnl_capital_pct) ? Math.round(p.pnl_capital_pct * 100) / 100 : null,
+  ]);
+  const payload = JSON.stringify([
+    activity.text || 'Siap mengikuti pemimpin', activity.coin, Math.floor((activity.at || Date.now()) / 1000), positions,
+  ]);
   return sealedFields(sealForLeader(leaderPublic, payload));
+}
+
+/** Baca ulang posisi terbuka laptop ini dari jurnal (tanpa menyentuh Binance). */
+async function refreshPositions() {
+  try {
+    const result = await engine.runJson(['posisi']);
+    if (Array.isArray(result.positions)) ownPositions = result.positions;
+  } catch {
+    return;
+  }
+  syncPresence();
+  send('positions:changed');
+}
+
+/** Pengikut pemimpin ini: sudah menerima ajakan dan masih terdengar di WiFi? */
+function followersStatus() {
+  if (!discovery || !team) return { followers: [], allConnected: false };
+  const now = Date.now();
+  const followers = [...team.invites].map(([id, rank]) => {
+    const peer = discovery.peers.get(id);
+    const accepted = Boolean(peer && team.describe(peer).followerRank);
+    return {
+      id,
+      rank,
+      name: peer?.name ?? followerNames.get(id) ?? 'Laptop pengikut',
+      accepted,
+      connected: accepted && now - (peer.seenAt || 0) < FOLLOWER_FRESH_MS,
+      positions: peer?.activity?.positions ?? [],
+      activity: peer?.activity?.text ?? '',
+      activityAt: peer?.activity?.at ?? 0,
+    };
+  });
+  return { followers, allConnected: followers.length > 0 && followers.every((f) => f.connected) };
+}
+
+const followerNames = new Map(); // id pengikut -> nama, diingat sejak diajak (bila nanti terputus)
+
+const closeQueue = []; // perintah Sell pemimpin yang menunggu bot di laptop ini selesai
+
+/** Pengikut: jalankan perintah Sell dari pemimpin (uji kertas, tombol tidak ditekan). */
+async function closeForLeader({ leaderName, symbol }) {
+  if (proc.running) {
+    closeQueue.push({ leaderName, symbol });
+    return;
+  }
+  let text;
+  try {
+    const result = await engine.runJson(['posisi', '--tutup', symbol === '*' ? 'semua' : symbol]);
+    if (Array.isArray(result.positions)) ownPositions = result.positions;
+    const done = (result.closed || []).map((c) => c.symbol).join(', ');
+    if (result.error) text = 'Gagal menutup posisi: harga Binance tidak bisa diambil';
+    else text = done ? `${leaderName} menutup posisi: ${done}` : `${leaderName} menutup posisi: tidak ada posisi terbuka`;
+  } catch {
+    text = 'Gagal menutup posisi';
+  }
+  reportActivity({ text });
+  send('positions:changed');
+  send('team:changed', { ...teamState(), notice: text });
 }
 
 function reportActivity({ text, coin }) {
@@ -112,8 +182,16 @@ function startDiscovery() {
       send('team:changed', { ...teamState(), notice: `${info.leaderName} mengeluarkan laptop ini dari kelompok.` });
     });
     team.on('start', startFollower);
+    team.on('close', closeForLeader);
     discovery.start();
     syncPresence();
+    refreshPositions();
+    // Detak pengikut: posisi terbaru dan tanda masih tersambung untuk pemimpin.
+    setInterval(() => {
+      if (!team?.membership) return;
+      activity.at = Date.now();
+      refreshPositions();
+    }, HEARTBEAT_MS).unref?.();
   } catch (err) {
     console.error(`Penemuan laptop tidak aktif: ${err.message}`);
     discovery = null;
@@ -137,6 +215,8 @@ proc.on('exit', (info) => {
   send('engine:exit', info);
   runningMode = null;
   syncPresence();
+  refreshPositions();
+  for (const job of closeQueue.splice(0)) closeForLeader(job);
   // Bot selesai: tampilkan lagi jendela aplikasi.
   if (win && !win.isDestroyed()) {
     win.restore();
@@ -219,6 +299,41 @@ handle('presence:activity', (update) => {
   return true;
 });
 handle('team:state', () => teamState());
+handle('positions:list', async () => {
+  const result = await engine.runJson(['posisi']);
+  if (Array.isArray(result.positions)) ownPositions = result.positions;
+  return result;
+});
+handle('positions:close', async (symbol) => {
+  // Hanya mode Sendiri; posisi pengikut hanya ditutup oleh pemimpinnya.
+  if (team?.membership || uiRole !== 'single') {
+    throw new Error('Hanya mode Sendiri yang bisa menutup posisinya sendiri. Posisi pengikut ditutup oleh pemimpin.');
+  }
+  if (symbol !== 'semua' && !PAIR.test(String(symbol))) throw new Error('Pair tidak valid');
+  const result = await engine.runJson(['posisi', '--tutup', symbol]);
+  if (result.error) throw new Error('Harga Binance tidak bisa diambil, posisi belum ditutup.');
+  if (Array.isArray(result.positions)) ownPositions = result.positions;
+  syncPresence();
+  return result;
+});
+handle('team:followers', async () => {
+  if (discovery) await discovery.list(1500);
+  return followersStatus();
+});
+handle('team:close', (target, symbol) => {
+  if (!leaderKeys) throw new Error(LEADER_ONLY);
+  if (team.membership || uiRole !== 'leader') throw new Error('Pilih peran Pemimpin di halaman Pantau dulu.');
+  if (target !== '*' && !team.invites.has(target)) throw new Error('Laptop itu bukan pengikut pemimpin ini.');
+  if (symbol !== '*' && !PAIR.test(String(symbol))) throw new Error('Pair tidak valid');
+  const { followers, allConnected } = followersStatus();
+  if (!allConnected) {
+    const missing = followers.filter((f) => !f.connected).map((f) => f.name).join(', ');
+    throw new Error(followers.length ? `Belum semua pengikut tersambung: ${missing}.` : 'Belum ada pengikut.');
+  }
+  team.requestClose(target, symbol);
+  syncPresence();
+  return true;
+});
 handle('team:invite', (peerId, rank) => {
   if (!leaderKeys) throw new Error(LEADER_ONLY);
   if (!team?.enabled) throw new Error('Token hub belum diatur di laptop ini. Hubungi admin.');
@@ -226,6 +341,7 @@ handle('team:invite', (peerId, rank) => {
   if (!discovery.peers.has(peerId)) throw new Error('Laptop itu sudah tidak terlihat. Cari ulang.');
   if (!Number.isInteger(rank) || rank < 1 || rank > 5) throw new Error('Top gainer harus 1 sampai 5');
   team.invite(peerId, rank);
+  followerNames.set(peerId, discovery.peers.get(peerId).name);
   syncPresence();
   return true;
 });
@@ -264,11 +380,22 @@ app.whenReady().then(() => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
-app.on('window-all-closed', () => {
+app.on('window-all-closed', () => app.quit());
+// Keluar: hentikan bot dan pamit di jaringan dulu (maks 0,5 detik) agar pemimpin langsung tahu
+// laptop ini pergi; tanpa pamit, pemimpin baru tahu setelah detak terlewat.
+let quitting = false;
+function shutdown() {
+  if (quitting) return;
+  quitting = true;
   proc.stop();
-  app.quit();
+  const exit = () => app.exit(0);
+  if (!discovery) return exit();
+  discovery.stop(exit);
+  setTimeout(exit, 500);
+}
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  shutdown();
 });
-app.on('before-quit', () => {
-  proc.stop();
-  discovery?.stop();
-});
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, shutdown);

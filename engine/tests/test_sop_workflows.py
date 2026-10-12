@@ -16,6 +16,7 @@ from binance_bot.workflows import (
     FollowerWorkflow,
     JournalWorkflow,
     LeaderWorkflow,
+    PositionsWorkflow,
     SingleWorkflow,
     SopTrader,
 )
@@ -37,7 +38,11 @@ NOW = datetime(2026, 10, 12, 16, 0, 0)
 
 
 def make_trader(
-    tmp_path: Path, nav: FakeNavigator, market: FakeMarket | None = None, **params: Any
+    tmp_path: Path,
+    nav: FakeNavigator,
+    market: FakeMarket | None = None,
+    role: str = "single",
+    **params: Any,
 ) -> tuple[SopTrader, FakeGate, Journal, FakeMarket]:
     market = market or FakeMarket()
     journal, gate = Journal(tmp_path / "sop.jsonl"), FakeGate()
@@ -48,6 +53,7 @@ def make_trader(
         market,  # type: ignore[arg-type]
         journal,
         gate,  # type: ignore[arg-type]
+        role=role,
         wall_clock=lambda: NOW.timestamp(),
         now=lambda: NOW,
     )
@@ -468,3 +474,70 @@ def test_each_evaluated_coin_emits_one_event(
     ]
     assert events[0]["count_ai"] == 3 and events[0]["stop_price"] is not None
     assert "TUNGGU" in events[1]["reason"]
+
+
+# --------------------------------------------------------------------------- posisi dan Sell
+
+
+def run_positions(journal: Journal, market: FakeMarket, close: str | None = None) -> dict[str, Any]:
+    out: list[str] = []
+    PositionsWorkflow(
+        SopParams(),
+        journal,
+        market,  # type: ignore[arg-type]
+        close=close,
+        output=out.append,
+        wall_clock=lambda: NOW.timestamp() + 600,
+    ).run()
+    result: dict[str, Any] = json.loads(out[0])
+    return result
+
+
+def test_positions_lists_open_trades_with_unrealized_result(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT", entry_price=1.0))
+    market = FakeMarket(quote=Quote(bid=0.97, ask=0.98, funding_rate=0.0001, change_pct=50.0))
+    market.minute_candles = [candle(1.0, 1.005, 0.99, 0.99, 1, 1)]  # belum kena target/stop
+    result = run_positions(journal, market)
+    [position] = result["positions"]
+    assert position["symbol"] == "CKBUSDT" and position["role"] == "single"
+    assert position["price"] == 0.98
+    assert position["pnl_pct"] == pytest.approx(1.9)  # 2% turun - fee 0,1%
+    assert result["closed"] == []
+
+
+def test_sell_closes_one_pair_at_the_ask_without_touching_binance(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT", entry_price=1.0))
+    journal.append(open_trade("WUSDT", entry_price=1.0))
+    market = FakeMarket(quote=Quote(bid=0.98, ask=0.99, funding_rate=0.0001, change_pct=50.0))
+    result = run_positions(journal, market, close="CKBUSDT")
+    assert [c["symbol"] for c in result["closed"]] == ["CKBUSDT"]
+    assert result["closed"][0]["pnl_pct"] == pytest.approx(0.9)  # beli kembali di ask 0,99
+    assert [p["symbol"] for p in result["positions"]] == ["WUSDT"]
+    by_symbol = {e.symbol: e for e in journal.load()}
+    assert (by_symbol["CKBUSDT"].status, by_symbol["CKBUSDT"].exit_price) == ("manual", 0.99)
+    assert by_symbol["WUSDT"].status == "open"
+
+    run_positions(journal, market, close="semua")
+    assert all(e.status == "manual" for e in journal.load())
+
+
+def test_sell_refuses_when_binance_prices_are_unavailable(tmp_path: Path) -> None:
+    class BlockedMarket(FakeMarket):
+        def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
+            raise MarketDataError("diblokir")
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT"))
+    result = run_positions(journal, BlockedMarket(), close="semua")
+    assert "tidak bisa diambil" in result["error"]
+    assert journal.load()[0].status == "open"
+
+
+def test_trades_record_the_role_of_the_laptop(tmp_path: Path) -> None:
+    single, _, _, _ = make_trader(tmp_path / "s", FakeNavigator({1: "STRKUSDT"}))
+    follower, _, _, _ = make_trader(tmp_path / "f", FakeNavigator({1: "STRKUSDT"}), role="follower")
+    assert single.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).role == "single"
+    assert follower.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).role == "follower"
+    assert follower.skip(2, "WUSDT", "pola TUNGGU (dari leader)").role == "follower"

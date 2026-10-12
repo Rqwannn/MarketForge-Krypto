@@ -28,7 +28,7 @@ function fakeBonjour() {
     fake.browser.on('up', onup);
     return fake.browser;
   };
-  fake.unpublishAll = () => {};
+  fake.unpublishAll = (done) => { fake.goodbye = true; done?.(); };
   fake.destroy = () => { fake.destroyed = true; };
   return fake;
 }
@@ -130,8 +130,11 @@ test('berhenti: pengumuman dicabut', () => {
   const bonjour = fakeBonjour();
   const discovery = new Discovery({ bonjour, id: SELF });
   discovery.start();
-  discovery.stop();
-  assert.equal(bonjour.destroyed, true);
+  let stopped = false;
+  discovery.stop(() => { stopped = true; });
+  assert.equal(bonjour.goodbye, true); // pamit dulu
+  assert.equal(bonjour.destroyed, true); // baru ditutup
+  assert.equal(stopped, true);
 });
 
 test('pengumuman pemimpin ditandatangani kunci pemimpin; pemimpin palsu tidak terverifikasi', () => {
@@ -159,12 +162,13 @@ test('pengumuman pemimpin ditandatangani kunci pemimpin; pemimpin palsu tidak te
 
 test('aktivitas laptop lain terenkripsi: hanya pemimpin yang bisa membacanya', () => {
   const leader = loadLeaderKey(generateLeaderKeys().privateText);
-  const sealed = sealForLeader(leader.public, JSON.stringify(['Membuka top 2: RSRUSDT', 'RSRUSDT|tunggu|skipped', 1800000000]));
+  const sealed = sealForLeader(leader.public, JSON.stringify(['Membuka top 2: RSRUSDT', 'RSRUSDT|tunggu|skipped', 1800000000, [['CKBUSDT', 1.25], ['<x>', 2]]]));
   const txt = { id: ATTA, name: 'Pengikut', role: 'follower', state: 'running', os: 'win32', ...sealedFields(sealed) };
   const signed = { ...txt, sig: sign(TOKEN, txt) };
   assert.ok(Object.values(signed).every((v) => !String(v).includes('RSRUSDT'))); // tidak terbaca di jaringan
   assert.deepEqual(peerFrom({ txt: signed }, SELF, TOKEN, { leaderKeys: leader }).activity, {
     text: 'Membuka top 2: RSRUSDT', coin: { symbol: 'RSRUSDT', verdict: 'tunggu', status: 'skipped' }, at: 1800000000000,
+    positions: [{ symbol: 'CKBUSDT', pnl: 1.25 }], // pair tidak valid dibuang
   });
   assert.equal(peerFrom({ txt: signed }, SELF, TOKEN, {}).activity, null); // bukan pemimpin
   const other = loadLeaderKey(generateLeaderKeys().privateText);

@@ -111,6 +111,7 @@ class SopTrader:
         gate: DryRunOrderGate,
         *,
         fill_form: bool = True,
+        role: str = "single",
         wall_clock: Callable[[], float] = time.time,
         now: Callable[[], datetime] = datetime.now,
     ) -> None:
@@ -122,6 +123,7 @@ class SopTrader:
         self._journal = journal
         self._gate = gate
         self._fill_form = fill_form
+        self._role = role
         self._wall_clock = wall_clock
         self._now = now
 
@@ -166,6 +168,7 @@ class SopTrader:
             rank=rank,
             capital_usdt=self.params.capital_usdt,
             leverage=self.params.leverage,
+            role=self._role,
         )
         try:
             self._run(entry, reading_source)
@@ -187,6 +190,7 @@ class SopTrader:
             reason=reason,
             capital_usdt=self.params.capital_usdt,
             leverage=self.params.leverage,
+            role=self._role,
         )
         if reading is not None:
             entry.pattern_ai = reading.pattern.as_dict()
