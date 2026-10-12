@@ -174,7 +174,7 @@ def bring_to_front(hwnd: int) -> None:
 
 def resize_window(hwnd: int, width: int, height: int) -> None:
     """Ubah ukuran jendela yang tampak menjadi width x height (tanpa menggeser pojok kirinya)."""
-    if user32.IsIconic(hwnd):
+    if user32.IsIconic(hwnd) or user32.IsZoomed(hwnd):
         user32.ShowWindow(hwnd, _SW_RESTORE)
     before = window_bounds(hwnd)
     outer = wintypes.RECT()
