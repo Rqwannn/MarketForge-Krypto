@@ -231,7 +231,10 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 /* ------------------------------------------------------------------ tabel dan aktivitas */
-.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+/* Kartu Aktivitas mengikuti tinggi kartu "Putaran ini" (kolom kiri yang menentukan tinggi baris);
+   isinya bergulir di dalam kartu. `contain: size` membuat isi feed tidak ikut menambah tinggi. */
+.cols > .card:last-child { display: flex; flex-direction: column; contain: size; min-height: 360px; }
 .table { width: 100%; border-collapse: collapse; }
 .table th { text-align: left; color: var(--faint); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 10px 10px; border-bottom: 1px solid var(--line); }
 .table td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -253,7 +256,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .dips span { margin-left: 4px; }
 .empty-row td { padding: 34px 0 !important; text-align: center; color: var(--faint); }
 
-.feed { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto; }
+.feed { list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-height: 0; overflow: auto; }
 .feed li { position: relative; display: grid; grid-template-columns: 14px 1fr; gap: 10px; padding: 0 0 14px; }
 .feed li::before { content: ""; position: absolute; left: 6px; top: 14px; bottom: 0; width: 1px; background: var(--line); }
 .feed li:last-child::before { display: none; }
@@ -396,6 +399,8 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 @media (max-width: 1180px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cols { grid-template-columns: 1fr; }
+  .cols > .card:last-child { contain: none; min-height: 0; }
+  .feed { flex: none; max-height: 360px; }
 }
 @media (max-width: 980px) {
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
