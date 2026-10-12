@@ -59,6 +59,9 @@ Ketik `make` untuk daftar lengkap.
 | `make check` | Lint, cek tipe, dan tes |
 | `make bench-cases` / `bench-smoke` / `bench-run` | Benchmark model AI (`make bench-install` dulu) |
 
+Rank top gainer yang bisa dipilih: **1 sampai 5**, satu atau beberapa (`RANKS=4`,
+`RANKS=1,2,3,4,5`) di single/leader, dan satu (`RANK=5`) di follower. Default: `RANKS=1,2,3`.
+
 Parameter SOP yang bisa diubah: `MODAL`, `JUMLAH`, `RISIKO`, `SL`, `TARGET`, `MIN_NAIK`,
 `MIN_TANDA`, `BATAS_JAM`, `MAKS_POSISI`, `SINYAL` (`ai`/`data`), `NO_FILL=1`. Default dan asalnya
 ada di [docs/SOP.md](docs/SOP.md#parameter).

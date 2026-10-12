@@ -28,7 +28,8 @@ Lakukan sekali per laptop (langkah lengkap di bagian **Setup** pada [README](../
 | Perintah | Yang dilakukan |
 |---|---|
 | `make single MODAL=100` | SOP pada rank 1, 2, 3; ukuran posisi dari modal 100 USDT |
-| `make single MODAL=100 RANKS=1` | Hanya top gainer #1 |
+| `make single MODAL=100 RANKS=1` | Hanya top gainer #1 (pilihan 1 sampai 5) |
+| `make single MODAL=100 RANKS=1,2,3,4,5` | Kelima top gainer, dicoba berurutan |
 | `make single JUMLAH=150 RANKS=2` | Jumlah koin manual 150 (rumus tidak dipakai) |
 | `make single MODAL=100 SL=4 TARGET=3` | Mengubah angka usulan SOP |
 | `make single MODAL=100 MAKS_POSISI=3` | Boleh masuk sampai 3 posisi uji per jalan |

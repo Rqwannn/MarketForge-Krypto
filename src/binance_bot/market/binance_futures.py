@@ -19,7 +19,7 @@ from typing import Any
 from binance_bot.exceptions import MarketDataError
 
 BASE_URL = "https://fapi.binance.com/fapi/v1"
-_SYMBOL = re.compile(r"^[A-Z0-9]{2,20}USD[TC]$")
+_SYMBOL = re.compile(r"^[A-Z0-9]{1,20}USD[TC]$")  # nama koin bisa satu huruf, mis. "SUSDT"
 
 GetJson = Callable[[str], Any]
 

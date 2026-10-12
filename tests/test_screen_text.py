@@ -53,3 +53,11 @@ def test_same_number_treats_comma_and_dot_alike() -> None:
     assert same_number("184,6 STRK", "184,6")
     assert not same_number("1846", "184,6")
     assert not same_number("STRK", "1")
+
+
+def test_single_letter_coin_is_read() -> None:
+    # Uji nyata: rank 4 adalah "S" (Sonic), tampil sebagai "SUSDT Perpetual".
+    texts = ["SUSDT Perpetual", "Please note that the project name of S is Sonic (formerly FTM)."]
+    assert parse_futures_symbol(texts) == "SUSDT"
+    rows = parse_gainer_rows(list_lines((4, "SUSDT", "+21.9%")), layout.FUTURES_LIST_AREA)
+    assert [(r.rank, r.symbol) for r in rows] == [(4, "SUSDT")]

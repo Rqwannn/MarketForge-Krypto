@@ -106,6 +106,9 @@ mencatat koin sebagai dilewati.
 | Follower B | `make follower RANK=2 MODAL=100` |
 | Follower C | `make follower RANK=3 MODAL=100` |
 
+Rank yang bisa dipilih: **1 sampai 5**, baik `RANKS` di leader (mis. `RANKS=1,2,3,4,5` atau
+`RANKS=4`) maupun `RANK` di follower. Rank follower harus termasuk `RANKS` leader.
+
 | Cara | Panggilan AI per siklus |
 |---|---|
 | Keempat laptop memakai mode single, masing-masing 3 koin | sampai 12 |

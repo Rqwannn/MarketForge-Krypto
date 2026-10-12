@@ -11,7 +11,8 @@ from binance_bot.exceptions import ScreenReadError
 from binance_bot.macos import TextLine
 
 # Pair Futures tampil tanpa garis miring, mis. "STRKUSDT Perpetual" atau "STRKUSDT Perp".
-FUTURES_SYMBOL_PATTERN = re.compile(r"\b([A-Z0-9]{2,20}USD[TC])\s*Perp")
+# Nama koin bisa satu huruf (mis. "SUSDT" untuk Sonic).
+FUTURES_SYMBOL_PATTERN = re.compile(r"\b([A-Z0-9]{1,20}USD[TC])\s*Perp")
 _PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)%$")
 _LEVERAGE = re.compile(r"^(\d{1,3})x$", re.IGNORECASE)
 

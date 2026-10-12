@@ -59,3 +59,8 @@ def test_ocr_symbols_are_validated_before_any_request(bad: str) -> None:
     with pytest.raises(MarketDataError, match="tidak valid"):
         FuturesMarket(get_json=fake_get(urls)).quote(bad)
     assert urls == []
+
+
+def test_single_letter_coin_is_a_valid_pair() -> None:
+    assert is_futures_symbol("SUSDT")
+    assert not is_futures_symbol("USDT")

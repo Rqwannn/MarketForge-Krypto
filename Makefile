@@ -51,7 +51,7 @@ help: ## Tampilkan daftar perintah
 	@echo ""
 	@echo "Parameter SOP: MODAL=$(MODAL) JUMLAH=$(JUMLAH) RISIKO=$(RISIKO) SL=$(SL) TARGET=$(TARGET)"
 	@echo "               MIN_NAIK=$(MIN_NAIK) MIN_TANDA=$(MIN_TANDA) BATAS_JAM=$(BATAS_JAM) MAKS_POSISI=$(MAKS_POSISI) SINYAL=$(SINYAL)"
-	@echo "Mode: RANK=$(RANK) RANKS=$(RANKS) INTERVAL=$(INTERVAL) HUB=$(HUB) PORT=$(PORT)"
+	@echo "Mode (rank 1..5): RANK=$(RANK) RANKS=$(RANKS) INTERVAL=$(INTERVAL) HUB=$(HUB) PORT=$(PORT)"
 	@echo "Panduan: docs/SOP.md, docs/MODE_SINGLE.md, docs/MODE_BANYAK.md"
 
 # --------------------------------------------------------------------------- setup
@@ -88,7 +88,7 @@ hub-health: ## Cek koneksi laptop ini ke hub leader (HUB=http://IP:8765)
 open: ## Buka Binance jika belum berjalan (sesi login tidak diganggu)
 	$(BOT) open
 
-single: ## SOP penuh di satu laptop (MODAL= atau JUMLAH=, RANKS=1,2,3)
+single: ## SOP penuh di satu laptop (MODAL= atau JUMLAH=, RANKS=1..5)
 	$(BOT) single --ranks $(RANKS) $(SOP_ARGS)
 
 single-fast: ## Sama dengan single, AI tanpa thinking (lebih cepat, kurang teliti)
@@ -97,7 +97,7 @@ single-fast: ## Sama dengan single, AI tanpa thinking (lebih cepat, kurang telit
 leader: ## Mode banyak, leader: AI tanda pucuk sekali per koin, bagikan lewat hub
 	$(BOT) leader --ranks $(RANKS) --min-naik $(MIN_NAIK) --interval $(INTERVAL) $(if $(PORT),--port $(PORT))
 
-follower: ## Mode banyak, follower: SOP penuh pakai hasil AI dari HUB (RANK=, MODAL=)
+follower: ## Mode banyak, follower: SOP penuh pakai hasil AI dari HUB (RANK=1..5, MODAL=)
 	$(BOT) follower --rank $(RANK) $(if $(HUB),--hub $(HUB)) $(SOP_ARGS)
 
 jurnal: ## Nilai uji kertas dan rekap win rate terhadap titik impas SOP
