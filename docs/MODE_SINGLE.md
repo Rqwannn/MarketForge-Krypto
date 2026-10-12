@@ -75,10 +75,10 @@ Contoh jawaban Haiku dari uji nyata (12 Okt 2026, tanpa API):
 
 | Lokasi | Isi |
 |---|---|
-| `journal/sop.jsonl` | Satu baris per koin yang dinilai: status (`skipped`, `open`, `target`, `stop`, `timeout`), alasan, hitungan pola AI dan data, keputusan, funding, spread, modal, margin, leverage, harga masuk/keluar/tertinggi, hasil bersih (% posisi, USDT, % modal) |
-| `screenshots/<waktu>_<PAIR>_rank<N>.png` | Halaman trade saat dinilai |
-| `screenshots/<waktu>_<PAIR>_rank<N>_15m.png` | Grafik 15 menit yang dibaca Haiku |
-| `logs/bot.log` | Log lengkap |
+| `engine/journal/sop.jsonl` | Satu baris per koin yang dinilai: status (`skipped`, `open`, `target`, `stop`, `timeout`), alasan, hitungan pola AI dan data, keputusan, funding, spread, modal, margin, leverage, harga masuk/keluar/tertinggi, hasil bersih (% posisi, USDT, % modal) |
+| `engine/screenshots/<waktu>_<PAIR>_rank<N>.png` | Halaman trade saat dinilai |
+| `engine/screenshots/<waktu>_<PAIR>_rank<N>_15m.png` | Grafik 15 menit yang dibaca Haiku |
+| `engine/logs/bot.log` | Log lengkap |
 
 Bentuk rekap `make jurnal` (angka ilustrasi, bukan hasil nyata):
 

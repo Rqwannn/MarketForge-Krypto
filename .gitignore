@@ -13,3 +13,5 @@ benchmarks/cases/
 .env
 .DS_Store
 journal/
+node_modules/
+interface/out/

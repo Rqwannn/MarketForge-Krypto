@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MarketForge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="wordmark">MarketForge <span>SOP V2</span></div>
+  <nav class="tabs">
+    <button class="tab active" data-page="run">Pantau</button>
+    <button class="tab" data-page="journal">Hasil uji</button>
+    <button class="tab" data-page="ready">Cek laptop</button>
+  </nav>
+  <div class="bar-right">
+    <span class="paper">Uji kertas · tanpa order sungguhan</span>
+    <span class="state" id="engine-state">Berhenti</span>
+  </div>
+</header>
+
+<main>
+  <!-- ================================================================ Pantau -->
+  <section class="page" id="page-run">
+    <div class="split">
+      <form class="setup" id="setup" autocomplete="off">
+        <h1>Pantau top gainers</h1>
+        <p class="lede">Bot membuka Binance, membaca grafik 15 menit, dan mencatat koin yang layak di-short.</p>
+
+        <fieldset>
+          <legend>Peran laptop</legend>
+          <div class="seg" id="mode" role="radiogroup" aria-label="Peran laptop">
+            <button type="button" role="radio" data-value="single">Sendiri</button>
+            <button type="button" role="radio" data-value="leader">Pemimpin</button>
+            <button type="button" role="radio" data-value="follower">Pengikut</button>
+          </div>
+          <p class="note" id="mode-note"></p>
+        </fieldset>
+
+        <fieldset data-modes="single follower">
+          <legend><label for="modal">Modal</label></legend>
+          <div class="money">
+            <input id="modal" inputmode="decimal" placeholder="0">
+            <span>USDT</span>
+          </div>
+          <p class="note">Tiap posisi memakai separuh modal, leverage 2x.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend><span id="ranks-title">Top gainers</span>
+            <button type="button" class="text-btn" id="ranks-all" data-modes="single leader">Pilih semua</button></legend>
+          <div class="seg ranks" id="ranks" role="group" aria-label="Top gainers"></div>
+          <p class="note" id="ranks-note"></p>
+        </fieldset>
+
+        <fieldset data-modes="single leader">
+          <legend>Ulangi</legend>
+          <div class="seg" id="interval" role="radiogroup" aria-label="Ulangi">
+            <button type="button" role="radio" data-value="0">Sekali</button>
+            <button type="button" role="radio" data-value="15">15 menit</button>
+            <button type="button" role="radio" data-value="30">30 menit</button>
+            <button type="button" role="radio" data-value="60">1 jam</button>
+          </div>
+        </fieldset>
+
+        <p class="error" id="run-error" role="alert"></p>
+        <button type="button" class="primary" id="toggle">Mulai memantau</button>
+        <p class="note">Selama bot bekerja, jangan pakai mouse dan keyboard laptop ini.</p>
+      </form>
+
+      <div class="live">
+        <div class="status" id="status">
+          <div>
+            <h2 id="status-title">Belum berjalan</h2>
+            <p id="status-sub">Atur di sebelah kiri, lalu mulai memantau.</p>
+          </div>
+          <dl class="figures">
+            <div><dt>Dinilai</dt><dd id="count-seen">0</dd></div>
+            <div><dt>Layak short</dt><dd id="count-ok">0</dd></div>
+            <div><dt>Posisi uji</dt><dd id="count-open">0</dd></div>
+          </dl>
+        </div>
+        <p class="share" id="share" hidden>Hasil dibagikan ke laptop pengikut.</p>
+
+        <h3>Putaran ini</h3>
+        <table class="grid coins">
+          <thead><tr><th>Top</th><th>Koin</th><th>Garis kuning</th><th>Keputusan</th><th>Keterangan</th></tr></thead>
+          <tbody id="coins"></tbody>
+        </table>
+
+        <h3>Aktivitas</h3>
+        <ol class="feed" id="feed"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================ Hasil uji -->
+  <section class="page" id="page-journal" hidden>
+    <div class="page-head">
+      <div>
+        <h1>Hasil uji kertas</h1>
+        <p class="lede">SOP meminta 50 trade uji sebelum memakai uang sungguhan.</p>
+      </div>
+      <button class="secondary" id="journal-refresh">Perbarui</button>
+    </div>
+    <p class="notice" id="journal-notice" hidden></p>
+
+    <div class="progress">
+      <div class="progress-label"><span id="progress-text">0 dari 50 trade</span><span id="verdict"></span></div>
+      <div class="track"><div id="progress-bar"></div></div>
+    </div>
+
+    <dl class="figures wide" id="kpis"></dl>
+
+    <h3>Trade terakhir</h3>
+    <table class="grid">
+      <thead><tr><th>Waktu</th><th>Koin</th><th>Status</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Hasil (% modal)</th></tr></thead>
+      <tbody id="trades"></tbody>
+    </table>
+  </section>
+
+  <!-- ================================================================ Cek laptop -->
+  <section class="page" id="page-ready" hidden>
+    <div class="page-head">
+      <div>
+        <h1>Cek laptop</h1>
+        <p class="lede" id="ready-summary">Memeriksa…</p>
+      </div>
+      <button class="secondary" id="ready-refresh">Cek ulang</button>
+    </div>
+    <table class="grid checks">
+      <tbody id="checks"></tbody>
+    </table>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

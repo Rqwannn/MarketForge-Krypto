@@ -1,0 +1,14 @@
+{
+ "name": "STRKUSDT_1d",
+ "price_range": 0.10167,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.11186,
+  "last_high": 0.12389,
+  "window_high": 0.12389,
+  "green_count_last5": 4,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

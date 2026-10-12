@@ -1,0 +1,14 @@
+{
+ "name": "INJUSDT_1d",
+ "price_range": 4.7299999999999995,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 7.655,
+  "last_high": 7.907,
+  "window_high": 8.687,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

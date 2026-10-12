@@ -1,0 +1,14 @@
+{
+ "name": "CHIPUSDT_1h",
+ "price_range": 0.02463,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.06454,
+  "last_high": 0.0654,
+  "window_high": 0.07178,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

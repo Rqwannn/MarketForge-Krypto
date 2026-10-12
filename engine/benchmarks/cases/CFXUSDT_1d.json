@@ -1,0 +1,14 @@
+{
+ "name": "CFXUSDT_1d",
+ "price_range": 0.0296,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.06913,
+  "last_high": 0.07037,
+  "window_high": 0.07037,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

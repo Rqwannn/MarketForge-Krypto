@@ -2,8 +2,8 @@
 
 Engine ini menjalankan **SOP V2 "Short Top Gainers (Futures 2x)"** dari PDF Pak Saputra
 (12 Oktober 2026). Ketiga mode (single, leader, follower) memakai algoritma yang sama; bedanya
-hanya siapa yang memanggil AI. Kode intinya ada di `src/binance_bot/workflows/sop.py` dan
-`src/binance_bot/strategy/`.
+hanya siapa yang memanggil AI. Kode intinya ada di `engine/src/binance_bot/workflows/sop.py` dan
+`engine/src/binance_bot/strategy/`.
 
 > **Tahap sekarang: uji kertas.** Tombol Jual/Short tidak pernah ditekan. Setiap keputusan
 > "masuk" dicatat di jurnal lalu dinilai dari candle sungguhan, sesuai fase uji 50 trade di PDF.
@@ -19,7 +19,7 @@ hanya siapa yang memanggil AI. Kode intinya ada di `src/binance_bot/workflows/so
 | 4. Cek slot | Maksimal 2 posisi; koin kedua hanya bila posisi pertama tidak sedang rugi | Jurnal + harga terkini |
 | 5. Masuk short 2x, margin 50% | Ukuran posisi, isi kolom **Jumlah**, pintu order **dry run** | Layar Binance |
 | 6. Monitor | `make jurnal`: target / stop-loss / batas waktu dari candle 1 menit; tandai posisi > 1 jam untuk ditinjau | API publik Binance |
-| 7. Catat | `journal/sop.jsonl`: semua isi "Yang dicatat tiap trade" di PDF | File lokal |
+| 7. Catat | `engine/journal/sop.jsonl`: semua isi "Yang dicatat tiap trade" di PDF | File lokal |
 
 Saringan yang gratis (biaya, slot) dijalankan **sebelum** AI. Bila slot sudah penuh, engine
 tidak memindai dan tidak memanggil AI sama sekali. Bila kelima koin belum OK, engine tidak masuk.

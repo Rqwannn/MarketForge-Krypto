@@ -1,0 +1,14 @@
+{
+ "name": "BTCUSDT_4h",
+ "price_range": 6826.440000000002,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "red",
+  "last_close": 83130.28,
+  "last_high": 83234.0,
+  "window_high": 87220.0,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

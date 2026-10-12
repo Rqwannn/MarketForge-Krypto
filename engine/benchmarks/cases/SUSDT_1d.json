@@ -1,0 +1,14 @@
+{
+ "name": "SUSDT_1d",
+ "price_range": 0.028609999999999997,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.04776,
+  "last_high": 0.04955,
+  "window_high": 0.04955,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

@@ -1,0 +1,72 @@
+# Aplikasi desktop MarketForge
+
+Aplikasi untuk menjalankan SOP V2 tanpa terminal. Pengguna cukup memilih peran laptop, modal,
+top gainers yang dipantau, lalu menekan **Mulai memantau**. Semua istilah teknis disembunyikan;
+detailnya tetap tersimpan di `engine/logs/bot.log` untuk admin.
+
+> Mode uji kertas: aplikasi tidak pernah menekan tombol beli atau jual di Binance.
+
+## Untuk pengguna
+
+| Halaman | Isi |
+|---|---|
+| **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Hasil tiap koin tampil di tabel "Putaran ini" beserta aktivitas bot. |
+| **Hasil uji** | Progres 50 trade uji, tingkat menang dibanding titik impas, hasil bersih dalam % modal, dan trade terakhir. |
+| **Cek laptop** | Daftar kesiapan: izin macOS, Binance terbuka, ukuran jendela, koneksi data Binance, AI, dan kerja sama antar laptop. |
+
+Arti keputusan di tabel:
+
+| Keputusan | Arti |
+|---|---|
+| Layak short | Garis kuning berkali-kali turun di bawah garis tren; bila ada slot, posisi uji dibuka |
+| Tunggu | Garis kuning baru sekali turun; harga masih bisa naik lagi |
+| Jangan short | Garis kuning selalu di atas; harga masih naik terus |
+| Dilewati | Koin tidak dinilai (mis. jaringan memblokir data Binance) |
+
+Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
+
+## Untuk admin (sekali per laptop)
+
+1. Siapkan engine: `make install` di root repo, lalu ikuti langkah **Setup** di
+   [README](../README.md) (izin macOS, Binance login, tata letak Pro, ukuran jendela).
+2. Pasang aplikasi: `make app-install`.
+3. Isi pengaturan: salin `interface/.env.example` menjadi `interface/.env`, lalu isi:
+
+   | Kunci | Laptop |
+   |---|---|
+   | `VIKEY_API_BASE`, `VIKEY_API_KEY` | Sendiri dan Pemimpin |
+   | `BOT_HUB_TOKEN` | Pemimpin dan Pengikut (sama di semua laptop; buat dengan `make token`) |
+   | `BOT_HUB_URL` | Pengikut: alamat laptop Pemimpin, mis. `http://192.168.1.24:8765` |
+
+   Nilai di `interface/.env` diteruskan ke engine dan menimpa `engine/.env`. File ini tidak
+   masuk git; jangan dibagikan.
+4. Buka aplikasi: `make app`. Untuk saat ini aplikasi dijalankan dari repo; paket `.app` yang
+   tinggal diklik dua kali menyusul.
+5. Izin macOS (Accessibility dan Screen Recording) diberikan ke aplikasi yang membuka
+   MarketForge. Saat dijalankan lewat `make app` dari Terminal/VS Code, izinkan aplikasi itu.
+
+## Cara kerja
+
+```
+interface/ (Electron)                       engine/ (Python)
+renderer  --IPC-->  main.js  --spawn-->  binance-bot --events single|leader|follower
+                    engine.js            binance-bot cek          (JSON kesiapan)
+                                         binance-bot jurnal --json (rekap)
+```
+
+- Argumen dibangun dan divalidasi di `interface/engine.js` (tanpa shell). Parameter SOP
+  memakai default V2 di engine; perubahan angka SOP dilakukan admin lewat Makefile/CLI.
+- Engine menulis satu JSON per baris (`--events`). Event `coin`, `cycle`, dan `hub`
+  dipakai untuk tabel dan status; pesan lain diterjemahkan ke bahasa sehari-hari.
+- Tombol Hentikan mengirim SIGINT (sama dengan Ctrl+C).
+- Debugging tetap lewat terminal: `make single MODAL=100`, `make cek`, `make jurnal`.
+
+## Pemecahan masalah (admin)
+
+| Gejala | Solusi |
+|---|---|
+| "Mesin bot belum terpasang di laptop ini" | `make install` |
+| Aplikasi tidak terbuka dari terminal VS Code | `make app` sudah menghapus `ELECTRON_RUN_AS_NODE`; jalankan lewat `make app`, bukan `npx electron` |
+| "Pengaturan AI di laptop ini belum lengkap" | Isi `VIKEY_API_BASE` dan `VIKEY_API_KEY` di `interface/.env` |
+| "Belum terhubung ke laptop pemimpin" | Samakan `BOT_HUB_TOKEN`, cek `BOT_HUB_URL` dan WiFi |
+| Detail kendala lain | `engine/logs/bot.log` |

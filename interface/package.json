@@ -1,0 +1,14 @@
+{
+  "name": "marketforge-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aplikasi desktop untuk engine SOP V2 Short Top Gainers (uji kertas).",
+  "main": "main.js",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "electron": "44.4.5"
+  }
+}

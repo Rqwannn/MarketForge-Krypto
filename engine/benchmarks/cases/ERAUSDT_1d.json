@@ -1,0 +1,14 @@
+{
+ "name": "ERAUSDT_1d",
+ "price_range": 0.05979999999999999,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.0859,
+  "last_high": 0.0939,
+  "window_high": 0.1137,
+  "green_count_last5": 4,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "name": "ETHUSDT_4h",
+ "price_range": 371.2199999999998,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "red",
+  "last_close": 2504.01,
+  "last_high": 2510.26,
+  "window_high": 2777.33,
+  "green_count_last5": 3,
+  "close_above_ma25": false,
+  "volume_last_is_max": false
+ }
+}

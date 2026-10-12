@@ -1,0 +1,14 @@
+{
+ "name": "LUMIAUSDT_1d",
+ "price_range": 0.11399999999999999,
+ "truth": {
+  "last_color": "green",
+  "prev_color": "green",
+  "last_close": 0.1646,
+  "last_high": 0.1833,
+  "window_high": 0.1833,
+  "green_count_last5": 3,
+  "close_above_ma25": true,
+  "volume_last_is_max": false
+ }
+}
