@@ -93,6 +93,7 @@ function plain(text) {
     [/leverage .*SOP/i, 'Leverage di Binance belum 2x (ubah sebelum memakai uang sungguhan)'],
     [/Isolated/i, 'Mode margin di Binance belum Isolated (ubah sebelum memakai uang sungguhan)'],
     [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti sesuai SOP'],
+    [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Hub belum punya|menunggu hasil/i, 'Hasil dari laptop pemimpin belum tersedia'],
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],

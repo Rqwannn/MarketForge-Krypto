@@ -142,6 +142,9 @@ function handle(channel, fn) {
 
 handle('engine:start', (mode, params) => {
   if (team?.membership && mode !== 'follower') throw new Error('Laptop ini pengikut. Keluar dari kelompok dulu.');
+  if ((mode === 'leader' || mode === 'follower') && !engine.hubToken()) {
+    throw new Error('Mode Pemimpin dan Pengikut butuh token hub yang sama di semua laptop. Minta admin mengisinya.');
+  }
   const args = mode === 'follower' && team?.membership
     ? engine.buildArgs(mode, { ...params, rank: team.membership.rank })
     : engine.buildArgs(mode, params);
