@@ -91,6 +91,24 @@ terhadap grafik, jurnal) di Binance Windows, dan layar selain 1920x1080.
 
 ## Aplikasi desktop (interface/)
 
-Aplikasi Electron di `interface/` (lihat [APLIKASI.md](APLIKASI.md)) saat ini mengasumsikan macOS:
-`interface/engine.js` memanggil `engine/.venv/bin/binance-bot` dan skrip `npm start` memakai
-`env -u`. Keduanya belum disesuaikan untuk Windows. Di Windows, jalankan engine lewat CLI di atas.
+Aplikasi Electron di `interface/` (lihat [APLIKASI.md](APLIKASI.md)) jalan di Windows. Tanpa `make`:
+
+```powershell
+cd interface
+npm ci          # sekali: memasang Electron
+npm start       # membuka aplikasi
+npm test        # tes interface (tanpa membuka jendela)
+```
+
+Yang disesuaikan untuk Windows:
+
+- `engine.js` mencari virtualenv di `engine\.venv`, lalu `.venv` di root repo, dan menjalankan
+  engine dengan `python.exe -m binance_bot` (bukan `binance-bot.exe`, yang hanya peluncur sehingga
+  menghentikannya tidak menghentikan engine).
+- Tombol **Hentikan** memakai `taskkill /T /F` karena Windows tidak punya SIGINT untuk proses anak.
+  Engine berhenti seketika; posisi uji yang sedang berjalan tidak diselesaikan dulu.
+- `npm start` memakai `start.js` (pengganti `env -u ELECTRON_RUN_AS_NODE`).
+- Halaman **Cek laptop** menampilkan petunjuk Windows (blokir screenshot, bukan izin macOS).
+- Engine dijalankan dengan `PYTHONUTF8=1` agar log berbahasa Indonesia tidak gagal di konsol.
+
+Pengaturan `interface\.env` (opsional) menimpa `engine\.env`, sama seperti di macOS.

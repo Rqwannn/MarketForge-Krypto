@@ -18,6 +18,7 @@ function listen(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('bot', {
+  platform: process.platform,
   start: (mode, params) => call('engine:start', mode, params),
   stop: () => call('engine:stop'),
   status: () => call('engine:status'),
