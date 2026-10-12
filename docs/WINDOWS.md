@@ -28,7 +28,7 @@ Perintah `make` tidak dipakai di Windows. Panggil CLI langsung:
 ```powershell
 .\.venv\Scripts\binance-bot open
 .\.venv\Scripts\binance-bot window-size --atur
-.\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 1
+.\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 200
 .\.venv\Scripts\binance-bot single --ranks 1,2,3 --modal 100
 .\.venv\Scripts\binance-bot jurnal
 ```
@@ -65,8 +65,8 @@ Futures USD-M > urutkan "Perubahan 24jam" > klik ikon candle di kolom "Tindakan"
 Uji kalibrasi (hasilnya harus `BERHASIL`; lalu kosongkan kolom Jumlah):
 
 ```powershell
-.\.venv\Scriptsinance-bot window-size --atur
-.\.venv\Scriptsinance-bot uji-isi --rank 1 --jumlah 200
+.\.venv\Scripts\binance-bot window-size --atur
+.\.venv\Scripts\binance-bot uji-isi --rank 1 --jumlah 200
 ```
 
 Gunakan jumlah di atas kuantitas minimum pair itu. Angka terlalu kecil memunculkan tooltip
