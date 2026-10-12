@@ -20,11 +20,14 @@ class WindowSizeWorkflow:
     def run(self) -> None:
         want_w, want_h = layout.EXPECTED_WINDOW
         if self._resize:
+            maximizer = getattr(self._window, "maximize", None)
             resizer = getattr(self._window, "resize", None)
-            if resizer is None:
-                logger.warning("Pengaturan ukuran otomatis hanya tersedia di Windows")
-            else:
+            if layout.WINDOW_MAXIMIZED and maximizer is not None:
+                maximizer(self._settings.app_name)
+            elif resizer is not None:
                 resizer(self._settings.app_name, want_w, want_h)
+            else:
+                logger.warning("Pengaturan ukuran otomatis hanya tersedia di Windows")
         rect = wait_for_window(
             self._window,
             self._settings.app_name,

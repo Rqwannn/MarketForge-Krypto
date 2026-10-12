@@ -15,7 +15,7 @@ from typing import Protocol
 from binance_bot.exceptions import CommandError, WindowError
 from binance_bot.macos.app_controller import Runner, run_command
 from binance_bot.macos.keyboard import clear_field, type_number
-from binance_bot.macos.mouse import click_at, scroll_up_at
+from binance_bot.macos.mouse import click_at, scroll_down_at, scroll_up_at
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,8 @@ class WindowController(Protocol):
 
     def scroll_up(self, x: int, y: int) -> None: ...
 
+    def scroll_down(self, x: int, y: int, notches: int) -> None: ...
+
     def clear_field(self) -> None: ...
 
     def type_number(self, text: str) -> None: ...
@@ -65,12 +67,14 @@ class MacWindowController:
         runner: Runner = run_command,
         mouse_click: Callable[[int, int], None] = click_at,
         mouse_scroll_up: Callable[[int, int], None] = scroll_up_at,
+        mouse_scroll_down: Callable[[int, int, int], None] = scroll_down_at,
         keyboard_clear: Callable[[], None] = clear_field,
         keyboard_type: Callable[[str], None] = type_number,
     ) -> None:
         self._run = runner
         self._mouse_click = mouse_click
         self._mouse_scroll_up = mouse_scroll_up
+        self._mouse_scroll_down = mouse_scroll_down
         self._keyboard_clear = keyboard_clear
         self._keyboard_type = keyboard_type
 
@@ -93,6 +97,10 @@ class MacWindowController:
     def scroll_up(self, x: int, y: int) -> None:
         logger.info("Gulir ke atas di (%d, %d)", x, y)
         self._mouse_scroll_up(x, y)
+
+    def scroll_down(self, x: int, y: int, notches: int) -> None:
+        logger.info("Gulir ke bawah %d langkah di (%d, %d)", notches, x, y)
+        self._mouse_scroll_down(x, y, notches)
 
     def clear_field(self) -> None:
         self._keyboard_clear()

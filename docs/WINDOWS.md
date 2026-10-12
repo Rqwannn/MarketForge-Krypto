@@ -39,30 +39,49 @@ diganti `python -c "import secrets; print(secrets.token_hex(16))"`.
 
 ## Syarat
 
-1. Binance Desktop untuk Windows, bahasa Indonesia, tata letak Futures **Pro**, sudah login.
-   Bila `binance-bot open` tidak menemukan aplikasinya, isi `BOT_APP_PATH` di `.env` dengan path
-   lengkap `Binance.exe`.
-2. Paket OCR Windows: Settings > Time & language > Language & region, pastikan ada bahasa dengan
+1. Binance Desktop untuk Windows (diuji v2.5.2), **bahasa Indonesia**, sudah login. Bila
+   `binance-bot open` tidak menemukan aplikasinya, isi `BOT_APP_PATH` di `.env`.
+2. **Layar 1920x1080** dengan jendela Binance di-maximize (area 1920x1020). Atur lewat
+   `binance-bot window-size --atur`. Resolusi lain butuh ukur ulang `layout_windows.py`.
+3. **Izinkan screenshot di Binance.** Secara bawaan Binance Desktop memblokir tangkapan layar
+   (`WDA_EXCLUDEFROMCAPTURE`), sehingga bot hanya melihat jendela di belakangnya. Matikan
+   pengaturan "perlindungan layar" di aplikasi (jangan klik "Aktifkan perlindungan layar" pada
+   banner keamanan). Bot tidak mencoba menembus proteksi ini.
+4. Paket OCR Windows: Settings > Time & language > Language & region, pastikan ada bahasa dengan
    fitur OCR (English cukup).
-3. Jalankan terminal **bukan sebagai Administrator** kecuali Binance juga dijalankan sebagai
+5. Jalankan terminal **bukan sebagai Administrator** kecuali Binance juga dijalankan sebagai
    Administrator (Windows memblokir input ke jendela yang lebih tinggi hak aksesnya).
+6. Jangan menyentuh mouse/keyboard saat bot bekerja: bot memakai kursor dan keyboard sungguhan,
+   dan memastikan Binance di depan sebelum klik, mengetik, atau mengambil screenshot.
 
-## Kalibrasi (wajib dilakukan sekali)
+## Kalibrasi
 
-Posisi klik di `binance_desktop/layout.py` diukur dari Binance Desktop **di macOS**, jendela
-1470x859. Versi Windows bisa punya bingkai/judul jendela dan tata letak yang sedikit beda, jadi
-pastikan dulu sebelum mempercayai hasilnya:
+Posisi klik Windows ada di `binance_desktop/layout_windows.py` (menimpa `layout.py` yang diukur
+dari macOS). `BOT_LAYOUT=mac|windows` memaksa profil tertentu. Ukuran: piksel / (1920, 1020).
 
-1. `binance-bot window-size --atur` harus menampilkan `OK` (ukuran dalam piksel fisik).
-2. `binance-bot uji-isi --rank 1 --jumlah 1` harus berakhir `BERHASIL`, lalu kosongkan kolom Jumlah.
-3. Bila klik meleset, ukur ulang konstanta di `layout.py` (titik relatif 0..1 terhadap jendela).
-   Screenshot jendela ada di folder `screenshots/` untuk membantu mengukur.
+Alur Windows: Pasar > tab Futures > gulir 1 langkah (agar 5 baris terlihat) > pilih sub-tab
+Futures USD-M > urutkan "Perubahan 24jam" > klik ikon candle di kolom "Tindakan" > halaman trade.
 
-Layar dengan scaling (125%/150%) aman: proses memakai piksel fisik, tetapi ukuran 1470x859
-piksel harus muat di layar Anda.
+Uji kalibrasi (hasilnya harus `BERHASIL`; lalu kosongkan kolom Jumlah):
 
-## Belum terverifikasi
+```powershell
+.\.venv\Scriptsinance-bot window-size --atur
+.\.venv\Scriptsinance-bot uji-isi --rank 1 --jumlah 200
+```
 
-Lapisan Windows diuji terhadap Notepad (cari jendela, bounds, klik, ketik angka, screenshot,
-OCR) dan unit test lulus. **Belum diuji terhadap Binance Desktop** karena aplikasinya belum
-terpasang di mesin pengembangan. Kalibrasi layout di atas adalah langkah yang membuktikannya.
+Gunakan jumlah di atas kuantitas minimum pair itu. Angka terlalu kecil memunculkan tooltip
+"Kuantitas Minimum ..." dan OCR kerap gagal membaca satu digit.
+
+## Perbedaan perilaku dibanding macOS
+
+- Zona tombol order (Beli/Long, Jual/Short, dan "Aktifkan Akun Futures") ditolak untuk diklik.
+- OCR Windows lebih goyah pada teks kecil: potongan pendek diperbesar dan dibaca dengan beberapa
+  varian, serta verifikasi kolom Jumlah diulang sampai 4 kali (kursor berkedip mengganggu).
+- Akun Futures belum aktif tetap bisa dipakai: halaman trade dan kolom Jumlah tetap tampil.
+
+## Status verifikasi
+
+Diuji langsung terhadap Binance Desktop 2.5.2 (Indonesia, 1920x1020): buka aplikasi, urut top
+gainer (6 dari 6 percobaan), buka rank 1 dan 2, baca pair, baca "Cross 20x", isi dan verifikasi
+kolom Jumlah (`uji-isi` berhasil). **Belum diuji:** alur `single`/`leader` penuh (analisis AI
+terhadap grafik, jurnal) di Binance Windows, dan layar selain 1920x1080.

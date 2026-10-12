@@ -41,3 +41,19 @@ def test_window_controller_refuses_non_numbers() -> None:
 def test_build_system_rejects_unknown_platform() -> None:
     with pytest.raises(BotError):
         build_system(Settings.from_env({}), platform="linux")
+
+
+def test_group_rows_merges_ocr_lines_on_the_same_visual_row() -> None:
+    from binance_bot.windows.ocr import _group_rows, _segment_line
+
+    # "BTCUSDT" dan "Perpetual" datang sebagai dua line OCR terpisah di baris yang sama
+    words = [
+        ("BTCUSDT", 295.0, 528.0, 90.0, 20.0),
+        ("83,923.60", 810.0, 517.0, 90.0, 20.0),
+        ("Perpetual", 395.0, 530.0, 75.0, 18.0),
+        ("$83,923.60", 823.0, 541.0, 78.0, 18.0),
+    ]
+    rows = _group_rows(words)
+    texts = [[" ".join(w[0] for w in seg) for seg in _segment_line(row)] for row in rows]
+    assert ["BTCUSDT Perpetual"] in texts
+    assert any("83,923.60" in group for group in texts)

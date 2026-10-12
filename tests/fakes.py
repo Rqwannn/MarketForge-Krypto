@@ -87,6 +87,9 @@ class FakeScreen:
     def scroll_up(self, x: int, y: int) -> None:
         self.events.append(("scroll_up", (x, y)))
 
+    def scroll_down(self, x: int, y: int, notches: int) -> None:
+        self.events.append(("scroll_down", (x, y, notches)))
+
     def clear_field(self) -> None:
         self.events.append(("clear", None))
 

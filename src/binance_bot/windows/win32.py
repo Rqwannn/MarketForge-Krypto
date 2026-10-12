@@ -19,6 +19,7 @@ dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _DWMWA_EXTENDED_FRAME_BOUNDS = 9
 _SW_RESTORE = 9
+_SW_MAXIMIZE = 3
 _INPUT_MOUSE, _INPUT_KEYBOARD = 0, 1
 _MOUSEEVENTF_LEFTDOWN, _MOUSEEVENTF_LEFTUP, _MOUSEEVENTF_WHEEL = 0x0002, 0x0004, 0x0800
 _KEYEVENTF_KEYUP, _KEYEVENTF_UNICODE = 0x0002, 0x0004
@@ -170,6 +171,11 @@ def bring_to_front(hwnd: int) -> None:
         user32.ShowWindow(hwnd, _SW_RESTORE)
     _send([_key(_VK_MENU), _key(_VK_MENU, flags=_KEYEVENTF_KEYUP)])
     user32.SetForegroundWindow(hwnd)
+
+
+def maximize_window(hwnd: int) -> None:
+    user32.ShowWindow(hwnd, _SW_MAXIMIZE)
+    time.sleep(0.5)
 
 
 def resize_window(hwnd: int, width: int, height: int) -> None:

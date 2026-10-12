@@ -51,6 +51,22 @@ def click_at(x: int, y: int) -> None:
         time.sleep(delay)
 
 
+def scroll_down_at(x: int, y: int, notches: int = 1) -> None:
+    """Gulir ke bawah `notches` langkah di (x, y)."""
+    from Quartz import (
+        CGEventCreateScrollWheelEvent,
+        CGEventPost,
+        kCGHIDEventTap,
+        kCGScrollEventUnitLine,
+    )
+
+    _move_to((float(x), float(y)))
+    CGEventPost(
+        kCGHIDEventTap,
+        CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitLine, 1, -3 * notches),
+    )
+
+
 def scroll_up_at(x: int, y: int, lines: int = 20) -> None:
     """Gulir ke atas di (x, y). Arahkan ke area yang bukan grafik, karena grafik akan ter-zoom."""
     from Quartz import (

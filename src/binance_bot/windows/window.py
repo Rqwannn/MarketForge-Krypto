@@ -47,6 +47,16 @@ class WinWindowController:
         logger.info("Gulir ke atas di (%d, %d)", x, y)
         win32.scroll_up_at(x, y, _SCROLL_NOTCHES)
 
+    def scroll_down(self, x: int, y: int, notches: int) -> None:
+        logger.info("Gulir ke bawah %d langkah di (%d, %d)", notches, x, y)
+        win32.scroll_at(x, y, -notches)
+
+    def maximize(self, app_name: str) -> None:
+        windows = win32.find_windows(self._exe)
+        if not windows:
+            raise WindowError(f"Jendela {self._exe} ({app_name}) tidak ditemukan")
+        win32.maximize_window(windows[0])
+
     def clear_field(self) -> None:
         win32.select_all_and_delete()
 
