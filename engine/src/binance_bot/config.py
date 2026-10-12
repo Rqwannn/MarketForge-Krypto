@@ -58,7 +58,7 @@ class Settings:
     hub_url: str = ""
     hub_port: int = 8765
     hub_token: str = field(default="", repr=False)
-    follower_wait_s: float = 180.0
+    follower_wait_s: float = 300.0  # leader menilai Top 1..5 berurutan, sekitar 30 detik per koin
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:

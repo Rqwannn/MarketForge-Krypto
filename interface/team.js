@@ -22,9 +22,10 @@ const HUB_PORT = 8765;
 
 const shortId = (id) => String(id).slice(0, SHORT_ID);
 
-function canonical(fields) {
+/** Teks yang ditandatangani: semua field kecuali tanda tangan itu sendiri. */
+function canonical(fields, skip = ['sig']) {
   return Object.keys(fields)
-    .filter((key) => key !== 'sig')
+    .filter((key) => !skip.includes(key))
     .sort()
     .map((key) => `${key}=${fields[key]}`)
     .join('&');
@@ -142,7 +143,8 @@ class Team extends EventEmitter {
     const me = shortId(this.myId);
     let changed = false;
     for (const peer of peers) {
-      if (peer.self || !peer.team.verified || peer.role !== 'leader') continue;
+      // Ajakan dan sinyal putaran hanya dari pemegang kunci pemimpin (tanda tangan Ed25519).
+      if (peer.self || !peer.team.verified || peer.role !== 'leader' || !peer.leaderVerified) continue;
       const rank = peer.team.invites.get(me);
       const member = this.membership;
       if (member && member.leaderId === peer.id) {
@@ -177,6 +179,7 @@ class Team extends EventEmitter {
 
 module.exports = {
   CYCLE_FRESH_MS,
+  canonical,
   HUB_PORT,
   Team,
   decodeInvites,

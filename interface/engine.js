@@ -112,7 +112,7 @@ function parseLine(line, fallbackLevel = 'INFO') {
 }
 
 /** Baca interface/.env (format sama dengan engine: KEY=VALUE). Hanya kunci yang diizinkan. */
-function readAppEnv(file = APP_ENV_FILE) {
+function readAppEnv(file = APP_ENV_FILE, keys = APP_ENV_KEYS) {
   let text = '';
   try {
     text = fs.readFileSync(file, 'utf8');
@@ -126,7 +126,7 @@ function readAppEnv(file = APP_ENV_FILE) {
     const at = line.indexOf('=');
     const key = line.slice(0, at).trim();
     const value = line.slice(at + 1).trim().replace(/^["']|["']$/g, '');
-    if (APP_ENV_KEYS.includes(key) && value !== '') values[key] = value;
+    if (keys.includes(key) && value !== '') values[key] = value;
   }
   return values;
 }
@@ -242,10 +242,14 @@ function runJson(
   });
 }
 
-/** Token hub: interface/.env, lingkungan, lalu engine/.env. '' bila belum diatur. */
+/** Satu pengaturan aplikasi: interface/.env, lingkungan, lalu engine/.env. '' bila belum diatur. */
+function appSetting(name, env = process.env) {
+  return readAppEnv(APP_ENV_FILE, [name])[name] || env[name]
+    || readAppEnv(path.join(ENGINE_DIR, '.env'), [name])[name] || '';
+}
+
 function hubToken(env = process.env) {
-  return readAppEnv().BOT_HUB_TOKEN || env.BOT_HUB_TOKEN
-    || readAppEnv(path.join(ENGINE_DIR, '.env')).BOT_HUB_TOKEN || '';
+  return appSetting('BOT_HUB_TOKEN', env);
 }
 
 module.exports = {
@@ -257,6 +261,7 @@ module.exports = {
   botFor,
   buildArgs,
   engineEnv,
+  appSetting,
   findBot,
   hubToken,
   parseLine,

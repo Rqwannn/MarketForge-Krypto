@@ -9,7 +9,7 @@ ENGINE_TARGETS = install env token fix-hidden window-size hub-health \
 	test lint format typecheck bench-install bench-cases bench-smoke bench-run clean
 
 .DEFAULT_GOAL := help
-.PHONY: help app-install app app-test check $(ENGINE_TARGETS)
+.PHONY: help leader-key app-install app app-test check $(ENGINE_TARGETS)
 
 help: ## Tampilkan daftar perintah
 	@echo "Aplikasi (interface/):"
@@ -19,6 +19,9 @@ help: ## Tampilkan daftar perintah
 
 $(ENGINE_TARGETS):
 	@$(MAKE) --no-print-directory -C engine $@
+
+leader-key: ## Buat kunci pemimpin: BOT_LEADER_KEY (laptop pemimpin saja) + BOT_LEADER_PUBLIC (pengikut)
+	@node interface/leaderkey.js
 
 app-install: ## Pasang Electron untuk aplikasi desktop (sekali)
 	cd interface && npm ci

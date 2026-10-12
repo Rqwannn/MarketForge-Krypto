@@ -39,6 +39,11 @@ class HubClient:
         payload = self._get(f"/analyses?{query}", allow_missing=True)
         return None if payload is None else self._shared(payload.get("record"), payload)
 
+    def by_rank(self, rank: int) -> SharedAnalysis | None:
+        """Hasil leader untuk Top `rank` di putaran ini, atau None bila belum dinilai."""
+        payload = self._get(f"/analyses?rank={int(rank)}", allow_missing=True)
+        return None if payload is None else self._shared(payload.get("record"), payload)
+
     def _shared(self, item: Any, payload: dict[str, Any]) -> SharedAnalysis:
         record = AnalysisRecord.from_dict(item)
         now = payload.get("now")

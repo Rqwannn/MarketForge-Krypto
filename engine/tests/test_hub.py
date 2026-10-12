@@ -37,6 +37,21 @@ def test_follower_reads_all_and_single_results_with_hub_clock_age(
     assert shared.age_s == 600.0
 
 
+def test_follower_reads_the_leaders_result_for_its_rank_in_this_cycle(
+    hub: tuple[AnalysisStore, str],
+) -> None:
+    store, url = hub
+    client = HubClient(url, TOKEN)
+    store.put(record("WUSDT", 2, analyzed_at=1000.0))  # putaran lalu
+    store.begin_cycle()
+    assert client.by_rank(2) is None  # leader belum menilai Top 2 di putaran ini
+    store.put(record("CFXUSDT", 2, analyzed_at=1500.0))
+    shared = client.by_rank(2)
+    assert shared is not None and shared.record.symbol == "CFXUSDT"
+    assert shared.age_s == 100.0
+    assert client.get("WUSDT") is not None  # hasil lama tetap ada untuk dipakai ulang
+
+
 def test_unknown_symbol_is_none(hub: tuple[AnalysisStore, str]) -> None:
     _, url = hub
     assert HubClient(url, TOKEN).get("ZKUSDT") is None

@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from binance_bot.analysis import AnalysisRecord
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
 from binance_bot.exceptions import MarketDataError, ScreenReadError
@@ -29,7 +30,7 @@ from fakes import (
     FakePatternAnalyzer,
     candle,
     ma_candles,
-    record,
+    reading,
 )
 
 NOW = datetime(2026, 10, 12, 16, 0, 0)
@@ -308,25 +309,27 @@ def test_leader_evaluates_a_pair_once_per_cycle_when_ranks_shift(tmp_path: Path)
 
 
 class FakeClient:
-    def __init__(self, appears_after_polls: int = 0) -> None:
+    """Hub tiruan: hasil leader untuk Top tertentu muncul setelah beberapa kali ditanya."""
+
+    def __init__(self, shared: AnalysisRecord | None, appears_after_polls: int = 0) -> None:
+        self.shared = shared
         self.appears_after_polls = appears_after_polls
         self.polls = 0
+        self.ranks: list[int] = []
 
-    def list(self) -> list[SharedAnalysis]:
-        return [SharedAnalysis(record("STRKUSDT", 1), 60.0)]
-
-    def get(self, symbol: str) -> SharedAnalysis | None:
+    def by_rank(self, rank: int) -> SharedAnalysis | None:
         self.polls += 1
-        if self.polls <= self.appears_after_polls:
+        self.ranks.append(rank)
+        if self.shared is None or self.polls <= self.appears_after_polls:
             return None
-        return SharedAnalysis(record(symbol, 2), 60.0)
+        return SharedAnalysis(self.shared, 60.0)
 
 
 def make_follower(
-    tmp_path: Path, client: FakeClient, wait_s: float = 180.0
+    tmp_path: Path, client: FakeClient, symbols: dict[int, str | Any], wait_s: float = 300.0
 ) -> tuple[FollowerWorkflow, FakeNavigator, Journal]:
     clock = Clock()
-    nav = FakeNavigator({2: "CFXUSDT"})
+    nav = FakeNavigator(symbols)
     trader, _, journal, _ = make_trader(tmp_path, nav)
     follower = FollowerWorkflow(
         Settings(screenshot_dir=tmp_path / "shots", follower_wait_s=wait_s),
@@ -340,20 +343,44 @@ def make_follower(
     return follower, nav, journal
 
 
-def test_follower_runs_sop_with_hub_reading_and_no_ai(tmp_path: Path) -> None:
-    follower, nav, _ = make_follower(tmp_path, FakeClient(appears_after_polls=2))
+def test_follower_enters_the_same_coin_as_the_leader_even_after_ranks_shift(tmp_path: Path) -> None:
+    # Leader menilai CFXUSDT di Top 2 (OK); saat follower masuk, CFXUSDT sudah di Top 3.
+    leader_result = AnalysisRecord("CFXUSDT", 2, 1000.0, reading(OK))
+    client = FakeClient(leader_result, appears_after_polls=2)
+    follower, nav, _ = make_follower(tmp_path, client, {2: "WUSDT", 3: "CFXUSDT"})
     follower.run()
+    assert client.ranks == [2, 2, 2]  # menunggu hasil Top 2 putaran ini
     assert follower.result is not None
-    assert (follower.result.status, follower.result.verdict) == ("open", "ok")
+    assert (follower.result.symbol, follower.result.status) == ("CFXUSDT", "open")
+    assert follower.result.pattern_ai == OK.as_dict()  # pola dari Haiku di leader
     assert nav.filled == ["100,0"]
 
 
-def test_follower_records_skip_when_hub_never_has_the_pair(tmp_path: Path) -> None:
-    follower, nav, _ = make_follower(tmp_path, FakeClient(10**6), wait_s=30)
+def test_follower_does_not_touch_binance_when_leader_says_wait(tmp_path: Path) -> None:
+    client = FakeClient(AnalysisRecord("CFXUSDT", 2, 1000.0, reading(WAIT)))
+    follower, nav, journal = make_follower(tmp_path, client, {2: "CFXUSDT"})
+    follower.run()
+    assert nav.calls == []  # Binance tidak dibuka
+    assert follower.result is not None
+    assert (follower.result.status, follower.result.verdict) == ("skipped", "tunggu")
+    assert "dari leader" in follower.result.reason
+    assert journal.load()[-1].symbol == "CFXUSDT"
+
+
+def test_follower_skips_when_the_leaders_coin_left_the_top_list(tmp_path: Path) -> None:
+    client = FakeClient(AnalysisRecord("CFXUSDT", 2, 1000.0, reading(OK)))
+    follower, nav, _ = make_follower(tmp_path, client, {1: "WUSDT", 2: "SUSDT"})
     follower.run()
     assert follower.result is not None and follower.result.status == "skipped"
-    assert "Hub belum punya analisis untuk CFXUSDT" in follower.result.reason
+    assert "sudah tidak di top" in follower.result.reason
     assert nav.filled == []
+
+
+def test_follower_gives_up_when_leader_never_judges_its_rank(tmp_path: Path) -> None:
+    follower, nav, journal = make_follower(tmp_path, FakeClient(None), {2: "CFXUSDT"}, wait_s=30)
+    follower.run()
+    assert follower.result is None
+    assert nav.calls == [] and journal.load() == []
 
 
 # --------------------------------------------------------------------------- jurnal

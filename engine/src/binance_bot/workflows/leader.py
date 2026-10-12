@@ -79,6 +79,7 @@ class LeaderWorkflow:
 
     def run_cycle(self) -> list[AnalysisRecord]:
         logger.info("Siklus analisis dimulai", extra=event("cycle", phase="start"))
+        self._store.begin_cycle()
         self._nav.prepare()
         stamp = f"{self._now():%Y%m%d_%H%M%S}"
         rows = {row.rank: row for row in self._nav.open_top_gainers()}

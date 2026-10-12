@@ -10,7 +10,10 @@ const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 const os = require('node:os');
 
-const { sign, teamFieldsFrom } = require('./team');
+const { openAsLeader, signAsLeader, verifyLeader } = require('./leaderkey');
+const { canonical, sign, teamFieldsFrom } = require('./team');
+
+const LEADER_SIGNED = ['sig', 'lsig']; // field yang tidak ikut ditandatangani kunci pemimpin
 
 const SERVICE_TYPE = 'marketforge';
 const SERVICE_PORT = 8765; // SRV wajib punya port; sama dengan port hub laptop pemimpin
@@ -38,26 +41,47 @@ function computerName(platform = process.platform) {
 
 const MAX_ACTIVITY = 90;
 const COIN = /^([A-Z0-9]{1,20}USD[TC])\|(ok|tunggu|jangan|)\|(open|skipped|analyzed)$/;
+const SEALED_CHUNK = 200; // satu string TXT maksimal 255 byte: aktivitas terenkripsi dibagi e1, e2
+
+/** Pecah aktivitas terenkripsi ke field TXT e1, e2, ... */
+function sealedFields(sealed) {
+  const fields = {};
+  for (let i = 0; i * SEALED_CHUNK < sealed.length; i += 1) {
+    fields[`e${i + 1}`] = sealed.slice(i * SEALED_CHUNK, (i + 1) * SEALED_CHUNK);
+  }
+  return fields;
+}
 
 /**
  * Aktivitas terakhir laptop lain (mis. "Membuka top 2: RSRUSDT") dan hasil koin terakhirnya.
- * Hanya dari laptop dengan token hub yang sama (TXT bertanda tangan cocok).
+ * Dienkripsi ke kunci pemimpin: hanya laptop pemimpin yang bisa membacanya.
  */
-function activityFrom(txt, verified) {
-  if (!verified || typeof txt.act !== 'string' || !txt.act) return null;
-  const coin = COIN.exec(txt.coin || '');
-  return {
-    text: txt.act.slice(0, MAX_ACTIVITY),
-    coin: coin ? { symbol: coin[1], verdict: coin[2], status: coin[3] } : null,
-    at: Number(txt.at) > 0 ? Number(txt.at) * 1000 : 0,
-  };
+function activityFrom(txt, verified, leaderKeys) {
+  if (!verified || !leaderKeys || typeof txt.e1 !== 'string') return null;
+  let sealed = '';
+  for (let i = 1; typeof txt[`e${i}`] === 'string' && i <= 4; i += 1) sealed += txt[`e${i}`];
+  const plain = openAsLeader(leaderKeys, sealed);
+  if (!plain) return null;
+  try {
+    const [text, coinText, at] = JSON.parse(plain);
+    const coin = COIN.exec(String(coinText || ''));
+    return {
+      text: String(text || '').slice(0, MAX_ACTIVITY),
+      coin: coin ? { symbol: coin[1], verdict: coin[2], status: coin[3] } : null,
+      at: Number(at) > 0 ? Number(at) * 1000 : 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Layanan Bonjour -> data laptop. Isinya dari jaringan: dibatasi dan divalidasi. */
-function peerFrom(service, selfId, token = '') {
+function peerFrom(service, selfId, token = '', { leaderPublic = null, leaderKeys = null } = {}) {
   const txt = service.txt || {};
   if (typeof txt.id !== 'string' || !/^[0-9a-f-]{8,40}$/.test(txt.id)) return null;
   const team = teamFieldsFrom(txt, token);
+  const leaderVerified = txt.role === 'leader'
+    && verifyLeader(leaderPublic, canonical(txt, LEADER_SIGNED), txt.lsig);
   return {
     id: txt.id,
     name: String(txt.name || service.host || 'Laptop').slice(0, MAX_NAME),
@@ -67,7 +91,8 @@ function peerFrom(service, selfId, token = '') {
     address: lanAddress(service),
     self: txt.id === selfId,
     team,
-    activity: activityFrom(txt, team.verified),
+    leaderVerified,
+    activity: activityFrom(txt, team.verified, leaderKeys),
   };
 }
 
@@ -106,8 +131,12 @@ class Discovery extends EventEmitter {
     platform = process.platform,
     id = crypto.randomUUID(),
     token = '',
+    leaderKeys = null, // kunci privat pemimpin (hanya di laptop pemimpin)
+    leaderPublic = null, // kunci publik pemimpin (di semua laptop kelompok)
   }) {
     super();
+    this.leaderKeys = leaderKeys;
+    this.leaderPublic = leaderPublic;
     this.bonjour = bonjour;
     this.id = id;
     this.name = name;
@@ -139,6 +168,9 @@ class Discovery extends EventEmitter {
       os: this.platform,
       ...this.extra,
     };
+    if (this.role === 'leader' && this.leaderKeys) {
+      txt.lsig = signAsLeader(this.leaderKeys, canonical(txt, LEADER_SIGNED));
+    }
     if (this.token) txt.sig = sign(this.token, txt);
     return txt;
   }
@@ -190,7 +222,10 @@ class Discovery extends EventEmitter {
   }
 
   seen(service) {
-    const peer = peerFrom(service, this.id, this.token);
+    const peer = peerFrom(service, this.id, this.token, {
+      leaderPublic: this.leaderPublic,
+      leaderKeys: this.leaderKeys,
+    });
     if (!peer || peer.self) return;
     this.peers.set(peer.id, peer);
     this.emit('peers', this.snapshot());
@@ -212,6 +247,7 @@ class Discovery extends EventEmitter {
       address: localAddress(),
       self: true,
       team: teamFieldsFrom({}, ''),
+      leaderVerified: this.role === 'leader' && Boolean(this.leaderKeys),
       activity: null,
     };
     return sortPeers([self, ...this.peers.values()]);
@@ -231,4 +267,6 @@ class Discovery extends EventEmitter {
   }
 }
 
-module.exports = { COIN, Discovery, MAX_ACTIVITY, SERVICE_TYPE, computerName, laptopName, localAddress, peerFrom };
+module.exports = {
+  COIN, Discovery, MAX_ACTIVITY, SERVICE_TYPE, computerName, laptopName, localAddress, peerFrom, sealedFields,
+};

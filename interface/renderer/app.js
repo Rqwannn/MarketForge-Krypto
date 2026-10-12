@@ -94,6 +94,9 @@ function plain(text) {
     [/Isolated/i, 'Mode margin di Binance belum Isolated (ubah sebelum memakai uang sungguhan)'],
     [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti sesuai SOP'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
+    [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
+    [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
+    [/peringkat bergeser/, 'Peringkat bergeser saat membuka koin, tidak ada tindakan'],
     [/Hub belum punya|menunggu hasil/i, 'Hasil dari laptop pemimpin belum tersedia'],
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],
@@ -130,6 +133,13 @@ function activity(entry) {
   if (/^(Tidak masuk putaran ini|Berhenti memantau): /.test(m)) return { text: plain(m), css: 'warn' };
   if (/^Tidak ada koin dengan pola OK/.test(m)) return { text: 'Belum ada koin yang layak, pantau lagi nanti' };
   if (/tidak di depan/.test(m)) return { text: 'Binance tertutup jendela lain, dibawa ke depan lagi' };
+  const waitingLeader = m.match(/^Menunggu leader menganalisis (Top \d+)/);
+  if (waitingLeader) return { text: `Menunggu hasil Haiku dari pemimpin untuk ${waitingLeader[1]}` };
+  const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
+  if (leaderSays) {
+    const ok = leaderSays[3] === 'OK';
+    return { text: `Pemimpin: ${leaderSays[2]} ${ok ? 'layak short, ikut entry' : `${leaderSays[3].toLowerCase()}, tidak ada tindakan`}`, css: ok ? 'good' : '' };
+  }
   if (entry.level === 'WARNING') return { text: plain(m), css: 'warn' };
   if (entry.level === 'ERROR' || entry.level === 'CRITICAL') {
     // Traceback Python terdiri dari banyak baris: cukup baris pesannya.
@@ -192,6 +202,7 @@ function render() {
     node.hidden = !node.dataset.modes.split(' ').includes(form.mode);
   }
   $('mode-note').textContent = MODE_NOTE[form.mode];
+  updateLeaderLock();
   $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
   $('ranks-note').textContent = multi ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih` : 'Pilih satu';
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
@@ -241,7 +252,7 @@ function setupForm() {
 // --------------------------------------------------------------------------- jalankan dan hentikan
 
 let state = 'stopped';
-let teamInfo = { available: false, enabled: false, role: 'single', membership: null };
+let teamInfo = { available: false, enabled: false, canLead: false, role: 'single', membership: null, loaded: false };
 const counts = { seen: 0, ok: 0, open: 0 };
 
 function setState(next, title, sub) {
@@ -368,7 +379,7 @@ function actionOf(e) {
 const FLOW = {
   single: ['Buka top gainers', 'Cek biaya & slot', 'Haiku baca grafik', 'Catat posisi uji'],
   leader: ['Buka top gainers', 'Haiku baca grafik', 'Keputusan', 'Bagikan ke pengikut'],
-  follower: ['Buka koin bagiannya', 'Cek biaya & slot', 'Ambil hasil pemimpin', 'Catat posisi uji'],
+  follower: ['Tunggu Haiku pemimpin', 'Buka koin yang sama', 'Cek biaya & slot', 'Catat posisi uji'],
 };
 const flow = { mode: 'single', step: -1, done: false, symbol: '', nextAt: 0 };
 
@@ -400,7 +411,23 @@ function advanceFlow(entry) {
     setFlow(0, 'Membuka daftar top gainers Futures di Binance');
     return;
   }
+  const waiting = m.match(/^Menunggu leader menganalisis (Top \d+)/);
+  if (waiting) {
+    setFlow(0, `Menunggu hasil Haiku dari pemimpin untuk ${waiting[1]}`);
+    return;
+  }
+  const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
+  if (leaderSays) {
+    flow.symbol = leaderSays[2];
+    if (leaderSays[3] === 'OK') setFlow(1, `Pemimpin: ${leaderSays[2]} layak short · membuka koin yang sama`);
+    else setFlow(FLOW.follower.length, `Pemimpin: ${leaderSays[2]} ${leaderSays[3].toLowerCase()} · tidak ada tindakan`, true);
+    return;
+  }
   const opened = m.match(/^Top gainer #(\d+): (\S+)/);
+  if (opened && follower) {
+    setFlow(2, `Top ${opened[1]}: ${opened[2]} · cek funding, spread, dan slot posisi`);
+    return;
+  }
   if (opened) {
     flow.symbol = opened[2];
     setFlow(1, leader ? `Top ${opened[1]}: ${opened[2]} · membuka grafik 15 menit`
@@ -409,16 +436,6 @@ function advanceFlow(entry) {
   }
   if (/_15m\.png/.test(m) && !follower) {
     setFlow(leader ? 1 : 2, `Haiku membaca garis kuning ${flow.symbol} di grafik 15 menit`);
-    return;
-  }
-  const waiting = m.match(/^Menunggu leader menganalisis (\S+)/);
-  if (waiting) {
-    setFlow(2, `Menunggu hasil Haiku dari pemimpin untuk ${waiting[1].replace(/\.+$/, '')}`);
-    return;
-  }
-  const shared = m.match(/^Hasil AI dari hub untuk (\S+)/);
-  if (shared) {
-    setFlow(2, `Hasil pemimpin untuk ${shared[1]} diterima`);
     return;
   }
   if (e?.type === 'coin') {
@@ -726,8 +743,9 @@ function renderPeers(peers) {
     let hint = 'Belum ada laptop lain. Pastikan laptop lain membuka MarketForge di WiFi yang sama.';
     if (others) {
       hint = `${others} laptop lain ditemukan. `;
-      if (!teamInfo.enabled) hint += 'Untuk mengajak pengikut, admin perlu mengisi token hub yang sama di kedua laptop.';
-      else if (!leading) hint += 'Pilih peran Pemimpin di halaman Pantau untuk mengajak laptop lain menjadi pengikut.';
+      if (!teamInfo.canLead) hint += 'Hanya laptop pemimpin yang bisa mengajak dan memantau laptop lain.';
+      else if (!teamInfo.enabled) hint += 'Admin perlu mengisi token hub di laptop ini untuk mengajak pengikut.';
+      else if (!leading) hint += 'Pilih peran Pemimpin di halaman Pantau untuk mengajak dan memantau laptop lain.';
       else hint += 'Pilih top gainer, tekan Jadikan pengikut, lalu laptop itu menerima ajakannya.';
     }
     $('peers-sub').textContent = hint;
@@ -765,16 +783,18 @@ function peerRow(p, leading) {
   } else if (leading) {
     actions = peerActions(p);
   }
-  const open = !p.self && expandedPeers.has(p.id);
-  const row = el('li', { class: `peer ${p.self ? 'self' : 'clickable'} ${open ? 'open' : ''}` },
+  // Hanya pemimpin yang bisa memantau laptop lain (aktivitas terenkripsi ke kunci pemimpin).
+  const monitor = !p.self && leading;
+  const open = monitor && expandedPeers.has(p.id);
+  const row = el('li', { class: `peer ${p.self ? 'self' : ''} ${monitor ? 'clickable' : ''} ${open ? 'open' : ''}` },
     el('span', { class: 'icon' }, icon('laptop')),
     el('div', { class: 'peer-info' },
       el('strong', { textContent: p.self ? `${p.name} (laptop ini)` : p.name }),
-      el('span', { textContent: p.self ? meta : `${meta} · klik untuk detail` })),
+      el('span', { textContent: monitor ? `${meta} · klik untuk memantau` : meta })),
     tags,
     el('div', { class: 'peer-actions' }, ...actions),
     open ? peerDetail(p) : null);
-  if (!p.self) {
+  if (monitor) {
     row.addEventListener('click', (ev) => {
       if (ev.target.closest('button, select')) return;
       if (expandedPeers.has(p.id)) expandedPeers.delete(p.id);
@@ -797,7 +817,7 @@ function peerDetail(p) {
   const a = p.activity;
   if (!a) {
     return el('div', { class: 'peer-detail empty' },
-      'Aktivitas belum terlihat. Pastikan laptop itu memakai MarketForge terbaru dan token hub yang sama.');
+      'Aktivitas belum terlihat. Pastikan laptop itu memakai MarketForge terbaru, token hub yang sama, dan kunci publik pemimpin.');
   }
   const coin = a.coin
     ? `${a.coin.symbol} · ${(VERDICT[a.coin.verdict] || ['tidak dibaca'])[0]} · ${a.coin.status === 'open' ? 'posisi uji dibuka' : a.coin.status === 'analyzed' ? 'dibagikan' : 'tidak masuk'}`
@@ -836,9 +856,23 @@ function peerActions(p) {
 
 // --------------------------------------------------------------------------- kelompok
 
+/** Peran Pemimpin hanya untuk laptop yang memegang kunci pemimpin. */
+function updateLeaderLock() {
+  const button = $('mode').querySelector('[data-value="leader"]');
+  const locked = teamInfo.loaded && !teamInfo.canLead;
+  button.disabled = locked;
+  button.title = locked ? 'Hanya laptop pemimpin (memegang kunci pemimpin dari admin)' : '';
+  if (locked) $('mode-note').textContent = `${MODE_NOTE[form.mode]} Peran Pemimpin terkunci di laptop ini.`;
+}
+
 function applyTeam(info) {
   if (!info) return;
-  teamInfo = info;
+  teamInfo = { ...info, loaded: true };
+  if (!info.canLead && form.mode === 'leader') {
+    form.mode = 'single';
+    render();
+  }
+  updateLeaderLock();
   const member = info.membership;
   $('group').hidden = !member;
   if (member) {

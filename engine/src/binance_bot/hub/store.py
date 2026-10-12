@@ -10,11 +10,24 @@ class AnalysisStore:
 
     def __init__(self) -> None:
         self._records: dict[str, AnalysisRecord] = {}
+        self._ranks: dict[int, str] = {}  # Top -> koin yang dinilai di putaran ini
         self._lock = threading.Lock()
+
+    def begin_cycle(self) -> None:
+        """Putaran baru: peta Top dikosongkan; hasil per koin tetap disimpan untuk dipakai ulang."""
+        with self._lock:
+            self._ranks.clear()
 
     def put(self, record: AnalysisRecord) -> None:
         with self._lock:
             self._records[record.symbol] = record
+            self._ranks[record.rank] = record.symbol
+
+    def by_rank(self, rank: int) -> AnalysisRecord | None:
+        """Hasil untuk Top `rank` di putaran ini, atau None bila leader belum menilainya."""
+        with self._lock:
+            symbol = self._ranks.get(rank)
+            return self._records.get(symbol) if symbol else None
 
     def get(self, symbol: str) -> AnalysisRecord | None:
         with self._lock:

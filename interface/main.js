@@ -8,7 +8,8 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const engine = require('./engine');
-const { COIN, Discovery, MAX_ACTIVITY } = require('./discovery');
+const { COIN, Discovery, MAX_ACTIVITY, sealedFields } = require('./discovery');
+const { loadLeaderKey, loadLeaderPublic, sealForLeader } = require('./leaderkey');
 const { Team } = require('./team');
 
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
@@ -26,11 +27,16 @@ let activity = { text: '', coin: '', at: 0 };
 let activityTimer = null;
 const ACTIVITY_THROTTLE_MS = 4000; // tiap pengumuman ulang = goodbye + announce: jangan terlalu sering
 
+// Kunci pemimpin (leaderkey.js): privat hanya di laptop pemimpin, publik di semua laptop kelompok.
+const leaderKeys = loadLeaderKey(engine.appSetting('BOT_LEADER_KEY'));
+const leaderPublic = leaderKeys?.public ?? loadLeaderPublic(engine.appSetting('BOT_LEADER_PUBLIC'));
+const LEADER_ONLY = 'Peran Pemimpin hanya untuk laptop yang memegang kunci pemimpin. Hubungi admin.';
+
+/** Aktivitas terenkripsi ke pemimpin: hanya laptop pemimpin yang bisa memantaunya. */
 function activityFields() {
-  if (!team?.enabled || !activity.text) return {};
-  const fields = { act: activity.text, at: String(Math.floor(activity.at / 1000)) };
-  if (activity.coin) fields.coin = activity.coin;
-  return fields;
+  if (!team?.enabled || !leaderPublic || leaderKeys || !activity.text) return {};
+  const payload = JSON.stringify([activity.text, activity.coin, Math.floor(activity.at / 1000)]);
+  return sealedFields(sealForLeader(leaderPublic, payload));
 }
 
 function reportActivity({ text, coin }) {
@@ -62,7 +68,8 @@ function peersNow() {
 function teamState() {
   return {
     available: discovery !== null,
-    enabled: Boolean(team?.enabled),
+    enabled: Boolean(team?.enabled && leaderPublic),
+    canLead: Boolean(leaderKeys),
     role: team?.membership ? 'follower' : uiRole,
     membership: team?.membership ?? null,
   };
@@ -89,7 +96,7 @@ function startDiscovery() {
     const { Bonjour } = require('bonjour-service');
     const bonjour = new Bonjour({}, (err) => console.error(`Bonjour: ${err.message}`));
     const token = engine.hubToken();
-    discovery = new Discovery({ bonjour, token });
+    discovery = new Discovery({ bonjour, token, leaderKeys, leaderPublic });
     team = new Team({ myId: discovery.id, token });
     discovery.on('peers', (peers) => {
       if (team.evaluate(peers)) syncPresence();
@@ -173,6 +180,7 @@ function handle(channel, fn) {
 
 handle('engine:start', (mode, params) => {
   if (team?.membership && mode !== 'follower') throw new Error('Laptop ini pengikut. Keluar dari kelompok dulu.');
+  if (mode === 'leader' && !leaderKeys) throw new Error(LEADER_ONLY);
   if ((mode === 'leader' || mode === 'follower') && !engine.hubToken()) {
     throw new Error('Mode Pemimpin dan Pengikut butuh token hub yang sama di semua laptop. Minta admin mengisinya.');
   }
@@ -195,7 +203,7 @@ handle('engine:status', () => ({ running: proc.running }));
 handle('engine:checks', () => engine.runJson(['cek']));
 handle('engine:summary', () => engine.runJson(['jurnal', '--json']));
 handle('presence:update', (role) => {
-  if (['single', 'leader', 'follower'].includes(role)) uiRole = role;
+  if (['single', 'follower'].includes(role) || (role === 'leader' && leaderKeys)) uiRole = role;
   syncPresence();
   return teamState();
 });
@@ -210,6 +218,7 @@ handle('presence:activity', (update) => {
 });
 handle('team:state', () => teamState());
 handle('team:invite', (peerId, rank) => {
+  if (!leaderKeys) throw new Error(LEADER_ONLY);
   if (!team?.enabled) throw new Error('Token hub belum diatur di laptop ini. Hubungi admin.');
   if (team.membership || uiRole !== 'leader') throw new Error('Pilih peran Pemimpin di halaman Pantau dulu.');
   if (!discovery.peers.has(peerId)) throw new Error('Laptop itu sudah tidak terlihat. Cari ulang.');

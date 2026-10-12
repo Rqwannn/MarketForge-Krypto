@@ -172,6 +172,30 @@ class SopTrader:
         except (_Skip, BotError) as exc:
             entry.status = "skipped"
             entry.reason = str(exc)
+        return self._finish(entry)
+
+    def skip(
+        self, rank: int, symbol: str, reason: str, reading: PatternReading | None = None
+    ) -> JournalEntry:
+        """Catat koin yang tidak dimasuki tanpa membuka aplikasi (mis. pola leader tidak OK)."""
+        entry = JournalEntry(
+            id=f"{self._now():%Y%m%d_%H%M%S}_{symbol}",
+            created_at=self._wall_clock(),
+            symbol=symbol,
+            rank=rank,
+            status="skipped",
+            reason=reason,
+            capital_usdt=self.params.capital_usdt,
+            leverage=self.params.leverage,
+        )
+        if reading is not None:
+            entry.pattern_ai = reading.pattern.as_dict()
+            entry.ai_summary = reading.summary
+            entry.verdict = reading.pattern.verdict(self.params.min_crosses)
+        return self._finish(entry)
+
+    def _finish(self, entry: JournalEntry) -> JournalEntry:
+        rank, symbol = entry.rank, entry.symbol
         self._journal.append(entry)
         if entry.status == "open":
             logger.info(

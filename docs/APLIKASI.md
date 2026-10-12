@@ -28,11 +28,20 @@ Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
 ### Kelompok pemimpin dan pengikut
 
 1. Admin mengisi `BOT_HUB_TOKEN` yang **sama** di `interface/.env` setiap laptop (`make token`).
-2. Laptop pemimpin: halaman **Pantau**, pilih peran **Pemimpin**.
-3. Halaman **Cek laptop** > **Lihat laptop**: pilih Top untuk laptop lain, tekan **Jadikan pengikut**.
-4. Laptop yang diajak menampilkan ajakan; pemiliknya mengisi modal lalu menekan **Terima**.
+2. Admin menjalankan `make leader-key` **sekali** di laptop pemimpin:
+   - `BOT_LEADER_KEY` (kunci privat) hanya di `interface/.env` laptop pemimpin. Rahasia.
+   - `BOT_LEADER_PUBLIC` (kunci publik) di `interface/.env` semua laptop pengikut.
+   Tanpa kunci privat, tombol Pemimpin terkunci. Token hub saja tidak cukup: pengikut hanya
+   menerima ajakan dan sinyal putaran yang ditandatangani kunci privat itu (Ed25519), jadi
+   laptop lain tidak bisa mengaku pemimpin walau membuat kuncinya sendiri.
+3. Laptop pemimpin: halaman **Pantau**, pilih peran **Pemimpin**.
+4. Halaman **Cek laptop** > **Lihat laptop**: pilih Top untuk laptop lain, tekan **Jadikan pengikut**.
+5. Laptop yang diajak menampilkan ajakan; pemiliknya mengisi modal lalu menekan **Terima**.
    Perannya otomatis menjadi Pengikut untuk Top itu, dengan alamat hub dari laptop pemimpin.
-5. Setiap pemimpin memulai putaran, bot di laptop pengikut ikut mulai sendiri.
+6. Setiap pemimpin memulai putaran, bot di laptop pengikut ikut mulai sendiri. Pengikut tidak
+   membaca grafik: ia menunggu keputusan Haiku pemimpin untuk Top-nya. Tunggu/Jangan = tidak
+   ada tindakan (Binance tidak disentuh). Layak short = pengikut membuka **koin yang sama**
+   (dicari dari nama pair, karena peringkat bisa bergeser), cek biaya dan slot, lalu entry.
    Pengikut bisa keluar lewat **Keluar dari kelompok**; pemimpin bisa menekan **Lepas**.
 
 Peran laptop selalu diatur di halaman Pantau (tombol **Ubah peran** di daftar laptop menuju ke

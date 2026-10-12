@@ -57,7 +57,16 @@ def _handler_for(
 
             # `now` dari jam hub, agar umur analisis benar walau jam tiap laptop berbeda.
             now = clock()
-            symbol = parse_qs(url.query).get("symbol", [None])[0]
+            query = parse_qs(url.query)
+            rank_text = query.get("rank", [None])[0]
+            if rank_text is not None:
+                found = store.by_rank(int(rank_text)) if rank_text.isdigit() else None
+                if found is None:
+                    self._send(404, {"error": f"leader belum menilai Top {rank_text} putaran ini"})
+                    return
+                self._send(200, {"now": now, "record": found.to_dict()})
+                return
+            symbol = query.get("symbol", [None])[0]
             if symbol is None:
                 self._send(200, {"now": now, "records": [r.to_dict() for r in store.all()]})
                 return

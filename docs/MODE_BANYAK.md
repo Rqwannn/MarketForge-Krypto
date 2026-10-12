@@ -117,13 +117,16 @@ Rank yang bisa dipilih: **1 sampai 5**, baik `RANKS` di leader (mis. `RANKS=1,2,
 
 Setiap follower punya jurnal sendiri; jalankan `make jurnal` di laptop masing-masing.
 
-## 5. Cara hasil dicocokkan
+## 5. Cara pengikut mengikuti pemimpin
 
-- Berdasarkan **nama pair** (mis. `STRKUSDT`), bukan nomor rank. Peringkat bisa bergeser
-  dalam hitungan detik; pada uji nyata, rank #1 dan #2 sempat membuka pair yang sama.
-- Bila pair follower belum ada di hub, follower mengecek ulang tiap 5 detik, paling lama
-  `BOT_FOLLOWER_WAIT_S` (180 detik), lalu mencatat koin itu sebagai dilewati.
-- Umur hasil dihitung dengan jam leader. Bila lebih dari 15 menit, follower memberi peringatan.
+- Pengikut **tidak membaca grafik**. Ia meminta hasil Haiku pemimpin untuk **Top miliknya di
+  putaran ini** (hub mencatat koin per Top dan mengosongkannya setiap putaran baru), lalu
+  menunggu sampai pemimpin selesai menilai Top itu, paling lama `BOT_FOLLOWER_WAIT_S` (300 detik).
+- Pola TUNGGU/JANGAN: dicatat "tidak masuk", Binance tidak dibuka.
+- Pola OK: pengikut membuka daftar top gainers, mencari **pair yang sama** (bukan nomor rank,
+  karena peringkat bisa bergeser), membukanya, lalu menjalankan cek biaya, slot, ukuran posisi,
+  kolom Jumlah, dan pintu order dry run dengan modal laptopnya sendiri.
+- Bila pair itu sudah keluar dari top 5, atau peringkat bergeser saat dibuka, pengikut tidak masuk.
 
 ## 6. Pengaturan
 
@@ -133,7 +136,7 @@ Setiap follower punya jurnal sendiri; jalankan `make jurnal` di laptop masing-ma
 | `BOT_HUB_URL` | (kosong) | follower | Pengganti `HUB=` |
 | `BOT_HUB_PORT` | `8765` | leader | Atau `make leader PORT=9000` |
 | `BOT_ANALYSIS_TTL_S` | `900` | leader | Lama hasil AI dipakai ulang |
-| `BOT_FOLLOWER_WAIT_S` | `180` | follower | Lama menunggu hasil di hub |
+| `BOT_FOLLOWER_WAIT_S` | `300` | follower | Lama menunggu leader menilai Top milik follower |
 
 ## 7. Keamanan
 
@@ -169,7 +172,7 @@ curl -H "$H" "http://192.168.1.24:8765/analyses?symbol=STRKUSDT"   # satu pair (
 | `Hub menolak token: samakan BOT_HUB_TOKEN dengan leader` | Token berbeda | Samakan |
 | `SINYAL=ai butuh hub leader: isi --hub atau BOT_HUB_URL` | Alamat hub kosong | `make follower HUB=http://IP:8765 ...` |
 | `Hub http://... tidak bisa dihubungi` | Leader mati, beda WiFi, IP berubah, firewall | Cek leader, WiFi, alamat terbaru, izinkan Python di firewall leader |
-| `Hub belum punya analisis untuk X setelah 180 detik` | Peringkat bergeser; koin follower tidak termasuk `RANKS` leader | Perluas `RANKS` leader, atau pakai `INTERVAL` |
+| `Leader belum menilai Top N setelah 300 detik` | Top follower tidak termasuk `RANKS` leader, atau leader dilewati di rank itu | Pastikan `RANKS` leader memuat Top follower |
 | `Analisis X sudah N menit` | Leader tidak memperbarui | Jalankan leader dengan `INTERVAL` |
 | `Hub tidak bisa memakai port 8765` | Port dipakai | Hentikan leader lama, atau `PORT=9000` |
 

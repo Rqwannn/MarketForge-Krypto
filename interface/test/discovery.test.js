@@ -4,7 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
-const { Discovery, SERVICE_TYPE, laptopName, localAddress, peerFrom } = require('../discovery');
+const { Discovery, SERVICE_TYPE, laptopName, localAddress, peerFrom, sealedFields } = require('../discovery');
+const { generateLeaderKeys, loadLeaderKey, sealForLeader } = require('../leaderkey');
 const { sign } = require('../team');
 
 const SELF = '11111111-2222-3333-4444-555555555555';
@@ -133,13 +134,40 @@ test('berhenti: pengumuman dicabut', () => {
   assert.equal(bonjour.destroyed, true);
 });
 
-test('aktivitas laptop lain hanya dari tanda tangan yang cocok, dan divalidasi', () => {
-  const txt = { id: ATTA, name: 'Pengikut', role: 'follower', state: 'running', os: 'win32', act: 'Membuka top 2: RSRUSDT', coin: 'RSRUSDT|tunggu|skipped', at: '1800000000' };
-  const peer = peerFrom({ txt: { ...txt, sig: sign(TOKEN, txt) } }, SELF, TOKEN);
-  assert.deepEqual(peer.activity, { text: 'Membuka top 2: RSRUSDT', coin: { symbol: 'RSRUSDT', verdict: 'tunggu', status: 'skipped' }, at: 1800000000000 });
-  assert.equal(peerFrom({ txt: { ...txt, sig: sign('token-lain', txt) } }, SELF, TOKEN).activity, null);
-  const bad = { ...txt, coin: '<img>|ok|open', act: 'x'.repeat(300) };
-  const odd = peerFrom({ txt: { ...bad, sig: sign(TOKEN, bad) } }, SELF, TOKEN).activity;
-  assert.equal(odd.coin, null);
-  assert.equal(odd.text.length, 90);
+test('pengumuman pemimpin ditandatangani kunci pemimpin; pemimpin palsu tidak terverifikasi', () => {
+  const leader = loadLeaderKey(generateLeaderKeys().privateText);
+  const bonjour = fakeBonjour();
+  const discovery = new Discovery({ bonjour, id: SELF, name: 'Pemimpin', platform: 'darwin', token: TOKEN, leaderKeys: leader });
+  discovery.start();
+  discovery.update({ role: 'leader', extra: { inv: 'aaaaaaaa:2' } });
+  bonjour.finishStops();
+  const txt = bonjour.published.at(-1).txt;
+  assert.ok(txt.lsig);
+  const asFollower = { leaderPublic: leader.public };
+  assert.equal(peerFrom({ txt }, ATTA, TOKEN, asFollower).leaderVerified, true);
+  assert.equal(peerFrom({ txt: { ...txt, inv: 'aaaaaaaa:3' } }, ATTA, TOKEN, asFollower).leaderVerified, false);
+
+  // laptop pengikut yang memegang token hub tapi membuat kunci pemimpinnya sendiri
+  const fake = loadLeaderKey(generateLeaderKeys().privateText);
+  const rogue = fakeBonjour();
+  const pretender = new Discovery({ bonjour: rogue, id: ATTA, name: 'Palsu', platform: 'darwin', token: TOKEN, leaderKeys: fake });
+  pretender.start();
+  pretender.update({ role: 'leader' });
+  rogue.finishStops();
+  assert.equal(peerFrom({ txt: rogue.published.at(-1).txt }, SELF, TOKEN, asFollower).leaderVerified, false);
+});
+
+test('aktivitas laptop lain terenkripsi: hanya pemimpin yang bisa membacanya', () => {
+  const leader = loadLeaderKey(generateLeaderKeys().privateText);
+  const sealed = sealForLeader(leader.public, JSON.stringify(['Membuka top 2: RSRUSDT', 'RSRUSDT|tunggu|skipped', 1800000000]));
+  const txt = { id: ATTA, name: 'Pengikut', role: 'follower', state: 'running', os: 'win32', ...sealedFields(sealed) };
+  const signed = { ...txt, sig: sign(TOKEN, txt) };
+  assert.ok(Object.values(signed).every((v) => !String(v).includes('RSRUSDT'))); // tidak terbaca di jaringan
+  assert.deepEqual(peerFrom({ txt: signed }, SELF, TOKEN, { leaderKeys: leader }).activity, {
+    text: 'Membuka top 2: RSRUSDT', coin: { symbol: 'RSRUSDT', verdict: 'tunggu', status: 'skipped' }, at: 1800000000000,
+  });
+  assert.equal(peerFrom({ txt: signed }, SELF, TOKEN, {}).activity, null); // bukan pemimpin
+  const other = loadLeaderKey(generateLeaderKeys().privateText);
+  assert.equal(peerFrom({ txt: signed }, SELF, TOKEN, { leaderKeys: other }).activity, null);
+  assert.equal(peerFrom({ txt: signed }, SELF, 'token-lain', { leaderKeys: leader }).activity, null);
 });

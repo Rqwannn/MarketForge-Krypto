@@ -11,10 +11,13 @@ const ME = '11111111-2222-3333-4444-555555555555';
 const NOW = 1_800_000_000_000;
 
 /** Laptop pemimpin seperti yang terlihat di jaringan (TXT ditandatangani). */
-function leaderPeer(extra = {}, token = TOKEN) {
+function leaderPeer(extra = {}, token = TOKEN, leaderVerified = true) {
   const txt = { id: LEADER, name: 'MacBook Pemimpin', role: 'leader', state: 'idle', os: 'darwin', ...extra };
   const signed = { ...txt, sig: sign(token, txt) };
-  return { id: LEADER, name: 'MacBook Pemimpin', role: 'leader', address: '192.168.1.19', self: false, team: teamFieldsFrom(signed, TOKEN) };
+  return {
+    id: LEADER, name: 'MacBook Pemimpin', role: 'leader', address: '192.168.1.19', self: false,
+    team: teamFieldsFrom(signed, TOKEN), leaderVerified,
+  };
 }
 
 function follower() {
@@ -51,6 +54,14 @@ test('ajakan muncul sekali; setelah diterima, putaran baru pemimpin memicu bot p
   team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000) })]); // putaran sama: sekali
   assert.deepEqual(events.at(-1), ['start', { leaderName: 'MacBook Pemimpin', rank: 2, modal: '100', hub: 'http://192.168.1.19:8765' }]);
   assert.equal(events.filter(([name]) => name === 'start').length, 1);
+});
+
+test('laptop bertoken hub tapi tanpa kunci pemimpin tidak bisa mengajak atau memicu bot', () => {
+  const { team, events } = follower();
+  team.evaluate([leaderPeer({ inv: '11111111:2' }, TOKEN, false)]);
+  team.accept({ leaderId: LEADER, leaderName: 'P', rank: 2, modal: '100' });
+  team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW) }, TOKEN, false)]);
+  assert.deepEqual(events, []);
 });
 
 test('putaran lama tidak memicu bot', () => {
