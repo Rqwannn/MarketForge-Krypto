@@ -169,12 +169,12 @@ async function startDiscovery() {
     const { Bonjour } = require('bonjour-service');
     // Bonjour hanya lewat kartu jaringan utama (rute bawaan). Tanpa ini, laptop dengan kartu virtual
     // (VirtualBox, WSL, Hyper-V) bisa mengumumkan diri lewat kartu yang salah dan tak terlihat.
-    const lan = await primaryAddress();
+    const lan = localAddress(undefined, await primaryAddress()); // WiFi/Ethernet sungguhan, bukan VPN
     const options = lan ? { interface: lan, bind: '0.0.0.0' } : {};
     const bonjour = new Bonjour(options, (err) => console.error(`Bonjour: ${err.message}`));
     const token = engine.hubToken();
     discovery = new Discovery({
-      bonjour, token, leaderKeys, leaderPublic, address: localAddress(undefined, lan),
+      bonjour, token, leaderKeys, leaderPublic, address: lan,
     });
     team = new Team({ myId: discovery.id, token });
     discovery.on('peers', (peers) => {

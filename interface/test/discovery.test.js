@@ -178,17 +178,22 @@ test('aktivitas laptop lain terenkripsi: hanya pemimpin yang bisa membacanya', (
   assert.equal(peerFrom({ txt: signed }, SELF, 'token-lain', { leaderKeys: leader }).activity, null);
 });
 
-test('alamat laptop ini: kartu dengan rute bawaan didahulukan dari kartu virtual', () => {
-  // Windows dengan VirtualBox: "Ethernet 3" (host-only) cocok dengan pola Ethernet tetapi bukan WiFi.
+test('alamat laptop ini: kartu virtual dan VPN dilewati, WiFi sungguhan dipilih', () => {
+  // Windows dengan VirtualBox, WSL, Tailscale, dan Cloudflare WARP.
+  const nic = (address, mac) => [{ family: 'IPv4', internal: false, address, mac }];
   const interfaces = {
-    'vEthernet (WSL)': [{ family: 'IPv4', internal: false, address: '172.23.64.1' }],
-    'Ethernet 3': [{ family: 'IPv4', internal: false, address: '192.168.56.1' }],
-    'Wi-Fi': [{ family: 'IPv4', internal: false, address: '192.168.68.151' }],
+    'vEthernet (WSL)': nic('172.23.64.1', '00:15:5d:35:8f:5e'),
+    'Ethernet 3': nic('192.168.56.1', '0a:00:27:00:00:04'), // VirtualBox host-only
+    Tailscale: nic('100.64.1.2', '00:00:00:00:00:01'),
+    CloudflareWARP: nic('172.16.0.2', '00:00:00:00:00:02'),
+    'Wi-Fi': nic('192.168.68.109', '3c:e9:f7:e0:a8:53'),
   };
-  assert.equal(localAddress(interfaces), '192.168.56.1'); // tanpa rute bawaan: tebakan lama
-  assert.equal(localAddress(interfaces, '192.168.68.151'), '192.168.68.151');
-  // alamat rute bawaan yang bukan milik laptop ini diabaikan
-  assert.equal(localAddress(interfaces, '10.0.0.9'), '192.168.56.1');
+  assert.equal(localAddress(interfaces), '192.168.68.109');
+  // rute bawaan lewat VPN (WARP) tidak boleh dipakai walau itu rute bawaan
+  assert.equal(localAddress(interfaces, '172.16.0.2'), '192.168.68.109');
+  assert.equal(localAddress(interfaces, '192.168.68.109'), '192.168.68.109');
+  // hanya kartu virtual yang ada: tetap mengembalikan sesuatu daripada kosong
+  assert.equal(localAddress({ 'vEthernet (WSL)': nic('172.23.64.1', '00:15:5d:00:00:01') }), '172.23.64.1');
 });
 
 test('primaryAddress mengembalikan IPv4 atau teks kosong, tanpa melempar galat', async () => {

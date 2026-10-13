@@ -161,17 +161,30 @@ function primaryAddress(timeoutMs = 1500) {
   });
 }
 
+// Kartu virtual dan terowongan: tidak terjangkau laptop lain di WiFi yang sama. Dikenali dari nama
+// (VPN, WSL, Hyper-V, VirtualBox, VMware, Docker, Tailscale, WARP, hotspot "Local Area Connection*")
+// dan dari awalan MAC pembuat mesin virtual (nama seperti "Ethernet 3" tidak membedakannya).
+const VIRTUAL_NAME = /(vethernet|virtualbox|host-only|vmware|vmnet|hyper-v|wsl|docker|veth|tailscale|warp|wireguard|zerotier|openvpn|tap-|\btun\b|\btap\b|utun|vpn|loopback|bluetooth|local area connection\*)/i;
+const VIRTUAL_MAC = /^(08:00:27|0a:00:27|00:50:56|00:0c:29|00:05:69|00:15:5d|00:1c:42|52:54:00|02:42)/i;
+
+function isVirtual(candidate) {
+  return VIRTUAL_NAME.test(candidate.name) || VIRTUAL_MAC.test(candidate.mac || '');
+}
+
 /**
- * Alamat IPv4 laptop ini di WiFi/Ethernet (untuk ditampilkan); VPN hanya bila tidak ada yang lain.
- * `primary` (kartu dengan rute bawaan, lihat primaryAddress) didahulukan bila memang milik laptop ini.
+ * IPv4 laptop ini di WiFi/Ethernet sungguhan, dipakai untuk ditampilkan dan untuk mengikat Bonjour.
+ * Kartu virtual dan terowongan dilewati; `primary` (kartu dengan rute bawaan, lihat primaryAddress)
+ * didahulukan bila termasuk kartu sungguhan. Kartu virtual hanya dipakai bila tidak ada yang lain.
  */
 function localAddress(interfaces = os.networkInterfaces(), primary = '') {
   const candidates = Object.entries(interfaces)
     .flatMap(([name, list]) => (list || []).map((i) => ({ name, ...i })))
     .filter((i) => i.family === 'IPv4' && !i.internal);
-  if (primary && candidates.some((i) => i.address === primary)) return primary;
-  const lan = candidates.find((i) => LAN_INTERFACE.test(i.name));
-  return (lan || candidates[0])?.address || '';
+  const real = candidates.filter((i) => !isVirtual(i));
+  const pool = real.length > 0 ? real : candidates;
+  if (primary && pool.some((i) => i.address === primary)) return primary;
+  const lan = pool.find((i) => LAN_INTERFACE.test(i.name));
+  return (lan || pool[0])?.address || '';
 }
 
 function sortPeers(peers) {
