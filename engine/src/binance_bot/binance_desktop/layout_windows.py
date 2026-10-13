@@ -22,6 +22,10 @@ MARKET_FUTURES_TAB = (0.2776, 0.4098)
 # di bawah jendela. Titik gulir di area tabel (900, 700).
 FUTURES_LIST_SCROLL_NOTCHES = 1
 FUTURES_LIST_SCROLL_POINT = (0.4688, 0.6863)
+# Pencarian tab Futures (y 306..673 mencakup posisi normal 418 dan bergeser banner 508) dan judul
+# kolom "Perubahan" sesudah digulir (y 204..816).
+MARKET_TABS_AREA = (0.10, 0.30, 0.60, 0.66)
+FUTURES_HEADER_AREA = (0.30, 0.20, 0.75, 0.80)
 # Sub-tab "Futures USD-M" setelah digulir (332, 405). Binance mengingat sub-tab terakhir,
 # jadi dipilih ulang agar tidak jatuh ke COIN-M.
 FUTURES_USDM_TAB = (0.1729, 0.3971)

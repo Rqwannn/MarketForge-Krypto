@@ -57,11 +57,14 @@ def parse_percent(text: str) -> float | None:
     return float(match.group(1).replace(",", ".")) if match else None
 
 
-def parse_gainer_rows(lines: Sequence[TextLine], area: tuple[float, ...]) -> list[GainerRow]:
+def parse_gainer_rows(
+    lines: Sequence[TextLine], area: tuple[float, ...], shift: float = 0.0
+) -> list[GainerRow]:
     """Pasangkan nama pair dan persentase per baris berdasarkan posisi vertikal.
 
     `lines` relatif terhadap gambar `area` (x0, y0, x1, y1 relatif jendela). Nomor baris
     dihitung dari posisi di layar, jadi baris yang gagal dibaca OCR tidak menggeser rank lain.
+    `shift` = pergeseran vertikal daftar (relatif jendela) akibat banner di atasnya.
     """
     _, top, _, bottom = area
 
@@ -80,7 +83,7 @@ def parse_gainer_rows(lines: Sequence[TextLine], area: tuple[float, ...]) -> lis
         nearest = min(percents, key=lambda item: abs(item[0] - y), default=None)
         if nearest is None or abs(nearest[0] - y) > layout.FUTURES_ROW_STEP / 2:
             continue
-        rank = layout.rank_at(y)
+        rank = layout.rank_at(y - shift)
         rows.setdefault(rank, GainerRow(rank, match.group(1), nearest[1]))
     return [rows[rank] for rank in sorted(rows)]
 

@@ -50,6 +50,9 @@ _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
 _VERIFY_RETRY_DELAY_S = 0.4
 _CHART_TAB = re.compile(r"\bGrafik\b")
+_FUTURES_TAB = re.compile(r"\bFutures\b")
+_CHANGE_HEADER = re.compile(r"Perubahan")
+_EXTRA_SCROLL_SHIFT = 0.05  # banner setinggi ini atau lebih: gulir satu langkah lagi
 _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
 _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
 _USDT_UNIT = re.compile(r"\bUSDT\b")
@@ -79,6 +82,8 @@ class BinanceNavigator:
         self._rect: Rect | None = None
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
+        self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
+        self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
 
     def prepare(self) -> None:
         """Bawa Binance ke depan dan pastikan ukuran jendela sesuai kalibrasi posisi klik."""
@@ -143,15 +148,16 @@ class BinanceNavigator:
     def open_top_gainers(self) -> list[GainerRow]:
         """Pasar -> tab Futures -> urutkan "Perubahan 24jam" dari kenaikan tertinggi.
 
-        Arah urutan diperiksa dengan OCR, bukan ditebak dari jumlah klik.
+        Arah urutan diperiksa dengan OCR, bukan ditebak dari jumlah klik. Banner promo di halaman
+        Pasar menggeser tab dan daftar; bila layout mengaktifkannya, posisi keduanya dicari dengan
+        OCR.
         """
         self._click(layout.SIDEBAR_MARKET)
         self._on_trade_page = False
-        self._click(layout.MARKET_FUTURES_TAB)
-        self._scroll_futures_list()
+        self._open_futures_list()
         rows: list[GainerRow] = []
         for _ in range(_SORT_ATTEMPTS):
-            self._click(layout.FUTURES_CHANGE_HEADER)
+            self._click(self._header_pos)
             rows = self.read_top_gainers()
             if is_sorted_by_top_gain(rows):
                 return rows
@@ -163,35 +169,77 @@ class BinanceNavigator:
             f"klik (terbaca: {[(r.symbol, r.change_pct) for r in rows[:3]]})"
         )
 
-    def _scroll_futures_list(self) -> None:
+    def _futures_tab_position(self) -> tuple[float, float]:
+        """Posisi tab Futures: dicari dengan OCR (banner bisa menggesernya), atau posisi tetap."""
+        if layout.MARKET_TABS_AREA is None:
+            return layout.MARKET_FUTURES_TAB
+        found = self._find_text(layout.MARKET_TABS_AREA, _FUTURES_TAB)
+        if found is None:
+            logger.warning("Tab Futures tidak terbaca di halaman Pasar; memakai posisi tetap")
+            return layout.MARKET_FUTURES_TAB
+        return found
+
+    def _open_futures_list(self) -> None:
+        """Buka tab Futures, gulir, lalu cari judul kolom untuk mengetahui pergeseran daftar."""
+        tab = self._futures_tab_position()
+        shift = tab[1] - layout.MARKET_FUTURES_TAB[1] if layout.MARKET_TABS_AREA else 0.0
+        self._click(tab)
+        notches = layout.FUTURES_LIST_SCROLL_NOTCHES
+        if notches and shift > _EXTRA_SCROLL_SHIFT:
+            notches += 1  # banner mendorong daftar ke bawah: gulir lebih jauh agar 5 baris terlihat
+        self._scroll_futures_list(notches)
+        self._locate_list()
+        if layout.FUTURES_USDM_TAB:
+            self._click(self._shifted(layout.FUTURES_USDM_TAB))
+
+    def _locate_list(self) -> None:
+        """Cari judul kolom "Perubahan" untuk tahu seberapa jauh daftar bergeser dari kalibrasi."""
+        self._list_shift = 0.0
+        self._header_pos = layout.FUTURES_CHANGE_HEADER
+        if layout.FUTURES_HEADER_AREA is None:
+            return
+        found = self._find_text(layout.FUTURES_HEADER_AREA, _CHANGE_HEADER)
+        if found is None:
+            logger.warning("Judul kolom Perubahan tidak terbaca; memakai posisi tetap")
+            return
+        self._header_pos = found
+        self._list_shift = found[1] - layout.FUTURES_CHANGE_HEADER[1]
+        if abs(self._list_shift) > 0.005:
+            logger.info(
+                "Daftar Futures bergeser %+.0f px dari kalibrasi",
+                self._list_shift * self.rect.height,
+            )
+
+    def _shifted(self, target: tuple[float, float]) -> tuple[float, float]:
+        return target[0], min(0.999, max(0.0, target[1] + self._list_shift))
+
+    def _scroll_futures_list(self, notches: int) -> None:
         """Gulir halaman Pasar bila tata letak butuh (agar 5 baris pertama terlihat)."""
-        if layout.FUTURES_LIST_SCROLL_NOTCHES:
+        if notches:
             self._window.scroll_down(
-                *self.rect.point_at(*layout.FUTURES_LIST_SCROLL_POINT),
-                layout.FUTURES_LIST_SCROLL_NOTCHES,
+                *self.rect.point_at(*layout.FUTURES_LIST_SCROLL_POINT), notches
             )
             self._sleep(self._settings.settle_delay_s)
-        if layout.FUTURES_USDM_TAB:
-            self._click(layout.FUTURES_USDM_TAB)
 
     def _reopen_futures_tab(self) -> None:
         if layout.FUTURES_LIST_SCROLL_NOTCHES:
             # Halaman sudah tergulir: tab Futures tidak lagi di tempat semula. Muat ulang
             # halaman Pasar agar posisi gulir kembali ke awal.
             self._click(layout.SIDEBAR_MARKET)
-        self._click(layout.MARKET_FUTURES_TAB)
-        self._scroll_futures_list()
+        self._open_futures_list()
 
     def read_top_gainers(self) -> list[GainerRow]:
-        area = layout.FUTURES_LIST_AREA
-        return parse_gainer_rows(self._read_lines(self.rect.sub(*area)), area)
+        x0, y0, x1, y1 = layout.FUTURES_LIST_AREA
+        shift = self._list_shift
+        area = (x0, max(0.0, y0 + shift), x1, min(1.0, y1 + shift))
+        return parse_gainer_rows(self._read_lines(self.rect.sub(*area)), area, shift)
 
     def open_gainer(self, rank: int) -> str:
         """Buka halaman trade Futures baris `rank`. Mengembalikan pair yang benar-benar terbuka.
 
         Peringkat bisa bergeser dalam hitungan detik, jadi pair dibaca ulang di halaman trade.
         """
-        self._click(layout.trade_icon(rank))
+        self._click(self._shifted(layout.trade_icon(rank)))
         self._on_trade_page = True
         self._chart_shift = 0.0
         symbol = self.read_symbol()

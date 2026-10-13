@@ -326,3 +326,41 @@ def test_chart_that_never_loads_is_an_error() -> None:
     nav, _ = trade_page_nav(toolbar(("15 mnt", 0.1265, 0.2416)), chart=[loading])
     with pytest.raises(ScreenReadError, match="belum termuat"):
         nav.show_15m_chart()
+
+
+def test_futures_list_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Banner promo menggeser halaman Pasar: tab, judul kolom, dan baris dicari dengan OCR."""
+    tabs_area = (0.10, 0.30, 0.60, 0.66)
+    header_area = (0.30, 0.20, 0.75, 0.80)
+    monkeypatch.setattr(layout, "MARKET_TABS_AREA", tabs_area)
+    monkeypatch.setattr(layout, "FUTURES_HEADER_AREA", header_area)
+    monkeypatch.setattr(layout, "FUTURES_LIST_SCROLL_NOTCHES", 1)
+
+    tab_y = tabs_area[1] + 0.8 * (tabs_area[3] - tabs_area[1])  # jauh di bawah posisi kalibrasi
+    header_y = layout.FUTURES_CHANGE_HEADER[1] + 0.03
+    shift = 0.03
+    x0, y0, x1, y1 = layout.FUTURES_LIST_AREA
+    shifted_area = (x0, y0 + shift, x1, min(1.0, y1 + shift))
+    header_rel = (header_y - header_area[1]) / (header_area[3] - header_area[1])
+    screen = FakeScreen(
+        texts={
+            tabs_area: [[TextLine("Futures", 0.5, 0.8)]],
+            header_area: [[TextLine("Perubahan 24jam", 0.5, header_rel)]],
+            shifted_area: [list_lines((1, "WUSDT", "+60.00%"), (2, "RSRUSDT", "+51.00%"))],
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    rows = nav.open_top_gainers()
+
+    assert [(r.rank, r.symbol) for r in rows] == [(1, "WUSDT"), (2, "RSRUSDT")]
+    tab_pos = (tabs_area[0] + 0.5 * (tabs_area[2] - tabs_area[0]), tab_y)
+    header_pos = (header_area[0] + 0.5 * (header_area[2] - header_area[0]), header_y)
+    assert clicks(screen) == [at(layout.SIDEBAR_MARKET), at(tab_pos), at(header_pos)]
+    # banner lebih dari 5% tinggi jendela: digulir dua langkah, bukan satu
+    scroll = next(e for k, e in screen.events if k == "scroll_down")
+    assert scroll[2] == 2
+    # ikon trade ikut bergeser
+    assert nav._shifted(layout.trade_icon(1)) == pytest.approx(
+        (layout.trade_icon(1)[0], layout.trade_icon(1)[1] + shift)
+    )

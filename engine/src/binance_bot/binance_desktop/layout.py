@@ -78,6 +78,11 @@ FUTURES_LIST_SCROLL_NOTCHES = 0
 FUTURES_LIST_SCROLL_POINT = (0.5, 0.7)
 # Sub-tab USD-M bila perlu dipilih eksplisit (setelah tergulir). None = sudah terpilih bawaan.
 FUTURES_USDM_TAB: tuple[float, float] | None = None
+# Banner promo (mis. "Listing Baru") bisa menggeser halaman Pasar ke bawah. Bila area ini diisi,
+# tab Futures dan judul kolom "Perubahan" dicari dengan OCR dan seluruh posisi daftar digeser
+# sebesar selisihnya. None = posisi tetap, tanpa pencarian.
+MARKET_TABS_AREA: tuple[float, float, float, float] | None = None
+FUTURES_HEADER_AREA: tuple[float, float, float, float] | None = None
 # Judul kolom "Perubahan 24jam": klik pertama = turun terdalam, klik kedua = naik tertinggi.
 FUTURES_CHANGE_HEADER = (0.5325, 0.5133)
 # Area OCR daftar: kolom nama pair dan perubahan 24 jam, baris 1..6.
