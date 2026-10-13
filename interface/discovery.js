@@ -7,6 +7,7 @@
 
 const { execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const dgram = require('node:dgram');
 const { EventEmitter } = require('node:events');
 const os = require('node:os');
 
@@ -122,11 +123,53 @@ function lanAddress(service) {
   return (service.addresses || []).find((a) => IPV4.test(a)) || '';
 }
 
-/** Alamat IPv4 laptop ini di WiFi/Ethernet (untuk ditampilkan); VPN hanya bila tidak ada yang lain. */
-function localAddress(interfaces = os.networkInterfaces()) {
+/**
+ * IPv4 yang dipakai sistem operasi untuk keluar ke jaringan, yaitu kartu yang memegang rute bawaan
+ * (biasanya WiFi). `connect` pada soket UDP hanya memilih rute dan tidak mengirim paket apa pun.
+ * Laptop dengan VirtualBox, WSL, Hyper-V, atau hotspot punya banyak kartu virtual; tanpa ini
+ * Bonjour bisa mengumumkan diri lewat kartu virtual sehingga laptop lain di WiFi tidak melihatnya.
+ * Mengembalikan '' bila tidak bisa ditentukan.
+ */
+function primaryAddress(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    let socket = null;
+    let finished = false;
+    const done = (value) => {
+      if (finished) return;
+      finished = true;
+      try {
+        socket?.close();
+      } catch {
+        // soket sudah tertutup
+      }
+      resolve(IPV4.test(value || '') ? value : '');
+    };
+    try {
+      socket = dgram.createSocket('udp4');
+      socket.on('error', () => done(''));
+      socket.connect(1, '10.255.255.255', () => {
+        try {
+          done(socket.address().address);
+        } catch {
+          done('');
+        }
+      });
+      setTimeout(() => done(''), timeoutMs).unref?.();
+    } catch {
+      done('');
+    }
+  });
+}
+
+/**
+ * Alamat IPv4 laptop ini di WiFi/Ethernet (untuk ditampilkan); VPN hanya bila tidak ada yang lain.
+ * `primary` (kartu dengan rute bawaan, lihat primaryAddress) didahulukan bila memang milik laptop ini.
+ */
+function localAddress(interfaces = os.networkInterfaces(), primary = '') {
   const candidates = Object.entries(interfaces)
     .flatMap(([name, list]) => (list || []).map((i) => ({ name, ...i })))
     .filter((i) => i.family === 'IPv4' && !i.internal);
+  if (primary && candidates.some((i) => i.address === primary)) return primary;
   const lan = candidates.find((i) => LAN_INTERFACE.test(i.name));
   return (lan || candidates[0])?.address || '';
 }
@@ -145,10 +188,12 @@ class Discovery extends EventEmitter {
     token = '',
     leaderKeys = null, // kunci privat pemimpin (hanya di laptop pemimpin)
     leaderPublic = null, // kunci publik pemimpin (di semua laptop kelompok)
+    address = localAddress(), // IPv4 laptop ini yang ditampilkan di daftar
   }) {
     super();
     this.leaderKeys = leaderKeys;
     this.leaderPublic = leaderPublic;
+    this.address = address;
     this.bonjour = bonjour;
     this.id = id;
     this.name = name;
@@ -257,7 +302,7 @@ class Discovery extends EventEmitter {
       role: this.role,
       running: this.running,
       os: OS_NAMES[this.platform] || 'Lainnya',
-      address: localAddress(),
+      address: this.address,
       self: true,
       team: teamFieldsFrom({}, ''),
       leaderVerified: this.role === 'leader' && Boolean(this.leaderKeys),
@@ -284,5 +329,6 @@ class Discovery extends EventEmitter {
 }
 
 module.exports = {
-  COIN, Discovery, MAX_ACTIVITY, SERVICE_TYPE, computerName, laptopName, localAddress, peerFrom, sealedFields,
+  COIN, Discovery, MAX_ACTIVITY, SERVICE_TYPE, computerName, laptopName, localAddress, peerFrom,
+  primaryAddress, sealedFields,
 };

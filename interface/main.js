@@ -8,7 +8,9 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const engine = require('./engine');
-const { COIN, Discovery, MAX_ACTIVITY, sealedFields } = require('./discovery');
+const {
+  COIN, Discovery, MAX_ACTIVITY, localAddress, primaryAddress, sealedFields,
+} = require('./discovery');
 const { loadLeaderKey, loadLeaderPublic, sealForLeader } = require('./leaderkey');
 const { Team } = require('./team');
 
@@ -162,12 +164,18 @@ function startFollower({ leaderName, rank, modal, hub }) {
 }
 
 /** Umumkan laptop ini ke MarketForge lain di WiFi yang sama (Bonjour) dan dengarkan mereka. */
-function startDiscovery() {
+async function startDiscovery() {
   try {
     const { Bonjour } = require('bonjour-service');
-    const bonjour = new Bonjour({}, (err) => console.error(`Bonjour: ${err.message}`));
+    // Bonjour hanya lewat kartu jaringan utama (rute bawaan). Tanpa ini, laptop dengan kartu virtual
+    // (VirtualBox, WSL, Hyper-V) bisa mengumumkan diri lewat kartu yang salah dan tak terlihat.
+    const lan = await primaryAddress();
+    const options = lan ? { interface: lan, bind: '0.0.0.0' } : {};
+    const bonjour = new Bonjour(options, (err) => console.error(`Bonjour: ${err.message}`));
     const token = engine.hubToken();
-    discovery = new Discovery({ bonjour, token, leaderKeys, leaderPublic });
+    discovery = new Discovery({
+      bonjour, token, leaderKeys, leaderPublic, address: localAddress(undefined, lan),
+    });
     team = new Team({ myId: discovery.id, token });
     discovery.on('peers', (peers) => {
       if (team.evaluate(peers)) syncPresence();
@@ -372,9 +380,9 @@ handle('team:leave', () => {
   return teamState();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (process.platform === 'darwin') app.dock?.setIcon(ICON);
-  startDiscovery();
+  await startDiscovery(); // selesai sebelum jendela memuat daftar laptop
   createWindow();
 });
 app.on('activate', () => {
