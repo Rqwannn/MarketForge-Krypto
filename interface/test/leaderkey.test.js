@@ -58,5 +58,6 @@ test('hash password ditulis ke .env tanpa mengubah baris lain', () => {
   setEnvValue(file, 'BOT_LEADER_PASSWORD_HASH', 'baru');
   setEnvValue(file, 'BOT_HUB_TOKEN', 'xyz');
   assert.equal(fs.readFileSync(file, 'utf8'), '# catatan\nVIKEY_API_KEY=abc\nBOT_LEADER_PASSWORD_HASH=baru\nBOT_HUB_TOKEN=xyz\n');
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  // Windows tidak mengenal izin berkas gaya Unix (chmod 600): pemeriksaan ini hanya untuk Unix.
+  if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 });
