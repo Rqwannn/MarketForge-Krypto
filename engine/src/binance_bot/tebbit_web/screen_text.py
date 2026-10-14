@@ -76,11 +76,13 @@ def parse_gainer_rows(
 def parse_header(texts: Sequence[str]) -> tuple[float, float]:
     """Header koin -> (harga terakhir, perubahan 24 jam %)."""
     joined = " ".join(texts)
-    price = re.search(r"(\d[\d,]*\.\d+)", joined)
-    change = re.search(r"([+-]\d+(?:\.\d+)?)\s*%", joined)
-    if not price or not change:
+    # Harga terakhir tepat diikuti perubahannya, mis. "0.15384 +11.35%" (OCR bisa menyisipkan
+    # spasi setelah tanda: "+ 11.35%").
+    found = re.search(r"(\d[\d,]*\.\d+)\s*([+-])\s*(\d+(?:\.\d+)?)\s*%", joined)
+    if not found:
         raise ScreenReadError(f"Harga atau perubahan 24 jam tidak terbaca di header: {texts}")
-    return float(price.group(1).replace(",", "")), float(change.group(1))
+    price, sign, change = found.groups()
+    return float(price.replace(",", "")), float(sign + change)
 
 
 def parse_order_book(

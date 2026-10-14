@@ -74,3 +74,12 @@ def test_harga_koin_lain_atau_sebelum_chrome_dibuka_tidak_terbaca() -> None:
             ScreenMarket(nav).quote("BTWUSDT")  # type: ignore[arg-type]
     quote = ScreenMarket(_Nav("BTWUSDT")).quote("BTWUSDT")  # type: ignore[arg-type]
     assert (quote.bid, quote.ask, quote.change_pct, quote.funding_rate) == (0.99, 1.01, 30.0, 0.0)
+
+
+def test_header_harga_dan_perubahan_walau_ocr_menyisipkan_spasi() -> None:
+    from binance_bot.tebbit_web.screen_text import parse_header
+
+    texts = ["24H Low", "24H High", "0.15384 + 11.35%", "OPUSDT Perpetual", "0.13448", "0.16230"]
+    assert parse_header(texts) == (0.15384, 11.35)
+    assert parse_header(["BTWUSDT Perpetual", "2.5528 +44.60%", "2.6047"]) == (2.5528, 44.6)
+    assert parse_header(["1,234.5 -2.5%"]) == (1234.5, -2.5)
