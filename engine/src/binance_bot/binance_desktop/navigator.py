@@ -164,10 +164,23 @@ class BinanceNavigator:
             if not rows:
                 # Daftar Futures belum tampil (halaman lambat dimuat, klik tab hilang): ulangi.
                 self._reopen_futures_tab()
+        shot = self._save_debug_shot("daftar-futures")
         raise ScreenReadError(
             f"Daftar Futures tidak terurut dari kenaikan tertinggi setelah {_SORT_ATTEMPTS} "
-            f"klik (terbaca: {[(r.symbol, r.change_pct) for r in rows[:3]]})"
+            f"klik (terbaca: {[(r.symbol, r.change_pct) for r in rows[:3]]}). "
+            f"Foto layar yang dilihat bot: {shot}"
         )
+
+    def _save_debug_shot(self, name: str) -> Path | str:
+        """Simpan foto jendela saat pembacaan gagal, agar admin tahu apa yang dilihat bot."""
+        try:
+            folder = self._settings.screenshot_dir
+            folder.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            return self.capture_window(folder / f"gagal-{name}-{stamp}.png")
+        except Exception:  # diagnosa tidak boleh menutupi galat aslinya
+            logger.debug("Foto layar diagnosa gagal disimpan", exc_info=True)
+            return "(tidak tersimpan)"
 
     def _futures_tab_position(self) -> tuple[float, float]:
         """Posisi tab Futures: dicari dengan OCR (banner bisa menggesernya), atau posisi tetap."""
