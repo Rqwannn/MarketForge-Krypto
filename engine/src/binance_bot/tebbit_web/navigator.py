@@ -11,21 +11,26 @@ from __future__ import annotations
 import itertools
 import logging
 import re
+import sys
+import tempfile
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from binance_bot.binance_desktop.navigator import BinanceNavigator
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings, same_number
 from binance_bot.config import Settings
 from binance_bot.exceptions import SafetyError, ScreenReadError, WindowError
-from binance_bot.macos import AppController, Rect, TextReader
+from binance_bot.macos import AppController, Rect, TextLine, TextReader
 from binance_bot.tebbit_web import layout_tebbit as lay
 from binance_bot.tebbit_web.chrome import (
     CHROME_BUNDLE_ID,
+    CHROME_EXE,
     CHROME_NAME,
     HOME_URL,
-    ChromeController,
+    Browser,
     ChromeWindowController,
 )
 from binance_bot.tebbit_web.screen_text import (
@@ -37,6 +42,9 @@ from binance_bot.tebbit_web.screen_text import (
     symbol_from_url,
 )
 from binance_bot.tebbit_web.visible import tab_window_is_visible
+
+if TYPE_CHECKING:
+    from binance_bot.tebbit_web.chrome_windows import WinChromeWindowController
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +66,16 @@ class TebbitNavigator(BinanceNavigator):
         self,
         settings: Settings,
         apps: AppController,
-        window: ChromeWindowController,
+        window: ChromeWindowController | WinChromeWindowController,
         reader: TextReader,
-        chrome: ChromeController,
+        chrome: Browser,
         *,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         screens: Callable[[], Sequence[Rect]],
     ) -> None:
-        chrome_settings = replace(settings, app_name=CHROME_NAME, app_bundle_id=CHROME_BUNDLE_ID)
+        app_id = CHROME_EXE if sys.platform == "win32" else CHROME_BUNDLE_ID
+        chrome_settings = replace(settings, app_name=CHROME_NAME, app_bundle_id=app_id)
         super().__init__(
             chrome_settings, apps, window, reader, sleep=sleep, clock=clock, screens=screens
         )
@@ -87,9 +96,9 @@ class TebbitNavigator(BinanceNavigator):
         self._chrome.set_bounds(self._window_id, area)
         self._chrome.raise_window(self._window_id)
         self._sleep(1.0)
-        self._rect = self._chrome.bounds(self._window_id)
+        self._rect = self._chrome.content_bounds(self._window_id)
         self._ensure_front()
-        self._chrome.set_zoom(lay.ZOOM_STEPS_DOWN)
+        self._chrome.set_zoom(lay.ZOOM_STEPS_DOWN, self._window_id)
         self._sleep(1.0)
         self._on_contract = False
         self._load(HOME_URL)
@@ -119,7 +128,7 @@ class TebbitNavigator(BinanceNavigator):
                 f"Zoom Chrome tidak 80% (menu Futures di x={x:.2f}, seharusnya "
                 f"{lay.NAV_FUTURES_X}). Atur zoom ke 80% lalu ulangi."
             )
-        top = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.17))
+        top = self._read_texts(self.rect.sub(*lay.LOGIN_AREA))
         if any(_LOGIN.search(text) for text in top):
             raise ScreenReadError("Belum login di Tebbit. Login sekali di Chrome, lalu ulangi.")
 
@@ -128,6 +137,22 @@ class TebbitNavigator(BinanceNavigator):
         if self._window_id is not None:
             self._chrome.close_window(self._window_id)
             self._window_id = None
+
+    def _read_lines(self, area: Rect) -> list[TextLine]:
+        """Baca area; teks kecil Tebbit diperbesar dulu bila profil layout meminta."""
+        factor = lay.OCR_UPSCALE
+        if not factor:
+            return super()._read_lines(area)
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raw, big = Path(tmp) / "ocr.png", Path(tmp) / "ocr_big.png"
+            self._ensure_front()
+            self._window.capture(area, raw)
+            with Image.open(raw) as image:
+                size = (image.width * factor, image.height * factor)
+                image.convert("L").resize(size, Image.Resampling.LANCZOS).save(big)
+            return self._reader.read_lines(big)
 
     # ------------------------------------------------------------------ keamanan
     def _forbidden(self, target: tuple[float, float]) -> bool:

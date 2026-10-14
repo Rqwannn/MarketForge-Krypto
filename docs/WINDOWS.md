@@ -102,8 +102,8 @@ npm test        # tes interface (tanpa membuka jendela)
 
 Yang disesuaikan untuk Windows:
 
-- `engine.js` mencari virtualenv di `engine\.venv`, lalu `.venv` di root repo, dan menjalankan
-  engine dengan `python.exe -m binance_bot` (bukan `binance-bot.exe`, yang hanya peluncur sehingga
+- `engine.js` memilih virtualenv yang pustakanya lengkap (ada Pillow): `engine\.venv` atau `.venv` di
+  root repo. Venv kosong (mis. sisa Python lama) dilewati. Engine dijalankan dengan `python.exe -m binance_bot` (bukan `binance-bot.exe`, yang hanya peluncur sehingga
   menghentikannya tidak menghentikan engine).
 - Tombol **Hentikan** memakai `taskkill /T /F` karena Windows tidak punya SIGINT untuk proses anak.
   Engine berhenti seketika; posisi uji yang sedang berjalan tidak diselesaikan dulu.
@@ -112,3 +112,30 @@ Yang disesuaikan untuk Windows:
 - Engine dijalankan dengan `PYTHONUTF8=1` agar log berbahasa Indonesia tidak gagal di konsol.
 
 Pengaturan `interface\.env` (opsional) menimpa `engine\.env`, sama seperti di macOS.
+
+## Platform Tebbit (website di Chrome)
+
+Alur Tebbit (`--bursa tebbit`, atau pilih Tebbit di aplikasi) sudah berjalan di Windows. Yang berbeda
+dari macOS:
+
+- **Kendali Chrome:** jendela Chrome baru dibuka lewat `chrome.exe --new-window` (Chrome dicari di
+  `Program Files`; atau isi `BOT_CHROME_PATH` di `.env`). Alamat tab dibaca lewat UI Automation
+  (PowerShell), bukan AppleScript. Sesi login Chrome yang terakhir dipakai terbawa; **login ke
+  Tebbit sekali di Chrome**, lalu jalankan bot.
+- **Pengaman fokus:** Windows tidak bisa mengirim tombol ke jendela tertentu, jadi tombol selalu
+  masuk ke jendela aktif. Sebelum mengetik alamat atau mengatur zoom, bot memastikan jendela Tebbit
+  miliknya yang aktif (dan memeriksa lagi saat mengetik). Bila Windows menolak membawanya ke depan,
+  bot berhenti dan tidak mengirim tombol apa pun. Satu-satunya teks yang diketik ke Chrome adalah
+  alamat `tebbit.io`.
+- **Zoom mengikuti skala layar:** zoom Chrome x skala tampilan Windows dijaga mendekati 1,0
+  (skala 125% memakai zoom 80%, skala 100% memakai 100%), seperti tampilan Mac yang diukur.
+- **Posisi relatif terhadap isi halaman** (`Chrome_RenderWidgetHostHWND`), bukan seluruh jendela,
+  sehingga bilah bookmark atau ekstensi tidak menggeser kalibrasi. Profilnya ada di
+  `engine/src/binance_bot/tebbit_web/layout_tebbit_windows.py`.
+- **OCR:** teks tabel Tebbit kecil, jadi gambar diperbesar 2x sebelum dibaca (`OCR_UPSCALE`).
+- Jendela Chrome yang dibuka bot tidak ditutup otomatis di akhir putaran (sama seperti di macOS);
+  tutup sendiri bila menumpuk.
+
+Diverifikasi di Windows 11 (layar 1920x1080, skala 125%, Chrome 14 Okt 2026): daftar Top 5, halaman
+koin, grafik 15 menit, margin, bid/ask, mengisi kolom Quantity (USDT), dan satu putaran `single`
+lengkap dengan AI. Belum diuji: mode pemimpin/pengikut lewat Tebbit, layar skala selain 125%.

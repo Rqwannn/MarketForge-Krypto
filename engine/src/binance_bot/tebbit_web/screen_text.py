@@ -11,7 +11,8 @@ from binance_bot.exceptions import ScreenReadError
 from binance_bot.macos import TextLine
 from binance_bot.tebbit_web import layout_tebbit as lay
 
-_PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)\s*%$")
+# OCR Windows kadang membaca "%" sebagai "0/0" pada font kecil.
+_PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)\s*(?:%|0/0)$")
 _PAIR = re.compile(r"([A-Z0-9]{1,20}USDT)\b")
 _PRICE = re.compile(r"^\d[\d,]*\.\d{2,}$")
 _LEVERAGE = re.compile(r"(\d{1,3})\s*[xX]\b")

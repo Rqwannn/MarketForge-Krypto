@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Protocol
 
 from binance_bot.exceptions import CommandError, WindowError
 from binance_bot.macos.app_controller import Runner, run_command
@@ -17,8 +18,25 @@ logger = logging.getLogger(__name__)
 
 CHROME_NAME = "Google Chrome"
 CHROME_BUNDLE_ID = "com.google.Chrome"
+CHROME_EXE = "chrome.exe"  # Windows: nama proses sebagai pengenal aplikasi
 SITE = "tebbit.io"
 HOME_URL = f"https://{SITE}/"
+
+
+class Browser(Protocol):
+    """Kendali jendela Chrome Tebbit; ada versi macOS (`ChromeController`) dan Windows."""
+
+    def open_window(self, url: str = ...) -> int: ...
+    def window_exists(self, window_id: int) -> bool: ...
+    def close_window(self, window_id: int) -> None: ...
+    def raise_window(self, window_id: int) -> None: ...
+    def open_url(self, window_id: int, url: str) -> None: ...
+    def current_url(self, window_id: int) -> str: ...
+    def tab_title(self, window_id: int) -> str: ...
+    def bounds(self, window_id: int) -> Rect: ...
+    def content_bounds(self, window_id: int) -> Rect: ...
+    def set_bounds(self, window_id: int, rect: Rect) -> None: ...
+    def set_zoom(self, steps_down: int, window_id: int | None = None) -> None: ...
 
 
 class ChromeController:
@@ -34,7 +52,7 @@ class ChromeController:
 
     def open_window(self, url: str = HOME_URL) -> int:
         """Buka jendela Chrome baru di alamat Tebbit dan kembalikan id jendelanya."""
-        _check_url(url)
+        check_url(url)
         script = "\n".join(
             [
                 'tell application "Google Chrome"',
@@ -74,7 +92,7 @@ class ChromeController:
         self._osascript(script, "Tidak bisa membawa jendela Chrome ke depan")
 
     def open_url(self, window_id: int, url: str) -> None:
-        _check_url(url)
+        check_url(url)
         script = (
             f'tell application "Google Chrome" to set URL of active tab of window id {window_id} '
             f'to "{url}"'
@@ -102,6 +120,10 @@ class ChromeController:
             raise WindowError(f"Format jendela Chrome tidak dikenal: {out.strip()!r}") from exc
         return Rect(left, top, right - left, bottom - top)
 
+    def content_bounds(self, window_id: int) -> Rect:
+        """Area yang dipetakan klik dan baca layar: di macOS seluruh jendela Chrome."""
+        return self.bounds(window_id)
+
     def set_bounds(self, window_id: int, rect: Rect) -> None:
         script = (
             'tell application "Google Chrome" to set bounds of window id '
@@ -109,7 +131,7 @@ class ChromeController:
         )
         self._osascript(script, "Tidak bisa mengatur ukuran jendela Chrome")
 
-    def set_zoom(self, steps_down: int) -> None:
+    def set_zoom(self, steps_down: int, window_id: int | None = None) -> None:
         """Zoom halaman: Cmd+0 (100%) lalu `steps_down` kali Cmd+minus. Chrome harus di depan."""
         keys = ["0"] + ["-"] * steps_down
         for key in keys:
@@ -125,7 +147,7 @@ class ChromeController:
             ) from exc
 
 
-def _check_url(url: str) -> None:
+def check_url(url: str) -> None:
     if not re.fullmatch(rf"https://(www\.)?{re.escape(SITE)}/[A-Za-z0-9_./?=&%-]*", url):
         raise WindowError(f"Alamat bukan halaman {SITE}: {url!r}")
 

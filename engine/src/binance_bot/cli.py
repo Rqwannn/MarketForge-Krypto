@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from binance_bot import __version__
 from binance_bot.analysis import ConsensusAnalyzer, VikeyPatternAnalyzer
@@ -23,7 +24,7 @@ from binance_bot.market import FuturesMarket, MarketData
 from binance_bot.strategy import DryRunOrderGate, Journal, SopParams
 from binance_bot.strategy.params import SIGNAL_SOURCES
 from binance_bot.system import System, build_system
-from binance_bot.tebbit_web.chrome import ChromeController, ChromeWindowController
+from binance_bot.tebbit_web.chrome import Browser, ChromeController, ChromeWindowController
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import TebbitNavigator
 from binance_bot.workflows import (
@@ -43,6 +44,9 @@ from binance_bot.workflows import (
 )
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.positions import ALL
+
+if TYPE_CHECKING:
+    from binance_bot.tebbit_web.chrome_windows import WinChromeWindowController
 
 logger = logging.getLogger(__name__)
 _DEFAULTS = SopParams()
@@ -263,14 +267,18 @@ TEBBIT_COMMANDS = (
 def build_tebbit(
     settings: Settings, system: System, *, browse: bool = False
 ) -> tuple[TradingNavigator, MarketData]:
-    chrome = ChromeController()
+    chrome: Browser
+    window: ChromeWindowController | WinChromeWindowController
+    if sys.platform == "win32":
+        from binance_bot.tebbit_web import chrome_windows
+
+        chrome = win_chrome = chrome_windows.WinChromeController()
+        window = chrome_windows.WinChromeWindowController(win_chrome)
+    else:
+        chrome = mac_chrome = ChromeController()
+        window = ChromeWindowController(mac_chrome)
     navigator = TebbitNavigator(
-        settings,
-        system.apps,
-        ChromeWindowController(chrome),
-        system.reader,
-        chrome,
-        screens=system.screens,
+        settings, system.apps, window, system.reader, chrome, screens=system.screens
     )
     return navigator, ScreenMarket(navigator, browse=browse)
 

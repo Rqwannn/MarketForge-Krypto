@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 import os
 import time
+from collections.abc import Callable
 from ctypes import wintypes
 from dataclasses import dataclass
 from typing import Any
@@ -177,6 +178,32 @@ def bring_to_front(hwnd: int) -> None:
     user32.SetForegroundWindow(hwnd)
 
 
+def foreground_window() -> int:
+    return int(user32.GetForegroundWindow() or 0)
+
+
+def force_to_front(hwnd: int) -> None:
+    """Seperti `bring_to_front`, tetapi lebih gigih untuk jendela yang baru dibuat proses lain.
+
+    Windows menolak SetForegroundWindow dari proses yang bukan pemilik fokus. Utas ini
+    disambungkan sementara ke utas jendela yang sedang aktif agar permintaannya diterima.
+    """
+    bring_to_front(hwnd)
+    if foreground_window() == hwnd:
+        return
+    current = user32.GetForegroundWindow()
+    mine = kernel32.GetCurrentThreadId()
+    theirs = user32.GetWindowThreadProcessId(current, None) if current else 0
+    attached = bool(theirs and theirs != mine and user32.AttachThreadInput(mine, theirs, True))
+    try:
+        user32.ShowWindow(hwnd, _SW_RESTORE if user32.IsIconic(hwnd) else 5)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(mine, theirs, False)
+
+
 def place_window(hwnd: int, x: int, y: int, width: int, height: int) -> None:
     """Pindahkan dan ubah ukuran jendela yang tampak ke (x, y, width, height)."""
     if user32.IsIconic(hwnd) or user32.IsZoomed(hwnd):
@@ -249,4 +276,126 @@ def type_char(char: str) -> None:
     code = ord(char)
     _send([_key(scan=code, flags=_KEYEVENTF_UNICODE)])
     _send([_key(scan=code, flags=_KEYEVENTF_UNICODE | _KEYEVENTF_KEYUP)])
+    time.sleep(_KEY_DELAY_S)
+
+
+# --------------------------------------------------------------------------- Chrome (Tebbit)
+
+_VK_RETURN, _VK_DELETE, _VK_L, _VK_0, _VK_OEM_MINUS = 0x0D, 0x2E, 0x4C, 0x30, 0xBD
+_WM_CLOSE = 0x0010
+_DWMWA_CLOAKED = 14
+user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+user32.IsWindow.argtypes = (wintypes.HWND,)
+user32.GetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
+
+
+def window_exists(hwnd: int) -> bool:
+    return bool(user32.IsWindow(hwnd)) and bool(user32.IsWindowVisible(hwnd))
+
+
+def window_title(hwnd: int) -> str:
+    length = user32.GetWindowTextLengthW(hwnd)
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, buffer, length + 1)
+    return buffer.value
+
+
+def content_bounds(hwnd: int) -> Bounds | None:
+    """Area isi halaman peramban (tanpa tab, bilah alamat, dan bilah bookmark), atau None."""
+    found: list[Bounds] = []
+
+    def visit(child: int, _lparam: int) -> bool:
+        name = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(child, name, 64)
+        if name.value == "Chrome_RenderWidgetHostHWND" and user32.IsWindowVisible(child):
+            box = wintypes.RECT()
+            user32.GetWindowRect(child, ctypes.byref(box))
+            found.append(Bounds(box.left, box.top, box.right - box.left, box.bottom - box.top))
+        return True
+
+    callback = win_ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(visit)
+    user32.EnumChildWindows(hwnd, callback, 0)
+    return max(found, key=lambda b: b.width * b.height, default=None)
+
+
+def close_window(hwnd: int) -> None:
+    """Minta jendela menutup diri (seperti menekan tombol X)."""
+    user32.PostMessageW(hwnd, _WM_CLOSE, 0, 0)
+
+
+def is_cloaked(hwnd: int) -> bool:
+    """Jendela disembunyikan Windows (mis. berada di desktop virtual lain)."""
+    state = wintypes.DWORD()
+    hr = dwmapi.DwmGetWindowAttribute(
+        hwnd, _DWMWA_CLOAKED, ctypes.byref(state), ctypes.sizeof(state)
+    )
+    return hr == 0 and state.value != 0
+
+
+def on_screen_windows() -> list[tuple[str, Bounds]]:
+    """Jendela biasa yang tampil di desktop aktif, dari depan ke belakang: (nama exe, persegi)."""
+    found: list[tuple[str, Bounds]] = []
+
+    def visit(hwnd: int, _lparam: int) -> bool:
+        if (
+            user32.IsWindowVisible(hwnd)
+            and not user32.IsIconic(hwnd)
+            and user32.GetWindowTextLengthW(hwnd) > 0
+            and not is_cloaked(hwnd)
+        ):
+            name = process_image_name(hwnd)
+            box = window_bounds(hwnd)
+            if name and box.width > 0 and box.height > 0:
+                found.append((name, box))
+        return True
+
+    callback = win_ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(visit)
+    user32.EnumWindows(callback, 0)  # EnumWindows berjalan dari depan ke belakang (urutan Z)
+    return found
+
+
+def _combo(*keys: int) -> None:
+    """Tekan beberapa tombol bersamaan (tombol terakhir diketuk), lalu lepaskan semuanya."""
+    *held, tap = keys
+    _send([_key(vk) for vk in held] + [_key(tap), _key(tap, flags=_KEYEVENTF_KEYUP)])
+    _send([_key(vk, flags=_KEYEVENTF_KEYUP) for vk in reversed(held)])
+    time.sleep(_KEY_DELAY_S)
+
+
+def _check(guard: Callable[[], bool] | None) -> None:
+    if guard is not None and not guard():
+        raise OSError("fokus berpindah ke jendela lain; pengetikan dihentikan")
+
+
+def browser_zoom(steps_down: int, guard: Callable[[], bool] | None = None) -> None:
+    """Zoom halaman: Ctrl+0 (100%) lalu `steps_down` kali Ctrl+minus. Peramban harus di depan.
+
+    `guard` diperiksa sebelum tiap tombol: tombol tidak boleh jatuh ke aplikasi lain.
+    """
+    _check(guard)
+    _combo(_VK_CONTROL, _VK_0)
+    for _ in range(steps_down):
+        _check(guard)
+        _combo(_VK_CONTROL, _VK_OEM_MINUS)
+        time.sleep(0.15)
+
+
+def browser_go(url: str, guard: Callable[[], bool] | None = None) -> None:
+    """Ketik alamat di bilah alamat lalu Enter. Hanya dipanggil dengan alamat yang sudah divalidasi.
+
+    Delete sebelum Enter membuang saran pelengkapan otomatis, supaya yang dibuka persis `url`.
+    `guard` diperiksa sebelum Ctrl+L, tiap beberapa karakter, dan sebelum Enter.
+    """
+    _check(guard)
+    _combo(_VK_CONTROL, _VK_L)
+    time.sleep(0.2)
+    for index, char in enumerate(url):
+        if index % 6 == 0:
+            _check(guard)
+        type_char(char)
+    _check(guard)
+    _send([_key(_VK_DELETE), _key(_VK_DELETE, flags=_KEYEVENTF_KEYUP)])
+    time.sleep(0.1)
+    _check(guard)
+    _send([_key(_VK_RETURN), _key(_VK_RETURN, flags=_KEYEVENTF_KEYUP)])
     time.sleep(_KEY_DELAY_S)
