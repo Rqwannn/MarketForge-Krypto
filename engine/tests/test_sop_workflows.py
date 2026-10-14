@@ -540,6 +540,7 @@ def test_journal_report_lists_ai_analyses_with_their_chart(tmp_path: Path) -> No
     assert analysis["verdict"] == "tunggu"
     assert analysis["chart"] == "screenshots/a_rank2_15m.png"
     assert analysis["summary"] == "Baru sekali di bawah."
+    assert analysis["old_rule"] is False  # tanpa pola AI: bukan catatan aturan lama
     assert coin_event(journal.load()[0])["event"]["chart"] == "screenshots/a_rank2_15m.png"
 
 

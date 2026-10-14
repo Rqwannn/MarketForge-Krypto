@@ -708,6 +708,7 @@ function analysisItem(a) {
         el('strong', { class: 'sym', textContent: a.symbol }),
         el('span', { class: `tag ${css}`, textContent: label }),
         el('span', { class: 'hist-meta', textContent: `${where} · ${when}` })),
+      a.old_rule ? el('p', { class: 'hist-old', textContent: 'Dinilai dengan aturan lama (tanpa syarat 6 jam terakhir). Dengan aturan sekarang hasilnya bisa berbeda.' }) : null,
       el('p', { class: 'hist-act', textContent: action }),
       a.summary ? el('small', { textContent: `AI: ${a.summary}` }) : null));
 }

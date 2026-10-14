@@ -171,4 +171,6 @@ def _analysis(entry: JournalEntry) -> dict[str, Any]:
         "summary": entry.ai_summary,
         "reason": entry.reason,
         "chart": chart_of(entry),
+        # Dinilai sebelum ada syarat "6 jam terakhir": statusnya bisa beda dengan aturan sekarang.
+        "old_rule": bool(ai) and "below_recent" not in ai,
     }
