@@ -183,6 +183,26 @@ function assertInstalled(bot) {
   }
 }
 
+const MAX_CHART_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Screenshot grafik 15 menit yang dibaca AI -> data URL untuk ditampilkan.
+ * Hanya file `*_15m.png` langsung di folder screenshots engine (path dari log engine).
+ */
+function readChart(file, engineDir = ENGINE_DIR) {
+  const shots = path.join(engineDir, 'screenshots');
+  const full = path.resolve(engineDir, String(file || ''));
+  if (path.dirname(full) !== shots || !/_15m\.png$/.test(full)) throw new InputError('Gambar grafik tidak dikenal');
+  let stat;
+  try {
+    stat = fs.statSync(full);
+  } catch {
+    throw new InputError('Gambar grafik sudah tidak ada');
+  }
+  if (!stat.isFile() || stat.size > MAX_CHART_BYTES) throw new InputError('Gambar grafik tidak bisa dibuka');
+  return `data:image/png;base64,${fs.readFileSync(full).toString('base64')}`;
+}
+
 /** Satu proses engine yang berjalan lama (single/leader/follower). */
 class EngineProcess extends EventEmitter {
   constructor({ bot = BOT, botArgs, cwd = ENGINE_DIR, env = engineEnv } = {}) {
@@ -276,6 +296,7 @@ module.exports = {
   EXCHANGES,
   BOT,
   ENGINE_DIR,
+  readChart,
   EngineProcess,
   InputError,
   botFor,

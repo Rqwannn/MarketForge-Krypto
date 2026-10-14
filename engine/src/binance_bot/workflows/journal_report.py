@@ -12,11 +12,12 @@ from binance_bot.exceptions import MarketDataError
 from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, summarize
 from binance_bot.strategy.params import REQUIRED_TEST_TRADES
-from binance_bot.workflows.sop import refresh_journal
+from binance_bot.workflows.sop import chart_of, refresh_journal
 
 logger = logging.getLogger(__name__)
 
 _RECENT_TRADES = 20
+_RECENT_ANALYSES = 30
 _ROW = "%-11s %-13s %-8s %-10s %-10s %-10s %-9s %-9s %s"
 
 
@@ -60,7 +61,7 @@ class JournalWorkflow:
             warning = f"Posisi terbuka belum dinilai ulang: {exc}"
             logger.warning("%s", warning)
             entries = self._journal.load()
-        trades = [e for e in entries if e.status != "skipped"]
+        trades = [e for e in entries if e.status not in ("skipped", "contoh")]
         if self._as_json:
             self._output(json.dumps(self._as_dict(entries, trades, now, warning), default=str))
             return
@@ -108,6 +109,8 @@ class JournalWorkflow:
                 {**e.to_dict(), "pnl_capital_pct": e.pnl_capital_pct}
                 for e in trades[-_RECENT_TRADES:]
             ],
+            # Riwayat setiap koin yang dinilai (termasuk yang dilewati) untuk aplikasi.
+            "analyses": [_analysis(e) for e in entries[-_RECENT_ANALYSES:] if e.verdict],
         }
 
     def _report(self, entries: list[JournalEntry], now: float) -> None:
@@ -153,3 +156,19 @@ def _crosses(entry: JournalEntry) -> str:
     ai = entry.pattern_ai.get("below_count") if entry.pattern_ai else None
     data = entry.pattern_data.get("below_count") if entry.pattern_data else None
     return f"{'-' if ai is None else ai}/{'-' if data is None else data}"
+
+
+def _analysis(entry: JournalEntry) -> dict[str, Any]:
+    ai = entry.pattern_ai or {}
+    return {
+        "created_at": entry.created_at,
+        "symbol": entry.symbol,
+        "rank": entry.rank,
+        "role": entry.role,
+        "status": entry.status,
+        "verdict": entry.verdict,
+        "count_ai": ai.get("below_count"),
+        "summary": entry.ai_summary,
+        "reason": entry.reason,
+        "chart": chart_of(entry),
+    }

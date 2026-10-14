@@ -156,7 +156,9 @@ def _is_ok(pattern: dict[str, object] | None, min_crosses: int) -> bool | None:
     if pattern is None:
         return None
     count = pattern.get("below_count")
-    return isinstance(count, int) and count >= min_crosses
+    # Catatan lama belum punya below_recent: dinilai seperti dulu (hitungan saja).
+    recent = pattern.get("below_recent", True) is not False
+    return isinstance(count, int) and count >= min_crosses and recent
 
 
 def summarize(entries: Sequence[JournalEntry], params: SopParams, now_s: float) -> Stats:

@@ -237,7 +237,8 @@ class TebbitNavigator(BinanceNavigator):
         return symbol_from_url(url)
 
     def read_symbol(self) -> str:
-        assert self._window_id is not None
+        if self._window_id is None:
+            raise WindowError("Jendela Tebbit belum dibuka")
         return symbol_from_url(self._chrome.current_url(self._window_id))
 
     def show_15m_chart(self) -> None:

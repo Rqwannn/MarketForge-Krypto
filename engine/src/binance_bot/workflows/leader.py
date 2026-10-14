@@ -52,6 +52,7 @@ class LeaderWorkflow:
         self._market = market
         self._analyzer = analyzer
         self._store = store
+        self._charts: dict[str, str] = {}  # pair -> screenshot grafik terakhir yang dibaca AI
         self._hub = hub
         self._ranks = list(ranks)
         self._interval_s = interval_s
@@ -146,6 +147,7 @@ class LeaderWorkflow:
                     verdict=verdict,
                     count_ai=pattern.below_count,
                     summary=record.reading.summary,
+                    chart=self._charts.get(symbol),
                 ),
             )
 
@@ -192,6 +194,7 @@ class LeaderWorkflow:
         )
         started = time.monotonic()
         record = AnalysisRecord(symbol, rank, self._wall_clock(), self._analyzer.analyze(chart))
+        self._charts[symbol] = str(chart)
         chart.with_suffix(".json").write_text(
             json.dumps(record.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
         )

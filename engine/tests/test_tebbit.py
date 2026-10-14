@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from binance_bot.exceptions import MarketDataError, WindowError
 from binance_bot.tebbit_web import layout_tebbit as lay
 from binance_bot.tebbit_web.chrome import ChromeController
+from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import _FIFTEEN
 
 
@@ -50,3 +52,25 @@ def test_kolom_quantity_dan_grafik_tidak_terlarang() -> None:
     forbidden = lay.ALWAYS_FORBIDDEN + lay.CONTRACT_FORBIDDEN
     assert not lay.in_zone((lay.QTY_CLICK_X, 0.345), forbidden)
     assert not lay.in_zone((0.068, 0.286), forbidden)  # tombol 15m
+
+
+class _Nav:
+    def __init__(self, symbol: str | None) -> None:
+        self.symbol = symbol
+
+    def read_symbol(self) -> str:
+        if self.symbol is None:
+            raise WindowError("Jendela Tebbit belum dibuka")
+        return self.symbol
+
+    def read_quote(self) -> tuple[float, float, float, float]:
+        return 0.99, 1.01, 1.0, 30.0
+
+
+def test_harga_koin_lain_atau_sebelum_chrome_dibuka_tidak_terbaca() -> None:
+    # Cek slot posisi terjadi sebelum Chrome dibuka: harus MarketDataError, bukan crash.
+    for nav in (_Nav(None), _Nav("OPUSDT")):
+        with pytest.raises(MarketDataError):
+            ScreenMarket(nav).quote("BTWUSDT")  # type: ignore[arg-type]
+    quote = ScreenMarket(_Nav("BTWUSDT")).quote("BTWUSDT")  # type: ignore[arg-type]
+    assert (quote.bid, quote.ask, quote.change_pct, quote.funding_rate) == (0.99, 1.01, 30.0, 0.0)

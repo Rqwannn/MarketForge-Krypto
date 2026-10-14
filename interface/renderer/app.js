@@ -36,7 +36,7 @@ const PLATFORMS = [
 ];
 /** Top tugas pengikut: angka 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
 const rankLabel = (rank) => (rank === '*' ? 'Semua top' : `Top ${String(rank).split('').join(', ')}`);
-const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin' };
+const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin', contoh: 'Contoh' };
 const ICONS = {
   play: ['M8 5v14l11-7z'],
   stop: ['M7 7h10v10H7z'],
@@ -338,11 +338,12 @@ async function toggleRun() {
   Object.assign(counts, { seen: 0, ok: 0, open: 0 });
   setCounts();
   $('share').hidden = true;
-  $('cycle-info').textContent = 'Menyiapkan Binance…';
-  emptyCoins('Menyiapkan Binance…');
+  const site = platform.name;
+  $('cycle-info').textContent = `Menyiapkan ${site}…`;
+  emptyCoins(`Menyiapkan ${site}…`);
   emptyFeed('Menunggu aktivitas pertama…');
-  setState('running', 'Sedang memantau', 'Menyiapkan aplikasi Binance…');
-  resetFlow(form.mode, 'Menyiapkan aplikasi Binance…');
+  setState('running', 'Sedang memantau', `Menyiapkan ${site}…`);
+  resetFlow(form.mode, `Menyiapkan ${site}…`);
 }
 
 function addFeed(item, ts) {
@@ -377,7 +378,18 @@ function addCoin(e) {
     el('td', { class: 'why' },
       el('strong', { class: `act ${act.css}`, textContent: act.text }),
       el('span', { textContent: act.note }),
-      e.summary ? el('small', { textContent: `AI: ${e.summary}` }) : null)));
+      e.summary ? el('small', { textContent: `AI: ${e.summary}` }) : null,
+      chartThumb(e.chart, `${e.symbol} · ${label}`))));
+}
+
+/** Screenshot grafik 15 menit yang dibaca AI; klik untuk memperbesar. Kosong bila tidak ada. */
+function chartThumb(file, caption) {
+  if (!file) return null;
+  const img = el('img', { class: 'chart-thumb', alt: `Grafik 15 menit ${caption}` });
+  img.title = 'Klik untuk memperbesar';
+  img.addEventListener('click', () => img.classList.toggle('big'));
+  window.bot.chartImage(file).then((src) => { img.src = src; }).catch(() => img.remove());
+  return img;
 }
 
 /** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
@@ -431,7 +443,7 @@ function advanceFlow(entry) {
   const follower = flow.mode === 'follower';
   if (e?.type === 'cycle' && e.phase === 'start') {
     flow.nextAt = 0;
-    setFlow(0, 'Membuka daftar top gainers Futures di Binance');
+    setFlow(0, `Membuka daftar top gainers Futures di ${platform?.name || 'Binance'}`);
     return;
   }
   const waiting = m.match(/^Menunggu leader menganalisis (Top \d+)/);
@@ -634,7 +646,9 @@ async function loadJournal() {
     const s = report.stats;
     notice.hidden = !report.warning;
     notice.className = 'notice';
-    notice.textContent = 'Data harga Binance belum bisa diambil di jaringan ini; angka di bawah dari catatan terakhir.';
+    notice.textContent = platform?.id === 'tebbit'
+      ? 'Hasil posisi uji Tebbit belum bisa dinilai otomatis (tidak ada data candle); angka dari catatan terakhir.'
+      : 'Data harga Binance belum bisa diambil di jaringan ini; angka di bawah dari catatan terakhir.';
 
     const enough = s.closed >= s.required_trades;
     const passed = s.verdict.startsWith('LULUS');
@@ -664,6 +678,10 @@ async function loadJournal() {
         el('td', { class: 'num', textContent: price(t.exit_price) }),
         el('td', { class: `num ${signClass(t.pnl_capital_pct)}`, textContent: percent(t.pnl_capital_pct) }));
     });
+    $('analyses').replaceChildren(...(report.analyses?.length
+      ? [...report.analyses].reverse().map(analysisItem)
+      : [el('li', { class: 'idle', textContent: 'Belum ada koin yang dinilai AI di platform ini.' })]));
+
     $('trades').replaceChildren(...(rows.length ? rows
       : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
   } catch (err) {
@@ -675,6 +693,24 @@ async function loadJournal() {
   }
 }
 loaders.journal = loadJournal;
+
+/** Satu hasil analisis di riwayat: grafik, status, alasan singkat, dan ringkasan AI. */
+function analysisItem(a) {
+  const [label, css] = VERDICT[a.verdict] || ['Tidak dibaca', ''];
+  const when = new Date(a.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const example = a.status === 'contoh';
+  const action = example ? a.reason : a.status === 'open' || STATUS[a.status] ? 'Short uji kertas dibuka' : plain(a.reason);
+  const where = example ? 'Gambar contoh' : `Top ${a.rank} · ${ROLE_NAME[a.role] || 'Sendiri'}`;
+  return el('li', { class: 'hist-item' },
+    chartThumb(a.chart, `${a.symbol} · ${label}`) || el('span', { class: 'chart-thumb none', textContent: 'Tanpa grafik' }),
+    el('div', {},
+      el('div', { class: 'hist-head' },
+        el('strong', { class: 'sym', textContent: a.symbol }),
+        el('span', { class: `tag ${css}`, textContent: label }),
+        el('span', { class: 'hist-meta', textContent: `${where} · ${when}` })),
+      el('p', { class: 'hist-act', textContent: action }),
+      a.summary ? el('small', { textContent: `AI: ${a.summary}` }) : null));
+}
 $('journal-refresh').addEventListener('click', loadJournal);
 
 // --------------------------------------------------------------------------- posisi (Sell)
@@ -699,7 +735,7 @@ async function loadPositions() {
   $('pos-lede').textContent = leading
     ? 'Tutup posisi para pengikut. Sell baru aktif bila semua pengikut tersambung.'
     : role === 'single'
-      ? 'Tutup posisi uji kertas kapan saja. Tombol Binance tidak ditekan.'
+      ? `Tutup posisi uji kertas kapan saja. Tombol ${platform?.name || 'Binance'} tidak ditekan.`
       : 'Laptop ini pengikut: posisinya hanya bisa ditutup oleh pemimpin.';
   $('pos-refresh').disabled = true;
   try {
@@ -715,7 +751,7 @@ loaders.positions = loadPositions;
 
 async function loadOwnPositions(canSell) {
   const result = await window.bot.positions.list();
-  posNotice(result.warning ? 'Harga Binance belum bisa diambil di jaringan ini; hasil sementara tidak tampil.' : '', 'warn');
+  posNotice(result.warning ? `Harga ${platform?.name || 'Binance'} belum bisa diambil; hasil sementara tidak tampil.` : '', 'warn');
   $('pos-close-all').disabled = !result.positions.length;
   const rows = result.positions.map((p) => el('tr', {},
     el('td', {}, el('strong', { class: 'sym', textContent: p.symbol }), el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
@@ -732,7 +768,7 @@ async function loadOwnPositions(canSell) {
 
 async function sellOwn(symbol) {
   const label = symbol === 'semua' ? 'semua posisi' : `posisi ${symbol}`;
-  if (!window.confirm(`Tutup ${label}? (uji kertas, tombol Binance tidak ditekan)`)) return;
+  if (!window.confirm(`Tutup ${label}? (uji kertas, tombol ${platform?.name || 'Binance'} tidak ditekan)`)) return;
   try {
     const result = await window.bot.positions.close(symbol);
     const text = result.closed.map((c) => `${c.symbol} ${percent(c.pnl_capital_pct)} modal`).join(', ');
@@ -776,7 +812,7 @@ function followerCard(f, allConnected) {
 }
 
 async function sellTeam(target, symbol, label) {
-  if (!window.confirm(`Tutup ${label}? Pengikut menutupnya sendiri (uji kertas, tombol Binance tidak ditekan).`)) return;
+  if (!window.confirm(`Tutup ${label}? Pengikut menutupnya sendiri (uji kertas, tombol ${platform?.name || 'Binance'} tidak ditekan).`)) return;
   try {
     await window.bot.team.close(target, symbol);
     posNotice('Perintah Sell dikirim. Pengikut menutup posisinya dalam beberapa detik.', 'good');
@@ -1180,10 +1216,10 @@ setCounts();
 emptyCoins('Belum ada koin yang dinilai. Tekan Mulai memantau.');
 resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
 emptyFeed('Aktivitas bot akan muncul di sini.');
-window.bot.status().then(({ running }) => {
+window.bot.status().then(({ running, exchange }) => {
   if (running) {
     setState('running', 'Sedang memantau', 'Bot sedang bekerja.');
-    choosePlatform('binance'); // bot sudah berjalan: langsung ke dashboard
+    choosePlatform(exchange || 'binance'); // bot sudah berjalan: langsung ke dashboard
   }
 });
 
@@ -1219,6 +1255,7 @@ function choosePlatform(id) {
   const chosen = PLATFORMS.find((p) => p.id === id);
   if (!chosen?.ready) return; // bursa yang belum siap tidak pernah menjadi platform aktif
   platform = chosen;
+  window.bot.setPlatform(chosen.id).catch(() => {});
   $('platform-name').textContent = chosen.name;
   $('platform-logo').src = chosen.logo;
   $('platform-logo').parentElement.className = `plat-logo ${chosen.id}`;

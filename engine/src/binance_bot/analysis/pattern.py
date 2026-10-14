@@ -24,6 +24,10 @@ Hitung berapa kali garis kuning berada DI BAWAH garis magenta sebagai periode te
 - setiap kali garis kuning turun menembus ke bawah garis magenta dihitung 1;
 - bila di ujung kiri grafik garis kuning sudah di bawah garis magenta, itu juga dihitung 1;
 - bila garis kuning selalu di atas garis magenta, jawabannya 0.
+Penurunan SINGKAT tetap dihitung: walau hanya beberapa lilin dan garis kuning hanya sedikit
+menembus ke bawah garis magenta (garis berpotongan lalu kembali ke atas), itu 1 kali.
+Perhatikan khususnya bagian kanan grafik setelah harga naik: saat harga mendatar di puncak,
+garis kuning sering berpotongan dengan garis magenta berkali-kali.
 Telusuri satu per satu dengan teliti sebelum menjawab.
 
 Jawab HANYA dengan JSON valid, tanpa teks lain:

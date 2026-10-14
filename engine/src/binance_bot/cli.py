@@ -26,6 +26,7 @@ from binance_bot.tebbit_web.chrome import ChromeController, ChromeWindowControll
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import TebbitNavigator
 from binance_bot.workflows import (
+    ExampleWorkflow,
     FillTestWorkflow,
     FollowerWorkflow,
     JournalWorkflow,
@@ -226,12 +227,19 @@ def build_parser() -> argparse.ArgumentParser:
     fill.add_argument(
         "--jumlah", type=parse_number, required=True, help="Ukuran order USDT, mis. 5 atau 5,5"
     )
+
+    example = sub.add_parser(
+        "contoh", help="AI menilai gambar grafik 15 menit (PNG); hasilnya masuk riwayat analisis."
+    )
+    example.add_argument("gambar", type=Path, help="File PNG grafik 15 menit")
+    example.add_argument("--koin", required=True, help="Pair, mis. MAGICUSDT")
+    example.add_argument("--catatan", default="", help="Mis. penilaian Pak Saputra")
     return parser
 
 
 BURSA = ("binance", "tebbit")
 TEBBIT_JOURNAL = Path("journal/sop-tebbit.jsonl")
-TEBBIT_COMMANDS = ("single", "leader", "follower", "jurnal", "posisi", "uji-isi")
+TEBBIT_COMMANDS = ("single", "leader", "follower", "jurnal", "posisi", "uji-isi", "contoh")
 
 
 def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, MarketData]:
@@ -280,6 +288,16 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
         return JournalWorkflow(params_from(args), journal, market, as_json=args.json)
+    if args.command == "contoh":
+        return ExampleWorkflow(
+            args.gambar,
+            args.koin,
+            args.catatan,
+            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT),
+            journal,
+            settings.screenshot_dir,
+            SopParams(),
+        )
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
         return PositionsWorkflow(params_from(args), journal, market, close=target)

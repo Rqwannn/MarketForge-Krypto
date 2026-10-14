@@ -9,11 +9,12 @@ import pytest
 from binance_bot.analysis import AnalysisRecord
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
-from binance_bot.exceptions import MarketDataError, ScreenReadError
+from binance_bot.exceptions import BotError, MarketDataError, ScreenReadError
 from binance_bot.hub import AnalysisStore, HubClient, HubServer, LeaderPlan, SharedAnalysis
 from binance_bot.market import Quote
 from binance_bot.strategy import Journal, JournalEntry, SopParams
 from binance_bot.workflows import (
+    ExampleWorkflow,
     FollowerWorkflow,
     JournalWorkflow,
     LeaderWorkflow,
@@ -21,6 +22,7 @@ from binance_bot.workflows import (
     SingleWorkflow,
     SopTrader,
 )
+from binance_bot.workflows.sop import coin_event
 from fakes import (
     NEVER,
     OK,
@@ -513,6 +515,34 @@ def test_journal_report_json_for_the_desktop_app(tmp_path: Path) -> None:
     assert [t["symbol"] for t in report["trades"]] == ["STRKUSDT"]  # yang dilewati tidak ikut
 
 
+def test_journal_report_lists_ai_analyses_with_their_chart(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    shots = ["screenshots/a_rank2.png", "screenshots/a_rank2_15m.png"]
+    journal.append(
+        JournalEntry(
+            id="t",
+            created_at=0.0,
+            symbol="WUSDT",
+            rank=2,
+            verdict="tunggu",
+            reason="pola garis kuning TUNGGU",
+            ai_summary="Baru sekali di bawah.",
+            screenshots=shots,
+        )
+    )
+    journal.append(JournalEntry(id="x", created_at=1.0, symbol="XUSDT", rank=3, reason="gagal"))
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(), journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
+    ).run()  # type: ignore[arg-type]
+    (analysis,) = json.loads(out[0])["analyses"]  # yang tidak dinilai AI tidak ikut
+    assert analysis["symbol"] == "WUSDT"
+    assert analysis["verdict"] == "tunggu"
+    assert analysis["chart"] == "screenshots/a_rank2_15m.png"
+    assert analysis["summary"] == "Baru sekali di bawah."
+    assert coin_event(journal.load()[0])["event"]["chart"] == "screenshots/a_rank2_15m.png"
+
+
 def test_journal_report_still_works_when_binance_api_is_blocked(tmp_path: Path) -> None:
     class BlockedMarket(FakeMarket):
         def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
@@ -669,3 +699,46 @@ def test_one_follower_covers_all_five_tops_the_leader_plays_over_a_real_hub(
         "C5USDT": "open",
     }
     assert follower_nav.filled == ["100", "100"]
+
+
+def test_example_chart_is_judged_and_kept_in_history_without_counting_as_trade(
+    tmp_path: Path,
+) -> None:
+    image = tmp_path / "magic.png"
+    image.write_bytes(b"\x89PNG")
+    journal = Journal(tmp_path / "sop.jsonl")
+    shots = tmp_path / "screenshots"
+    ExampleWorkflow(
+        image,
+        "magicusdt",
+        "menarik (Pak Saputra)",
+        FakePatternAnalyzer(OK),
+        journal,
+        shots,
+        SopParams(),
+        wall_clock=lambda: NOW.timestamp(),
+    ).run()  # type: ignore[arg-type]
+    (entry,) = journal.load()
+    assert (entry.symbol, entry.status, entry.role, entry.verdict) == (
+        "MAGICUSDT",
+        "contoh",
+        "contoh",
+        "ok",
+    )
+    assert entry.reason == "Contoh: menarik (Pak Saputra)"
+    assert entry.screenshots[0].endswith("_contoh_MAGICUSDT_15m.png")
+    assert Path(entry.screenshots[0]).read_bytes() == b"\x89PNG"
+
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(), journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
+    ).run()  # type: ignore[arg-type]
+    report = json.loads(out[0])
+    assert report["stats"]["skipped"] == 0 and report["trades"] == []
+    assert [a["symbol"] for a in report["analyses"]] == ["MAGICUSDT"]
+
+    for symbol, name in [("MAGIC", "magic.png"), ("MAGICUSDT", "tidak-ada.png")]:
+        with pytest.raises(BotError):
+            ExampleWorkflow(
+                tmp_path / name, symbol, "", FakePatternAnalyzer(OK), journal, shots, SopParams()
+            ).run()

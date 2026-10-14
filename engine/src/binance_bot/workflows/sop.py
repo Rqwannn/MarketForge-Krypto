@@ -65,7 +65,13 @@ def coin_event(entry: JournalEntry) -> dict[str, dict[str, Any]]:
         entry_price=entry.entry_price,
         target_price=entry.target_price,
         stop_price=entry.stop_price,
+        chart=chart_of(entry),
     )
+
+
+def chart_of(entry: JournalEntry) -> str | None:
+    """Screenshot grafik 15 menit yang dibaca AI (yang terakhir diambil), bila ada."""
+    return next((s for s in reversed(entry.screenshots) if s.endswith("_15m.png")), None)
 
 
 class _Skip(Exception):
