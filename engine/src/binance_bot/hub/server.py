@@ -58,6 +58,12 @@ def _handler_for(
             # `now` dari jam hub, agar umur analisis benar walau jam tiap laptop berbeda.
             now = clock()
             query = parse_qs(url.query)
+            if "plan" in query:
+                ranks, done, started = store.plan()
+                self._send(
+                    200, {"now": now, "ranks": list(ranks), "done": done, "started": started}
+                )
+                return
             rank_text = query.get("rank", [None])[0]
             if rank_text is not None:
                 found = store.by_rank(int(rank_text)) if rank_text.isdigit() else None

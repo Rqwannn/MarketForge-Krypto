@@ -15,17 +15,21 @@ from binance_bot.workflows.sop import SopTrader, log_top_gainers
 logger = logging.getLogger(__name__)
 
 _HUB_POLL_S = 5.0
+_PLAN_WAIT_S = 60.0  # menunggu leader mencatat rencana putaran
+_PLAN_FRESH_S = 600.0  # rencana lebih tua dari ini dianggap putaran lama
 
 
 class FollowerWorkflow:
-    """Mode banyak, laptop follower: ikut entry berdasarkan keputusan Haiku di laptop leader.
+    """Mode banyak, laptop follower: ikut entry berdasarkan keputusan AI di laptop leader.
 
-    Follower tidak membaca grafik sendiri. Ia menunggu hasil leader untuk Top yang ditugaskan
-    di putaran ini, lalu:
+    Follower tidak membaca grafik sendiri. Untuk tiap Top yang ia ikuti, ia menunggu hasil leader
+    untuk Top itu di putaran ini, lalu:
     - pola tidak OK (TUNGGU/JANGAN): dicatat sebagai tidak masuk, Binance tidak disentuh;
     - pola OK: membuka koin YANG SAMA dengan leader (dicari dari nama pair di daftar top gainers,
       karena peringkat bisa bergeser), lalu menjalankan sisa SOP: biaya, slot, ukuran posisi,
       kolom Jumlah, dan pintu order dry run.
+    `rank` = satu Top tertentu; `rank=None` = semua Top yang dimainkan leader di putaran ini
+    (rencana putaran dari hub), diproses berurutan sampai slot posisi penuh.
     Modal, ukuran posisi, dan jurnal milik laptop ini sendiri. Hasil terakhir ada di `self.result`.
     Dengan SINYAL=data, follower membaca pola sendiri dari data candle Top miliknya.
     """
@@ -39,7 +43,7 @@ class FollowerWorkflow:
         trader: SopTrader,
         client: HubClient | None,
         *,
-        rank: int = 1,
+        rank: int | None = 1,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -62,75 +66,116 @@ class FollowerWorkflow:
         if blocker:
             logger.info("Tidak masuk: %s", blocker)
             return
-        if not uses_ai:
-            self._nav.prepare()
-            log_top_gainers(self._nav.open_top_gainers())
-            symbol = self._nav.open_gainer(self._rank)
-            self.result = self._trader.trade(self._rank, symbol, None)
-            return
-
         try:
-            shared = self._wait_for_leader()
+            ranks = self._ranks_to_follow(uses_ai)
         except HubError as exc:
             logger.warning("Tidak masuk: %s", exc)
             return
+
+        handled: set[str] = set()
+        for rank in ranks:
+            blocker = self._trader.slot_blocker()
+            if blocker:
+                logger.info("Berhenti mengikuti: %s", blocker)
+                break
+            outcome = self._follow(rank, uses_ai, handled)
+            if outcome is not None:
+                self.result = outcome
+
+    def _ranks_to_follow(self, uses_ai: bool) -> list[int]:
+        if self._rank is not None:
+            return [self._rank]
+        if not uses_ai:
+            return list(range(1, MAX_RANK + 1))
+        return self._leader_ranks()
+
+    def _leader_ranks(self) -> list[int]:
+        """Top yang dimainkan leader di putaran ini (menunggu rencana putaran yang masih baru)."""
+        assert self._client is not None
+        deadline = self._clock() + _PLAN_WAIT_S
+        while True:
+            plan = self._client.plan()
+            if plan.ranks and plan.age_s <= _PLAN_FRESH_S:
+                logger.info("Leader memainkan Top %s", ", ".join(str(r) for r in plan.ranks))
+                return [r for r in plan.ranks if 1 <= r <= MAX_RANK]
+            if self._clock() >= deadline:
+                raise HubError("Leader belum memulai putaran baru; tidak ada Top untuk diikuti.")
+            logger.info("Menunggu rencana putaran leader...")
+            self._sleep(_HUB_POLL_S)
+
+    def _follow(self, rank: int, uses_ai: bool, handled: set[str]) -> JournalEntry | None:
+        if not uses_ai:
+            self._nav.prepare()
+            log_top_gainers(self._nav.open_top_gainers())
+            symbol = self._nav.open_gainer(rank)
+            return self._trader.trade(rank, symbol, None)
+
+        try:
+            shared = self._wait_for_leader(rank)
+        except HubError as exc:
+            logger.warning("Tidak masuk Top %d: %s", rank, exc)
+            return None
+        if shared is None:
+            logger.info("Leader tidak menilai Top %d di putaran ini", rank)
+            return None
         record = shared.record
         reading = record.reading
         verdict = reading.pattern.verdict(self._trader.params.min_crosses)
         logger.info(
             "Hasil leader untuk Top %d: %s, garis kuning %d kali di bawah MA25 -> %s "
             "(umur %.1f menit)",
-            self._rank,
+            rank,
             record.symbol,
             reading.pattern.below_count,
             verdict.upper(),
             shared.age_s / 60,
         )
+        if record.symbol in handled:
+            logger.info("%s sudah diikuti di putaran ini, dilewati", record.symbol)
+            return None
+        handled.add(record.symbol)
         if verdict != "ok":
-            # Haiku di leader tidak memberi sinyal masuk: follower tidak perlu membuka Binance.
-            self.result = self._trader.skip(
-                self._rank,
-                record.symbol,
-                f"pola garis kuning {verdict.upper()} (dari leader)",
-                reading,
+            # AI di leader tidak memberi sinyal masuk: follower tidak perlu membuka Binance.
+            return self._trader.skip(
+                rank, record.symbol, f"pola garis kuning {verdict.upper()} (dari leader)", reading
             )
-            return
 
         self._nav.prepare()
         rows = self._nav.open_top_gainers()
         log_top_gainers(rows)
         now = next((row.rank for row in rows if row.symbol == record.symbol), None)
         if now is None or now > MAX_RANK:
-            self.result = self._trader.skip(
-                self._rank,
+            return self._trader.skip(
+                rank,
                 record.symbol,
                 f"{record.symbol} sudah tidak di top {MAX_RANK} gainers saat follower masuk",
                 reading,
             )
-            return
         opened = self._nav.open_gainer(now)
         if opened != record.symbol:
-            self.result = self._trader.skip(
+            return self._trader.skip(
                 now,
                 record.symbol,
                 f"peringkat bergeser: yang terbuka {opened}, bukan {record.symbol}",
                 reading,
             )
-            return
-        self.result = self._trader.trade(now, opened, lambda _symbol, _chart: reading)
+        return self._trader.trade(now, opened, lambda _symbol, _chart: reading)
 
-    def _wait_for_leader(self) -> SharedAnalysis:
-        """Tunggu leader selesai menilai Top milik follower ini di putaran ini."""
+    def _wait_for_leader(self, rank: int) -> SharedAnalysis | None:
+        """Tunggu leader menilai Top ini; None bila leader selesai putaran tanpa menilainya."""
         assert self._client is not None
         deadline = self._clock() + self._settings.follower_wait_s
         while True:
-            shared = self._client.by_rank(self._rank)
+            shared = self._client.by_rank(rank)
             if shared is not None and shared.age_s <= self._settings.analysis_ttl_s:
                 return shared
+            plan = self._client.plan()
+            if plan.done and plan.age_s <= _PLAN_FRESH_S:
+                return None  # leader sudah selesai putaran ini dan tidak menilai Top ini
             if self._clock() >= deadline:
                 raise HubError(
-                    f"Leader belum menilai Top {self._rank} setelah "
+                    f"Leader belum menilai Top {rank} setelah "
                     f"{self._settings.follower_wait_s:.0f} detik. Pastikan leader memantau Top ini."
                 )
-            logger.info("Menunggu leader menganalisis Top %d...", self._rank)
+            logger.info("Menunggu leader menganalisis Top %d...", rank)
             self._sleep(_HUB_POLL_S)

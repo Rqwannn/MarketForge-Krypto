@@ -347,7 +347,7 @@ handle('team:invite', (peerId, rank) => {
   if (!team?.enabled) throw new Error('Token hub belum diatur di laptop ini. Hubungi admin.');
   if (team.membership || uiRole !== 'leader') throw new Error('Pilih peran Pemimpin di halaman Pantau dulu.');
   if (!discovery.peers.has(peerId)) throw new Error('Laptop itu sudah tidak terlihat. Cari ulang.');
-  if (!Number.isInteger(rank) || rank < 1 || rank > 5) throw new Error('Top gainer harus 1 sampai 5');
+  if (rank !== '*' && (!Number.isInteger(rank) || rank < 1 || rank > 5)) throw new Error('Top gainer harus 1 sampai 5, atau semua');
   team.invite(peerId, rank);
   followerNames.set(peerId, discovery.peers.get(peerId).name);
   syncPresence();

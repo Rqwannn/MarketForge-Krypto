@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Sequence
 
 from binance_bot.analysis import AnalysisRecord
 
@@ -11,12 +12,31 @@ class AnalysisStore:
     def __init__(self) -> None:
         self._records: dict[str, AnalysisRecord] = {}
         self._ranks: dict[int, str] = {}  # Top -> koin yang dinilai di putaran ini
+        self._plan: tuple[int, ...] = ()  # Top yang dimainkan leader di putaran ini
+        self._plan_started = 0.0
+        self._plan_done = True
         self._lock = threading.Lock()
 
-    def begin_cycle(self) -> None:
-        """Putaran baru: peta Top dikosongkan; hasil per koin tetap disimpan untuk dipakai ulang."""
+    def begin_cycle(self, ranks: Sequence[int] = (), at: float = 0.0) -> None:
+        """Putaran baru: peta Top dikosongkan; hasil per koin tetap disimpan untuk dipakai ulang.
+
+        `ranks` = Top yang akan dimainkan leader, agar follower tahu mana yang perlu ditunggu.
+        """
         with self._lock:
             self._ranks.clear()
+            self._plan = tuple(ranks)
+            self._plan_started = at
+            self._plan_done = False
+
+    def end_cycle(self) -> None:
+        """Leader selesai menilai semua Top putaran ini (follower tak perlu menunggu lagi)."""
+        with self._lock:
+            self._plan_done = True
+
+    def plan(self) -> tuple[tuple[int, ...], bool, float]:
+        """(Top yang dimainkan, putaran selesai?, waktu mulai putaran dengan jam leader)."""
+        with self._lock:
+            return self._plan, self._plan_done, self._plan_started
 
     def put(self, record: AnalysisRecord) -> None:
         with self._lock:

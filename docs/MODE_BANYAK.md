@@ -119,6 +119,13 @@ Setiap follower punya jurnal sendiri; jalankan `make jurnal` di laptop masing-ma
 
 ## 5. Cara pengikut mengikuti pemimpin
 
+- Pengikut bisa ditugaskan ke **satu Top** (`make follower RANK=2`) atau ke **semua Top**
+  (`make follower` dengan `--semua`; di aplikasi pilihan "Semua top", yang menjadi bawaan). Dengan
+  "semua", pengikut mengikuti Top mana pun yang dimainkan pemimpin di putaran itu, berurutan, dan
+  berhenti ketika slot posisi penuh (maksimal 2). Pemimpin mengumumkan rencana putarannya di hub
+  (Top mana yang dimainkan dan apakah sudah selesai), jadi pengikut tidak menunggu Top yang tidak
+  dimainkan.
+
 - Pengikut **tidak membaca grafik**. Ia meminta hasil Haiku pemimpin untuk **Top miliknya di
   putaran ini** (hub mencatat koin per Top dan mengosongkannya setiap putaran baru), lalu
   menunggu sampai pemimpin selesai menilai Top itu, paling lama `BOT_FOLLOWER_WAIT_S` (300 detik).

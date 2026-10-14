@@ -43,7 +43,8 @@ Selama bot bekerja, mouse dan keyboard laptop itu jangan dipakai.
    menerima ajakan dan sinyal putaran yang ditandatangani kunci privat itu (Ed25519), jadi
    laptop lain tidak bisa mengaku pemimpin walau membuat kuncinya sendiri.
 3. Laptop pemimpin: halaman **Pantau**, pilih peran **Pemimpin**.
-4. Halaman **Cek laptop** > **Lihat laptop**: pilih Top untuk laptop lain, tekan **Jadikan pengikut**.
+4. Halaman **Cek laptop** > **Lihat laptop**: pilih Top untuk laptop lain (bawaan **Semua top**: mengikuti
+   Top mana pun yang dimainkan pemimpin), tekan **Jadikan pengikut**.
 5. Laptop yang diajak menampilkan ajakan; pemiliknya mengisi modal lalu menekan **Terima**.
    Perannya otomatis menjadi Pengikut untuk Top itu, dengan alamat hub dari laptop pemimpin.
 6. Setiap pemimpin memulai putaran, bot di laptop pengikut ikut mulai sendiri. Pengikut tidak

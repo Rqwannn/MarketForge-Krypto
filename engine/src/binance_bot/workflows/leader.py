@@ -78,8 +78,16 @@ class LeaderWorkflow:
                 self._hub.stop()
 
     def run_cycle(self) -> list[AnalysisRecord]:
+        # Rencana (Top yang dimainkan) dicatat sebelum sinyal mulai, agar follower tahu Top mana
+        # yang perlu ditunggu, dan ditandai selesai walau putaran gagal di tengah jalan.
+        self._store.begin_cycle(self._ranks, self._wall_clock())
+        try:
+            return self._cycle()
+        finally:
+            self._store.end_cycle()
+
+    def _cycle(self) -> list[AnalysisRecord]:
         logger.info("Siklus analisis dimulai", extra=event("cycle", phase="start"))
-        self._store.begin_cycle()
         self._nav.prepare()
         stamp = f"{self._now():%Y%m%d_%H%M%S}"
         rows = {row.rank: row for row in self._nav.open_top_gainers()}

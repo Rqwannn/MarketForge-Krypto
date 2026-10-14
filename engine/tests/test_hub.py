@@ -52,6 +52,16 @@ def test_follower_reads_the_leaders_result_for_its_rank_in_this_cycle(
     assert client.get("WUSDT") is not None  # hasil lama tetap ada untuk dipakai ulang
 
 
+def test_follower_reads_the_leaders_plan_for_this_cycle(hub: tuple[AnalysisStore, str]) -> None:
+    store, url = hub
+    client = HubClient(url, TOKEN)
+    store.begin_cycle([1, 2, 3, 4, 5], at=1500.0)  # jam hub 1600: putaran berumur 100 detik
+    plan = client.plan()
+    assert plan.ranks == (1, 2, 3, 4, 5) and plan.done is False and plan.age_s == 100.0
+    store.end_cycle()
+    assert client.plan().done is True
+
+
 def test_unknown_symbol_is_none(hub: tuple[AnalysisStore, str]) -> None:
     _, url = hub
     assert HubClient(url, TOKEN).get("ZKUSDT") is None

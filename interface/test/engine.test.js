@@ -41,6 +41,12 @@ test('pengikut dari ajakan pemimpin: alamat hub ikut, dan divalidasi', () => {
   }
 });
 
+test('pengikut semua top: --semua; angka di luar 1..5 tetap ditolak', () => {
+  assert.deepEqual(buildArgs('follower', { rank: '*', modal: '100' }), ['--events', 'follower', '--semua', '--modal', '100']);
+  assert.deepEqual(buildArgs('follower', { rank: 3, modal: '100' }).slice(0, 4), ['--events', 'follower', '--rank', '3']);
+  for (const rank of [0, 6, '**', 'semua']) assert.throws(() => buildArgs('follower', { rank, modal: '100' }), InputError, String(rank));
+});
+
 test('hanya Binance yang bisa dijalankan; bursa lain ditolak', () => {
   assert.deepEqual(buildArgs('single', { exchange: 'binance', ranks: [1], modal: '100' }).slice(0, 2), ['--events', 'single']);
   for (const exchange of ['tebbit', 'bybit', '', 'BINANCE', null]) {

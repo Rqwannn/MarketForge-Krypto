@@ -128,3 +128,23 @@ test('perintah Sell dari laptop tanpa kunci pemimpin diabaikan', () => {
   team.evaluate([leaderPeer({ inv: '11111111:2', cls: `${NOW - 1000}:*:*` }, TOKEN, false)]);
   assert.deepEqual(events.filter(([name]) => name === 'close'), []);
 });
+
+test('ajakan "semua top": dikodekan, dibaca pengikut, dan ikut diumumkan sebagai tugas pengikut', () => {
+  assert.equal(encodeInvites(new Map([[ME, '*'], [LEADER, 3]])), '11111111:*,aaaaaaaa:3');
+  assert.deepEqual([...decodeInvites('11111111:*,aaaaaaaa:7,bbbbbbbb:*')], [['11111111', '*'], ['bbbbbbbb', '*']]);
+
+  const { team, events } = follower();
+  team.evaluate([leaderPeer({ inv: '11111111:*' })]);
+  assert.deepEqual(events, [['invite', { leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: '*' }]]);
+  team.accept({ leaderId: LEADER, leaderName: 'P', rank: '*', modal: '100' });
+  assert.deepEqual(team.fields('follower'), { leader: 'aaaaaaaa', rank: '*' });
+
+  team.evaluate([leaderPeer({ inv: '11111111:*', cycle: String(NOW - 1000) })]);
+  assert.deepEqual(events.at(-1), ['start', { leaderName: 'MacBook Pemimpin', rank: '*', modal: '100', hub: 'http://192.168.1.19:8765' }]);
+
+  const txt = { id: ME, name: 'L', role: 'follower', state: 'idle', os: 'win32', leader: 'aaaaaaaa', rank: '*' };
+  const view = new Team({ myId: LEADER, token: TOKEN });
+  view.invite(ME, '*');
+  const peer = { id: ME, name: 'L', role: 'follower', self: false, team: teamFieldsFrom({ ...txt, sig: sign(TOKEN, txt) }, TOKEN) };
+  assert.deepEqual([view.describe(peer).invitedRank, view.describe(peer).followerRank], ['*', '*']);
+});

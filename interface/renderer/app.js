@@ -34,6 +34,8 @@ const PLATFORMS = [
   { id: 'binance', name: 'Binance', logo: 'img/binance.png', note: 'Futures · pantau top gainers', ready: true },
   { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Dalam pengembangan · tebbit.io', ready: false },
 ];
+/** Top tugas pengikut: angka 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
+const rankLabel = (rank) => (rank === '*' ? 'Semua top' : `Top ${rank}`);
 const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin' };
 const ICONS = {
   play: ['M8 5v14l11-7z'],
@@ -196,14 +198,15 @@ function mark(group, isOn) {
 }
 
 function watchedCount() {
-  return form.mode === 'follower' ? 1 : form.ranks.length;
+  if (form.mode !== 'follower') return form.ranks.length;
+  return form.rank === '*' ? RANKS.length : 1;
 }
 
 function render() {
   const multi = form.mode !== 'follower';
   mark($('mode'), (v) => v === form.mode);
   mark($('interval'), (v) => Number(v) === Number(form.interval));
-  const chosen = multi ? form.ranks : [form.rank];
+  const chosen = multi ? form.ranks : form.rank === '*' ? RANKS : [form.rank];
   mark($('ranks'), (v) => chosen.includes(Number(v)));
   for (const node of document.querySelectorAll('[data-modes]')) {
     node.hidden = !node.dataset.modes.split(' ').includes(form.mode);
@@ -211,7 +214,9 @@ function render() {
   $('mode-note').textContent = MODE_NOTE[form.mode];
   updateLeaderLock();
   $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
-  $('ranks-note').textContent = multi ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih` : 'Pilih satu';
+  $('ranks-note').textContent = multi
+    ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih`
+    : form.rank === '*' ? 'Mengikuti semua Top yang dimainkan pemimpin' : 'Pilih satu';
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
   if (state === 'stopped') {
     $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
@@ -755,7 +760,7 @@ function followerCard(f, allConnected) {
   return el('li', { class: 'follower' },
     el('div', { class: 'f-head' },
       el('span', { class: 'icon' }, icon('laptop')),
-      el('div', {}, el('strong', { textContent: f.name }), el('span', { textContent: `Top ${f.rank}${f.activity ? ` · ${f.activity}` : ''}` })),
+      el('div', {}, el('strong', { textContent: f.name }), el('span', { textContent: `${rankLabel(f.rank)}${f.activity ? ` · ${f.activity}` : ''}` })),
       el('span', { class: `tag ${css}`, textContent: state })),
     el('div', { class: 'f-positions' }, ...positions));
 }
@@ -968,18 +973,20 @@ function peerActions(p) {
     }
   };
   if (p.followerRank) {
-    return [el('span', { class: 'tag follower', textContent: `Pengikut · Top ${p.followerRank}` }),
+    return [el('span', { class: 'tag follower', textContent: `Pengikut · ${rankLabel(p.followerRank)}` }),
       el('button', { class: 'secondary small', textContent: 'Lepas', onclick: act(() => window.bot.team.uninvite(p.id)) })];
   }
   if (p.invitedRank) {
-    return [el('span', { class: 'tag tunggu', textContent: `Menunggu jawaban · Top ${p.invitedRank}` }),
+    return [el('span', { class: 'tag tunggu', textContent: `Menunggu jawaban · ${rankLabel(p.invitedRank)}` }),
       el('button', { class: 'secondary small', textContent: 'Batal', onclick: act(() => window.bot.team.uninvite(p.id)) })];
   }
+  // Default "Semua top": pengikut mengikuti Top mana pun yang dimainkan pemimpin di putaran itu.
   const select = el('select', { class: 'rank-select' },
+    el('option', { value: '*', textContent: 'Semua top' }),
     ...RANKS.map((r) => el('option', { value: String(r), textContent: `Top ${r}` })));
   select.setAttribute('aria-label', `Top gainer untuk ${p.name}`);
   return [select,
-    el('button', { class: 'primary small', textContent: 'Jadikan pengikut', onclick: act(() => window.bot.team.invite(p.id, Number(select.value))) })];
+    el('button', { class: 'primary small', textContent: 'Jadikan pengikut', onclick: act(() => window.bot.team.invite(p.id, select.value === '*' ? '*' : Number(select.value))) })];
 }
 
 // --------------------------------------------------------------------------- kelompok
@@ -1004,7 +1011,7 @@ function applyTeam(info) {
   const member = info.membership;
   $('group').hidden = !member;
   if (member) {
-    $('group-title').textContent = `Pengikut dari ${member.leaderName} · Top ${member.rank}`;
+    $('group-title').textContent = `Pengikut dari ${member.leaderName} · ${rankLabel(member.rank)}`;
     $('group-sub').textContent = `Bot mulai otomatis setiap pemimpin memulai putaran (modal ${member.modal} USDT).`;
     if (form.mode !== 'follower' || form.rank !== member.rank) {
       form.mode = 'follower';
@@ -1020,7 +1027,7 @@ let pendingInvite = null;
 function showInvite(invite) {
   pendingInvite = invite;
   $('invite-title').textContent = `${invite.leaderName} mengajak laptop ini`;
-  $('invite-text').textContent = `Menjadi Pengikut untuk Top ${invite.rank}. Bot laptop ini akan mulai otomatis setiap pemimpin memulai putaran, memakai hasil AI dari pemimpin.`;
+  $('invite-text').textContent = `Menjadi Pengikut untuk ${invite.rank === '*' ? 'semua Top yang dimainkan pemimpin' : rankLabel(invite.rank)}. Bot laptop ini akan mulai otomatis setiap pemimpin memulai putaran, memakai hasil AI dari pemimpin.`;
   $('invite-modal').value = form.modal;
   $('invite-error').textContent = '';
   $('invite').hidden = false;

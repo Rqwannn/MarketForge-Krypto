@@ -97,8 +97,11 @@ function buildArgs(mode, params = {}) {
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
     const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];
-    return ['--events', 'follower', '--rank', String(number(p.rank, 'Top gainer', 1, MAX_RANK, true)),
-      ...hub, '--modal', modalOf(p.modal)];
+    // '*' = ikuti semua Top yang dimainkan pemimpin di putaran ini.
+    const tops = p.rank === '*'
+      ? ['--semua']
+      : ['--rank', String(number(p.rank, 'Top gainer', 1, MAX_RANK, true))];
+    return ['--events', 'follower', ...tops, ...hub, '--modal', modalOf(p.modal)];
   }
   const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN));
   const args = ['--events', mode, '--ranks', ranksOf(p.ranks).join(','), '--interval', interval];

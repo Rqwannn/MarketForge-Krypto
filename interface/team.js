@@ -49,12 +49,15 @@ function encodeInvites(invites) {
   return [...invites].map(([id, rank]) => `${shortId(id)}:${rank}`).join(',');
 }
 
-/** "abcd1234:2,..." -> Map(id pendek -> top). Bagian yang tidak valid diabaikan. */
+/** Top tugas pengikut: 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
+const parseRank = (value) => (value === '*' ? '*' : Number(value));
+
+/** "abcd1234:2,ef567890:*" -> Map(id pendek -> top atau '*'). Bagian yang tidak valid diabaikan. */
 function decodeInvites(text) {
   const invites = new Map();
   for (const part of String(text || '').split(',')) {
-    const match = /^([0-9a-f]{8}):([1-5])$/.exec(part);
-    if (match) invites.set(match[1], Number(match[2]));
+    const match = /^([0-9a-f]{8}):([1-5]|\*)$/.exec(part);
+    if (match) invites.set(match[1], parseRank(match[2]));
   }
   return invites;
 }
@@ -64,13 +67,13 @@ function teamFieldsFrom(txt, token) {
   if (!isSigned(token, txt)) {
     return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, close: null };
   }
-  const rank = Number(txt.rank);
+  const rank = txt.rank === '*' ? '*' : Number(txt.rank);
   const close = CLOSE.exec(txt.cls || '');
   return {
     verified: true,
     invites: decodeInvites(txt.inv),
     leader: /^[0-9a-f]{8}$/.test(txt.leader || '') ? txt.leader : '',
-    rank: Number.isInteger(rank) && rank >= 1 && rank <= 5 ? rank : null,
+    rank: rank === '*' || (Number.isInteger(rank) && rank >= 1 && rank <= 5) ? rank : null,
     cycle: Number.isFinite(Number(txt.cycle)) ? Number(txt.cycle) : 0,
     close: close ? { seq: Number(close[1]), target: close[2], symbol: close[3] } : null,
   };

@@ -9,7 +9,7 @@ from binance_bot.analysis import AnalysisRecord
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
 from binance_bot.exceptions import MarketDataError, ScreenReadError
-from binance_bot.hub import AnalysisStore, SharedAnalysis
+from binance_bot.hub import AnalysisStore, HubClient, HubServer, LeaderPlan, SharedAnalysis
 from binance_bot.market import Quote
 from binance_bot.strategy import Journal, JournalEntry, SopParams
 from binance_bot.workflows import (
@@ -315,34 +315,50 @@ def test_leader_evaluates_a_pair_once_per_cycle_when_ranks_shift(tmp_path: Path)
 
 
 class FakeClient:
-    """Hub tiruan: hasil leader untuk Top tertentu muncul setelah beberapa kali ditanya."""
+    """Hub tiruan: hasil leader per Top (muncul setelah beberapa kali ditanya) + rencana."""
 
-    def __init__(self, shared: AnalysisRecord | None, appears_after_polls: int = 0) -> None:
-        self.shared = shared
+    def __init__(
+        self,
+        shared: AnalysisRecord | dict[int, AnalysisRecord] | None,
+        appears_after_polls: int = 0,
+        *,
+        plan_done: bool = False,
+    ) -> None:
+        self.results = shared if isinstance(shared, dict) else ({2: shared} if shared else {})
         self.appears_after_polls = appears_after_polls
+        self.plan_done = plan_done
         self.polls = 0
         self.ranks: list[int] = []
 
     def by_rank(self, rank: int) -> SharedAnalysis | None:
         self.polls += 1
         self.ranks.append(rank)
-        if self.shared is None or self.polls <= self.appears_after_polls:
+        record = self.results.get(rank)
+        if record is None or self.polls <= self.appears_after_polls:
             return None
-        return SharedAnalysis(self.shared, 60.0)
+        return SharedAnalysis(record, 60.0)
+
+    def plan(self) -> LeaderPlan:
+        return LeaderPlan(tuple(sorted(self.results)) or (2,), self.plan_done, 5.0)
 
 
 def make_follower(
-    tmp_path: Path, client: FakeClient, symbols: dict[int, str | Any], wait_s: float = 300.0
+    tmp_path: Path,
+    client: FakeClient,
+    symbols: dict[int, str | Any],
+    wait_s: float = 300.0,
+    rank: int | None = 2,
+    **params: Any,
 ) -> tuple[FollowerWorkflow, FakeNavigator, Journal]:
     clock = Clock()
     nav = FakeNavigator(symbols)
-    trader, _, journal, _ = make_trader(tmp_path, nav)
+    trader, _, journal, _ = make_trader(tmp_path, nav, role="follower", **params)
     follower = FollowerWorkflow(
         Settings(screenshot_dir=tmp_path / "shots", follower_wait_s=wait_s),
         nav,
         trader,
         client,
-        rank=2,
+        rank=rank,
         sleep=clock.sleep,
         clock=clock,  # type: ignore[arg-type]
     )
@@ -355,11 +371,50 @@ def test_follower_enters_the_same_coin_as_the_leader_even_after_ranks_shift(tmp_
     client = FakeClient(leader_result, appears_after_polls=2)
     follower, nav, _ = make_follower(tmp_path, client, {2: "WUSDT", 3: "CFXUSDT"})
     follower.run()
-    assert client.ranks == [2, 2, 2]  # menunggu hasil Top 2 putaran ini
+    assert client.ranks[:3] == [2, 2, 2]  # menunggu hasil Top 2 putaran ini
     assert follower.result is not None
     assert (follower.result.symbol, follower.result.status) == ("CFXUSDT", "open")
-    assert follower.result.pattern_ai == OK.as_dict()  # pola dari Haiku di leader
+    assert follower.result.pattern_ai == OK.as_dict()  # pola dari AI di leader
     assert nav.filled == ["100"]
+
+
+def test_follower_with_all_tops_follows_every_top_the_leader_plays(tmp_path: Path) -> None:
+    # Leader memainkan Top 1-5 (hanya 1, 2, 3 yang diwakili di hub). Pengikut bukan hanya Top 1.
+    results = {
+        1: AnalysisRecord("WUSDT", 1, 1000.0, reading(WAIT)),
+        2: AnalysisRecord("CFXUSDT", 2, 1000.0, reading(OK)),
+        3: AnalysisRecord("SUSDT", 3, 1000.0, reading(NEVER)),
+    }
+    client = FakeClient(results, plan_done=True)
+    symbols = {1: "WUSDT", 2: "CFXUSDT", 3: "SUSDT"}
+    follower, nav, journal = make_follower(tmp_path, client, symbols, rank=None, margin_pct=25)
+    follower.run()
+    assert client.ranks == [1, 2, 3]  # semua Top milik leader, berurutan
+    rows = {e.symbol: e for e in journal.load()}
+    assert rows["WUSDT"].status == "skipped" and rows["WUSDT"].verdict == "tunggu"
+    assert rows["CFXUSDT"].status == "open" and rows["CFXUSDT"].role == "follower"
+    assert rows["SUSDT"].status == "skipped" and rows["SUSDT"].verdict == "jangan"
+    assert nav.filled == ["50"]  # hanya koin OK yang membuka form; margin 25% x 2x x 100
+
+
+def test_follower_with_all_tops_stops_when_two_slots_are_full(tmp_path: Path) -> None:
+    results = {r: AnalysisRecord(f"C{r}USDT", r, 1000.0, reading(OK)) for r in (1, 2, 3)}
+    client = FakeClient(results, plan_done=True)
+    symbols = {r: f"C{r}USDT" for r in (1, 2, 3)}
+    follower, _nav, journal = make_follower(tmp_path, client, symbols, rank=None)
+    follower.run()
+    opened = [e.symbol for e in journal.load() if e.status == "open"]
+    assert opened == ["C1USDT", "C2USDT"]  # maksimal 2 posisi (SOP)
+    assert client.ranks == [1, 2]  # Top 3 tidak ditanyakan: slot sudah penuh
+
+
+def test_follower_skips_a_top_the_leader_finished_without_judging(tmp_path: Path) -> None:
+    # Putaran leader selesai dan tidak pernah menilai Top 2: jangan menunggu 300 detik.
+    client = FakeClient({1: AnalysisRecord("WUSDT", 1, 1000.0, reading(OK))}, plan_done=True)
+    follower, nav, _ = make_follower(tmp_path, client, {1: "WUSDT"}, rank=2)
+    follower.run()
+    assert follower.result is None and nav.calls == []
+    assert client.ranks == [2]  # satu kali tanya, tidak menunggu
 
 
 def test_follower_does_not_touch_binance_when_leader_says_wait(tmp_path: Path) -> None:
@@ -541,3 +596,53 @@ def test_trades_record_the_role_of_the_laptop(tmp_path: Path) -> None:
     assert single.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).role == "single"
     assert follower.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).role == "follower"
     assert follower.skip(2, "WUSDT", "pola TUNGGU (dari leader)").role == "follower"
+
+
+def test_one_follower_covers_all_five_tops_the_leader_plays_over_a_real_hub(
+    tmp_path: Path,
+) -> None:
+    """Bug sebelumnya: pemimpin memainkan Top 1-5 tapi pengikut hanya mengikuti Top 1."""
+    symbols = {r: f"C{r}USDT" for r in (1, 2, 3, 4, 5)}
+    patterns = {"C1USDT": WAIT, "C2USDT": NEVER, "C3USDT": OK, "C4USDT": WAIT, "C5USDT": OK}
+    clock = Clock()
+    store = AnalysisStore()
+    leader = LeaderWorkflow(
+        Settings(screenshot_dir=tmp_path / "shots"),
+        SopParams(),
+        FakeNavigator(symbols),  # type: ignore[arg-type]
+        FakeMarket(),
+        FakePatternAnalyzer(WAIT, patterns),
+        store,
+        None,
+        [1, 2, 3, 4, 5],  # type: ignore[arg-type]
+        wall_clock=clock,
+        now=lambda: NOW,
+    )
+    server = HubServer(store, "token-uji", host="127.0.0.1", port=0, clock=clock)
+    server.start()
+    try:
+        leader.run_cycle()
+        follower_nav = FakeNavigator(symbols)
+        trader, _, journal, _ = make_trader(tmp_path / "f", follower_nav, role="follower")
+        follower = FollowerWorkflow(
+            Settings(screenshot_dir=tmp_path / "f" / "shots", follower_wait_s=60),
+            follower_nav,
+            trader,
+            HubClient(f"http://127.0.0.1:{server.port}", "token-uji"),
+            rank=None,  # "semua top"
+            sleep=clock.sleep,
+            clock=clock,  # type: ignore[arg-type]
+        )
+        follower.run()
+    finally:
+        server.stop()
+    by_symbol = {e.symbol: e for e in journal.load()}
+    assert sorted(by_symbol) == ["C1USDT", "C2USDT", "C3USDT", "C4USDT", "C5USDT"]  # semua Top
+    assert {s: e.status for s, e in by_symbol.items()} == {
+        "C1USDT": "skipped",  # AI: tunggu
+        "C2USDT": "skipped",  # AI: jangan
+        "C3USDT": "open",  # AI: layak short
+        "C4USDT": "skipped",
+        "C5USDT": "open",
+    }
+    assert follower_nav.filled == ["100", "100"]

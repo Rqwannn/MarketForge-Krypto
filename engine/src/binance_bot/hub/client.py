@@ -17,6 +17,13 @@ class SharedAnalysis:
     age_s: float  # dihitung dengan jam hub
 
 
+@dataclass(frozen=True, slots=True)
+class LeaderPlan:
+    ranks: tuple[int, ...]  # Top yang dimainkan leader di putaran ini
+    done: bool  # leader sudah selesai menilai semuanya
+    age_s: float  # umur putaran, dihitung dengan jam hub
+
+
 class HubClient:
     def __init__(self, base_url: str, token: str, *, timeout_s: float = 10.0) -> None:
         if not base_url:
@@ -38,6 +45,18 @@ class HubClient:
         query = urllib.parse.urlencode({"symbol": symbol})
         payload = self._get(f"/analyses?{query}", allow_missing=True)
         return None if payload is None else self._shared(payload.get("record"), payload)
+
+    def plan(self) -> LeaderPlan:
+        """Rencana putaran leader: Top mana yang dimainkan dan apakah putaran sudah selesai."""
+        payload = self._get("/analyses?plan=1")
+        ranks, done = payload.get("ranks"), payload.get("done")
+        now, started = payload.get("now"), payload.get("started")
+        valid = isinstance(ranks, list) and all(isinstance(r, int) for r in ranks)
+        if not valid or not isinstance(done, bool):
+            raise HubError("Respons hub tidak berisi rencana putaran")
+        if not isinstance(now, int | float) or not isinstance(started, int | float):
+            raise HubError("Respons hub tidak berisi waktu putaran")
+        return LeaderPlan(tuple(ranks), done, float(now) - float(started))
 
     def by_rank(self, rank: int) -> SharedAnalysis | None:
         """Hasil leader untuk Top `rank` di putaran ini, atau None bila belum dinilai."""
