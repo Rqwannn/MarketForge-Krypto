@@ -74,10 +74,6 @@ class SingleWorkflow:
         on_list = True
         seen: set[str] = set()
         for rank in self._ranks:
-            blocker = self._trader.slot_blocker()
-            if blocker:
-                logger.info("Berhenti memantau: %s", blocker)
-                break
             row = rows.get(rank)
             if row is not None and row.change_pct < min_gain:
                 logger.info(

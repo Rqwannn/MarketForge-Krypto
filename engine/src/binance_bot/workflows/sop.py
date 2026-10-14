@@ -236,9 +236,6 @@ class SopTrader:
             raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
-        blocker = self.slot_blocker()
-        if blocker:
-            raise _Skip(blocker)
 
         # Saringan biaya (gratis, sebelum AI): funding, spread, dan kenaikan minimal bila diisi.
         quote = self._market.quote(symbol)
@@ -296,6 +293,11 @@ class SopTrader:
                     "tapi 6 jam terakhir naik terus)"
                 )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
+
+        # Langkah 4 SOP (setelah pola dan biaya): slot posisi.
+        blocker = self.slot_blocker()
+        if blocker:
+            raise _Skip(blocker)
 
         # Ukuran posisi: margin % modal x leverage.
         rules = self._market.rules(symbol)

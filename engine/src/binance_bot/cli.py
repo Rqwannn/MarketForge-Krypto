@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from binance_bot import __version__
-from binance_bot.analysis import VikeyPatternAnalyzer
+from binance_bot.analysis import ConsensusAnalyzer, VikeyPatternAnalyzer
 from binance_bot.analysis.pattern import PROMPT, TEBBIT_PROMPT
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
@@ -312,7 +312,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             args.gambar,
             args.koin,
             args.catatan,
-            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT),
+            ConsensusAnalyzer(
+                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            ),
             journal,
             settings.screenshot_dir,
             SopParams(),
@@ -332,7 +334,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             SopParams(min_gain_pct=args.min_naik, min_crosses=args.min_turun),
             navigator,
             market,
-            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT),
+            ConsensusAnalyzer(
+                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            ),
             store,
             HubServer(store, settings.hub_token, port=args.port or settings.hub_port),
             args.ranks,
@@ -353,7 +357,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     uses_ai = params.signal_source == "ai"
     if args.command == "single":
         analyzer = (
-            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            ConsensusAnalyzer(
+                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            )
             if uses_ai
             else None
         )
