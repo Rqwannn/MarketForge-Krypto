@@ -11,7 +11,6 @@ import re
 
 from binance_bot.exceptions import CommandError, WindowError
 from binance_bot.macos.app_controller import Runner, run_command
-from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.macos.window import MacWindowController, Rect
 
 logger = logging.getLogger(__name__)
@@ -117,24 +116,6 @@ class ChromeController:
             script = f'tell application "System Events" to keystroke "{key}" using command down'
             self._osascript(script, "Tidak bisa mengatur zoom Chrome")
 
-    def clear_focused_field(self) -> None:
-        """Pilih semua (Cmd+A) lalu hapus di kolom yang sedang fokus."""
-        script = (
-            'tell application "System Events"\n'
-            '\tkeystroke "a" using command down\n'
-            "\tkey code 51\n"
-            "end tell"
-        )
-        self._osascript(script, "Tidak bisa mengosongkan kolom")
-
-    def type_digits(self, text: str) -> None:
-        """Ketik angka (dan satu tanda desimal) di kolom yang fokus. Tidak ada Enter/Return."""
-        if not NUMBER_PATTERN.fullmatch(text):
-            raise ValueError(f"Hanya angka yang boleh diketik, bukan {text!r}")
-        lines = [f'\tkeystroke "{char}"' for char in text]
-        script = "\n".join(['tell application "System Events"', *lines, "end tell"])
-        self._osascript(script, "Tidak bisa mengetik angka")
-
     def _osascript(self, script: str, failure: str) -> str:
         try:
             return self._run(["osascript", "-e", script])
@@ -166,11 +147,3 @@ class ChromeWindowController(MacWindowController):
         if self.window_id is None:
             raise WindowError("Tab Tebbit belum dipilih")
         self._chrome.set_bounds(self.window_id, rect)
-
-    def clear_field(self) -> None:
-        # Chrome menolak ketikan CoreGraphics pada kolom angka; System Events dipakai di sini.
-        self._chrome.clear_focused_field()
-
-    def type_number(self, text: str) -> None:
-        logger.info("Ketik %s", text)
-        self._chrome.type_digits(text)

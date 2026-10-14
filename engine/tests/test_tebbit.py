@@ -6,7 +6,6 @@ import pytest
 
 from binance_bot.exceptions import MarketDataError, WindowError
 from binance_bot.tebbit_web import layout_tebbit as lay
-from binance_bot.tebbit_web.chrome import ChromeController
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import _FIFTEEN
 
@@ -22,17 +21,18 @@ def test_tombol_lain_bukan_15m(text: str) -> None:
 
 
 def test_hanya_angka_yang_diketik_tanpa_enter() -> None:
+    from binance_bot.macos.keyboard import clear_field, type_number
+
     calls: list[list[str]] = []
-    chrome = ChromeController(runner=lambda args: calls.append(args) or "")
-    chrome.type_digits("100,5")
-    script = calls[0][-1]
-    assert [line.strip() for line in script.splitlines()[1:-1]] == [
-        f'keystroke "{c}"' for c in "100,5"
-    ]
-    for bad in ["7\n", "1e3", "", "12a", "1;2"]:
+    type_number("100,5", run=lambda args: calls.append(args) or "")
+    lines = [line.strip() for line in calls[0][-1].splitlines()[1:-1]]
+    assert lines == [f'keystroke "{c}"' for c in "100,5"]
+    for bad in ["7\n", "1e3", "", "12a", "1;2", '1"']:
         with pytest.raises(ValueError):
-            chrome.type_digits(bad)
+            type_number(bad, run=lambda args: calls.append(args) or "")
     assert len(calls) == 1
+    clear_field(run=lambda args: calls.append(args) or "")
+    assert "return" not in calls[-1][-1].lower() and "key code 36" not in calls[-1][-1]
 
 
 @pytest.mark.parametrize(
