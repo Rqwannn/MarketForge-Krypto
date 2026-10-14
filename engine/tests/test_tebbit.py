@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from binance_bot.exceptions import MarketDataError, WindowError
+from binance_bot.exceptions import MarketDataError, NoHistoryError, WindowError
 from binance_bot.tebbit_web import layout_tebbit as lay
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import _FIFTEEN
@@ -57,23 +57,45 @@ def test_kolom_quantity_dan_grafik_tidak_terlarang() -> None:
 class _Nav:
     def __init__(self, symbol: str | None) -> None:
         self.symbol = symbol
+        self.visits: list[str] = []
+        self.prices = {"BTWUSDT": (2.50, 2.51), "TRUTHUSDT": (0.021, 0.0211)}
 
     def read_symbol(self) -> str:
         if self.symbol is None:
             raise WindowError("Jendela Tebbit belum dibuka")
         return self.symbol
 
+    def prepare(self) -> None:
+        self.visits.append("beranda")
+
+    def open_symbol(self, symbol: str) -> str:
+        self.visits.append(symbol)
+        self.symbol = symbol
+        return symbol
+
     def read_quote(self) -> tuple[float, float, float, float]:
-        return 0.99, 1.01, 1.0, 30.0
+        assert self.symbol is not None
+        bid, ask = self.prices[self.symbol]
+        return bid, ask, bid, 30.0
 
 
-def test_harga_koin_lain_atau_sebelum_chrome_dibuka_tidak_terbaca() -> None:
-    # Cek slot posisi terjadi sebelum Chrome dibuka: harus MarketDataError, bukan crash.
+def test_harga_koin_lain_hanya_dibaca_saat_bot_bekerja_lalu_kembali() -> None:
+    # Daftar posisi di aplikasi (browse mati): Chrome tidak dibuka, harga tidak terbaca.
     for nav in (_Nav(None), _Nav("OPUSDT")):
         with pytest.raises(MarketDataError):
             ScreenMarket(nav).quote("BTWUSDT")  # type: ignore[arg-type]
-    quote = ScreenMarket(_Nav("BTWUSDT")).quote("BTWUSDT")  # type: ignore[arg-type]
-    assert (quote.bid, quote.ask, quote.change_pct, quote.funding_rate) == (0.99, 1.01, 30.0, 0.0)
+        assert nav.visits == []
+    # Saat bot menilai OPUSDT: buka TRUTHUSDT sebentar untuk cek slot, lalu kembali ke OPUSDT.
+    nav = _Nav("BTWUSDT")
+    quote = ScreenMarket(nav, browse=True).quote("TRUTHUSDT")  # type: ignore[arg-type]
+    assert (quote.bid, quote.ask, quote.funding_rate) == (0.021, 0.0211, 0.0)
+    assert nav.visits == ["TRUTHUSDT", "BTWUSDT"]
+    # Belum ada jendela (cek slot di awal putaran): siapkan Chrome dulu.
+    nav = _Nav(None)
+    ScreenMarket(nav, browse=True).quote("BTWUSDT")  # type: ignore[arg-type]
+    assert nav.visits == ["beranda", "BTWUSDT"]
+    with pytest.raises(NoHistoryError):
+        ScreenMarket(nav).klines("BTWUSDT", "1m")  # type: ignore[arg-type]
 
 
 def test_header_harga_dan_perubahan_walau_ocr_menyisipkan_spasi() -> None:

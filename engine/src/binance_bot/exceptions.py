@@ -44,3 +44,10 @@ class SafetyError(BotError):
 
 class MarketDataError(BotError):
     """Data pasar publik Binance (harga, funding, candle) tidak bisa diambil."""
+
+
+class NoHistoryError(MarketDataError):
+    """Bursa ini memang tidak punya riwayat harga (candle/funding), mis. Tebbit lewat layar.
+
+    Berbeda dengan Binance yang diblokir sementara: posisi tetap boleh ditutup di harga terkini.
+    """

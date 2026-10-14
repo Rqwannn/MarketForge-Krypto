@@ -9,7 +9,7 @@ import pytest
 from binance_bot.analysis import AnalysisRecord
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError, MarketDataError, ScreenReadError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError, ScreenReadError
 from binance_bot.hub import AnalysisStore, HubClient, HubServer, LeaderPlan, SharedAnalysis
 from binance_bot.market import Quote
 from binance_bot.strategy import Journal, JournalEntry, SopParams
@@ -767,3 +767,19 @@ def test_history_delete_one_entry_or_clear_everything_except_trades(tmp_path: Pa
     assert journal.load() == []
     with pytest.raises(BotError):
         HistoryWorkflow(journal)
+
+
+def test_sell_works_on_exchange_without_price_history(tmp_path: Path) -> None:
+    class ScreenOnly(FakeMarket):  # seperti Tebbit: harga terkini ada, candle dan funding tidak
+        def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
+            raise NoHistoryError("tidak punya sumber candle")
+
+        def funding_history(self, symbol: str, start_ms: int, end_ms: int) -> list[Any]:
+            raise NoHistoryError("tidak punya sumber funding")
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT"))
+    result = run_positions(journal, ScreenOnly(), close="CKBUSDT")
+    assert "error" not in result
+    assert [c["symbol"] for c in result["closed"]] == ["CKBUSDT"]
+    assert journal.load()[0].status == "manual"

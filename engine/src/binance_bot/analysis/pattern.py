@@ -113,7 +113,7 @@ class ConsensusAnalyzer:
     nilai tengahnya, "di bawah sekarang" dan "6 jam terakhir" diambil suara terbanyak.
     """
 
-    def __init__(self, analyzer: PatternAnalyzer, reads: int = 3) -> None:
+    def __init__(self, analyzer: PatternAnalyzer, reads: int = 5) -> None:
         self._inner = analyzer
         self._reads = reads
 

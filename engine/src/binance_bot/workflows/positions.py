@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from binance_bot.exceptions import MarketDataError
+from binance_bot.exceptions import MarketDataError, NoHistoryError
 from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, close_short_now
 from binance_bot.workflows.sop import refresh_journal
@@ -47,6 +47,8 @@ class PositionsWorkflow:
         warning = ""
         try:
             entries = refresh_journal(self._journal, self._market, self._params.fee_pct, now)
+        except NoHistoryError:
+            entries = self._journal.load()  # tanpa riwayat harga: tutup di harga terkini saja
         except MarketDataError as exc:
             warning = f"Harga Binance tidak bisa diambil: {exc}"
             entries = self._journal.load()
@@ -55,7 +57,12 @@ class PositionsWorkflow:
             if warning:
                 self._output(json.dumps({"error": warning, "closed": [], "positions": []}))
                 return
-            entries, closed = self._close_positions(entries, now)
+            try:
+                entries, closed = self._close_positions(entries, now)
+            except MarketDataError as exc:
+                error = f"Harga tidak bisa diambil: {exc}"
+                self._output(json.dumps({"error": error, "closed": [], "positions": []}))
+                return
         result = {
             "warning": warning or None,
             "closed": [self._closed_dict(e) for e in closed],
@@ -71,9 +78,12 @@ class PositionsWorkflow:
         for entry in entries:
             if entry.status == "open" and wanted in (ALL, entry.symbol):
                 ask = self._market.quote(entry.symbol).ask
-                funding = self._market.funding_history(
-                    entry.symbol, int(entry.created_at * 1000), int(now * 1000)
-                )
+                try:
+                    funding = self._market.funding_history(
+                        entry.symbol, int(entry.created_at * 1000), int(now * 1000)
+                    )
+                except NoHistoryError:
+                    funding = []  # bursa tanpa riwayat funding (Tebbit)
                 entry = close_short_now(entry, ask, now, funding, self._params.fee_pct)
                 closed.append(entry)
                 logger.warning(

@@ -259,7 +259,9 @@ TEBBIT_COMMANDS = (
 )
 
 
-def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, MarketData]:
+def build_tebbit(
+    settings: Settings, system: System, *, browse: bool = False
+) -> tuple[TradingNavigator, MarketData]:
     chrome = ChromeController()
     navigator = TebbitNavigator(
         settings,
@@ -269,7 +271,7 @@ def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, 
         chrome,
         screens=system.screens,
     )
-    return navigator, ScreenMarket(navigator)
+    return navigator, ScreenMarket(navigator, browse=browse)
 
 
 def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
@@ -289,7 +291,11 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     navigator: TradingNavigator
     market: MarketData
     if tebbit:
-        navigator, market = build_tebbit(settings, system)
+        # Membuka halaman koin lain untuk membaca harganya hanya saat bot bekerja atau Sell.
+        browse = args.command in ("single", "leader", "follower") or (
+            args.command == "posisi" and args.tutup is not None
+        )
+        navigator, market = build_tebbit(settings, system, browse=browse)
     else:
         market = FuturesMarket()
     if args.command == "cek":
