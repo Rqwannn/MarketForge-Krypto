@@ -186,10 +186,12 @@ class Team extends EventEmitter {
     if (!this.enabled) return false;
     const me = shortId(this.myId);
     let changed = false;
+    const active = new Set(); // ajakan yang saat ini diumumkan untuk laptop ini
     for (const peer of peers) {
       // Ajakan dan sinyal putaran hanya dari pemegang kunci pemimpin (tanda tangan Ed25519).
       if (peer.self || !peer.team.verified || peer.role !== 'leader' || !peer.leaderVerified) continue;
       const rank = peer.team.invites.get(me);
+      if (rank) active.add(`${peer.id}:${rank}`);
       const member = this.membership;
       if (member && member.leaderId === peer.id) {
         if (!rank) {
@@ -223,6 +225,9 @@ class Team extends EventEmitter {
         this.emit('invite', { leaderId: peer.id, leaderName: peer.name, rank });
       }
     }
+    // Jawaban hanya berlaku selama ajakannya masih diumumkan: bila dicabut, ajakan baru (walau Top
+    // sama) harus muncul lagi.
+    for (const key of this.answered) if (!active.has(key)) this.answered.delete(key);
     return changed;
   }
 }
