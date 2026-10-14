@@ -446,10 +446,13 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .platform strong { font-size: 17px; }
 .platform div span { color: var(--muted); font-size: 13px; }
 .platform.soon { opacity: 0.55; cursor: not-allowed; border-style: dashed; }
-.plat-mark { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--card-2); border: 1px solid var(--line-2); color: var(--accent-2); font: 700 22px var(--mono); }
-.platform.soon .plat-mark { color: var(--faint); }
+.plat-logo { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; overflow: hidden; background: var(--card-2); border: 1px solid var(--line-2); }
+.plat-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.plat-logo.tebbit { background: #eef1f6; border-color: #eef1f6; }
+.plat-logo.tebbit img { width: 62%; height: 62%; }
+.platform.soon .plat-logo { filter: grayscale(1); }
 .platform-chip { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; margin: 0 0 18px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
-.platform-chip .plat-mark { width: 36px; height: 36px; border-radius: 9px; font-size: 16px; }
+.platform-chip .plat-logo { width: 36px; height: 36px; border-radius: 9px; }
 .platform-chip div { display: grid; line-height: 1.3; min-width: 0; }
 .platform-chip small { color: var(--faint); font-size: 11px; }
 .platform-chip strong { font-size: 14px; }

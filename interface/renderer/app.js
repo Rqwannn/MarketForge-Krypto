@@ -31,8 +31,8 @@ const STATUS = {
 };
 // Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
 const PLATFORMS = [
-  { id: 'binance', name: 'Binance', note: 'Futures · pantau top gainers, SOP V2', ready: true },
-  { id: 'tebbit', name: 'Tebbit', note: 'Dalam pengembangan · tebbit.io', ready: false },
+  { id: 'binance', name: 'Binance', logo: 'img/binance.png', note: 'Futures · pantau top gainers', ready: true },
+  { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Dalam pengembangan · tebbit.io', ready: false },
 ];
 const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin' };
 const ICONS = {
@@ -99,7 +99,7 @@ function plain(text) {
     [/Kolom Jumlah/, 'Kolom Jumlah di Binance tidak terisi dengan benar'],
     [/leverage .*SOP/i, 'Leverage di Binance belum 2x (ubah sebelum memakai uang sungguhan)'],
     [/Isolated/i, 'Mode margin di Binance belum Isolated (ubah sebelum memakai uang sungguhan)'],
-    [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti sesuai SOP'],
+    [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti untuk hari ini'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
@@ -1088,8 +1088,9 @@ window.bot.status().then(({ running }) => {
 
 let platform = null; // platform yang sedang dipakai
 
+/** Logo platform. Logo gelap (Tebbit) ditaruh di kotak terang agar terlihat di tema gelap. */
 function platformMark(p) {
-  const mark = el('span', { class: 'plat-mark', textContent: p.name[0] });
+  const mark = el('span', { class: `plat-logo ${p.id}` }, el('img', { src: p.logo, alt: '' }));
   mark.setAttribute('aria-hidden', 'true');
   return mark;
 }
@@ -1116,7 +1117,8 @@ function choosePlatform(id) {
   if (!chosen?.ready) return; // bursa yang belum siap tidak pernah menjadi platform aktif
   platform = chosen;
   $('platform-name').textContent = chosen.name;
-  $('platform-mark').textContent = chosen.name[0];
+  $('platform-logo').src = chosen.logo;
+  $('platform-logo').parentElement.className = `plat-logo ${chosen.id}`;
   $('chooser').hidden = true;
   $('app').inert = false;
   showPage('run');
