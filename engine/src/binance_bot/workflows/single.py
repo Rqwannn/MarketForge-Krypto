@@ -5,9 +5,9 @@ import time
 from collections.abc import Callable, Sequence
 
 from binance_bot.analysis import PatternAnalyzer
-from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.exceptions import BotError
 from binance_bot.logging_setup import event
+from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import SopTrader, log_top_gainers
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class SingleWorkflow:
 
     def __init__(
         self,
-        navigator: BinanceNavigator,
+        navigator: TradingNavigator,
         trader: SopTrader,
         analyzer: PatternAnalyzer | None,
         *,

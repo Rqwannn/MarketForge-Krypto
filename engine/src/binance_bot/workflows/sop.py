@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 from binance_bot.analysis import PatternReading
-from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
@@ -34,6 +33,7 @@ from binance_bot.strategy import (
     size_position,
     stop_streak,
 )
+from binance_bot.workflows.base import TradingNavigator
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class SopTrader:
         self,
         settings: Settings,
         params: SopParams,
-        navigator: BinanceNavigator,
+        navigator: TradingNavigator,
         market: FuturesMarket,
         journal: Journal,
         gate: DryRunOrderGate,

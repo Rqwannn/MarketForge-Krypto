@@ -357,11 +357,15 @@ class BinanceNavigator:
         return self._rect
 
     def _click(self, target: tuple[float, float]) -> None:
-        if self._on_trade_page and layout.in_order_button_zone(target):
-            raise SafetyError(f"Klik ke zona tombol order ditolak: {target}")
+        if self._forbidden(target):
+            raise SafetyError(f"Klik ke zona terlarang ditolak: {target}")
         self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
         self._sleep(self._settings.settle_delay_s)
+
+    def _forbidden(self, target: tuple[float, float]) -> bool:
+        """Titik yang tidak boleh diklik (tombol order). Platform lain menimpanya."""
+        return self._on_trade_page and layout.in_order_button_zone(target)
 
     def _ensure_front(self) -> None:
         """Pastikan Binance jendela aktif. Klik, ketikan, dan tangkapan layar hanya berarti bila

@@ -4,12 +4,12 @@ import logging
 import time
 from collections.abc import Callable, Sequence
 
-from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
 from binance_bot.config import Settings
 from binance_bot.exceptions import ConfigError, HubError
 from binance_bot.hub import HubClient, SharedAnalysis
 from binance_bot.strategy import JournalEntry
+from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import SopTrader, log_top_gainers
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class FollowerWorkflow:
     def __init__(
         self,
         settings: Settings,
-        navigator: BinanceNavigator,
+        navigator: TradingNavigator,
         trader: SopTrader,
         client: HubClient | None,
         *,
