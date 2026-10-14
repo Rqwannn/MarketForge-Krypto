@@ -13,7 +13,7 @@ from collections.abc import Callable
 from typing import Any
 
 from binance_bot.exceptions import MarketDataError
-from binance_bot.market import FuturesMarket
+from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, close_short_now
 from binance_bot.workflows.sop import refresh_journal
 
@@ -29,7 +29,7 @@ class PositionsWorkflow:
         self,
         params: SopParams,
         journal: Journal,
-        market: FuturesMarket,
+        market: MarketData,
         *,
         close: str | None = None,  # None = hanya daftar, "semua", atau nama pair
         output: Callable[[str], None] = print,

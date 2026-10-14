@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from binance_bot.exceptions import MarketDataError
 
@@ -67,6 +67,28 @@ class Quote:
     def spread_pct(self) -> float:
         mid = (self.bid + self.ask) / 2
         return 100 * (self.ask - self.bid) / mid if mid else float("inf")
+
+
+class MarketData(Protocol):
+    """Sumber data pasar yang dipakai SOP; FuturesMarket (Binance) dan ScreenMarket (Tebbit)."""
+
+    def rules(self, symbol: str) -> SymbolRules: ...
+
+    def quote(self, symbol: str) -> Quote: ...
+
+    def klines(
+        self,
+        symbol: str,
+        interval: str,
+        *,
+        limit: int = 100,
+        start_ms: int | None = None,
+        end_ms: int | None = None,
+    ) -> list[Candle]: ...
+
+    def funding_history(
+        self, symbol: str, start_ms: int, end_ms: int
+    ) -> list[tuple[int, float]]: ...
 
 
 class FuturesMarket:

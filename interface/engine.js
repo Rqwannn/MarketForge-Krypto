@@ -43,7 +43,7 @@ const BOT = DEFAULT_BOT.command;
 
 const MODES = ['single', 'leader', 'follower'];
 // Bursa yang sudah didukung engine. Tebbit menyusul; sampai itu ditambahkan, hanya Binance yang jalan.
-const EXCHANGES = ['binance'];
+const EXCHANGES = ['binance', 'tebbit'];
 const MAX_RANK = 5;
 const MAX_INTERVAL_MIN = 1440;
 const STOP_GRACE_MS = 15000;
@@ -106,15 +106,16 @@ function buildArgs(mode, params = {}) {
   if (!MODES.includes(mode)) throw new InputError(`Mode tidak dikenal: ${mode}`);
   const p = params || {};
   if (p.exchange !== undefined && !EXCHANGES.includes(p.exchange)) {
-    throw new InputError('Bursa ini belum didukung. Saat ini hanya Binance.');
+    throw new InputError('Bursa ini belum didukung. Pilih Binance atau Tebbit.');
   }
+  const bursa = p.exchange ? ['--bursa', p.exchange] : [];
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
     const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];
-    return ['--events', 'follower', ...followerTops(p.rank), ...hub, '--modal', modalOf(p.modal)];
+    return [...bursa, '--events', 'follower', ...followerTops(p.rank), ...hub, '--modal', modalOf(p.modal)];
   }
   const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN));
-  const args = ['--events', mode, '--ranks', ranksOf(p.ranks).join(','), '--interval', interval];
+  const args = [...bursa, '--events', mode, '--ranks', ranksOf(p.ranks).join(','), '--interval', interval];
   return mode === 'single' ? [...args, '--modal', modalOf(p.modal)] : args;
 }
 

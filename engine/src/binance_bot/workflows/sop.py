@@ -18,13 +18,14 @@ from typing import Any
 from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError
+from binance_bot.exceptions import BotError, MarketDataError
 from binance_bot.logging_setup import event
-from binance_bot.market import FuturesMarket
+from binance_bot.market import MarketData
 from binance_bot.strategy import (
     DryRunOrderGate,
     Journal,
     JournalEntry,
+    MaPattern,
     OrderPlan,
     SopParams,
     candles_needed,
@@ -79,7 +80,7 @@ def log_top_gainers(rows: Sequence[GainerRow]) -> None:
 
 
 def refresh_journal(
-    journal: Journal, market: FuturesMarket, fee_pct: float, now_s: float
+    journal: Journal, market: MarketData, fee_pct: float, now_s: float
 ) -> list[JournalEntry]:
     """Langkah 6 SOP: nilai posisi uji yang masih terbuka dari candle sungguhan."""
     entries = journal.load()
@@ -106,7 +107,7 @@ class SopTrader:
         settings: Settings,
         params: SopParams,
         navigator: TradingNavigator,
-        market: FuturesMarket,
+        market: MarketData,
         journal: Journal,
         gate: DryRunOrderGate,
         *,
@@ -128,7 +129,13 @@ class SopTrader:
         self._now = now
 
     def refresh_journal(self) -> list[JournalEntry]:
-        return refresh_journal(self._journal, self._market, self.params.fee_pct, self._wall_clock())
+        try:
+            return refresh_journal(
+                self._journal, self._market, self.params.fee_pct, self._wall_clock()
+            )
+        except MarketDataError as exc:  # bursa tanpa sumber candle (Tebbit): posisi tetap terbuka
+            logger.warning("Posisi uji belum bisa dinilai: %s", exc)
+            return self._journal.load()
 
     def halted(self, entries: list[JournalEntry]) -> bool:
         """SOP: setelah 3 stop-loss berturut-turut, berhenti hari itu dan tinjau catatan."""
@@ -151,7 +158,10 @@ class SopTrader:
             assert entry.entry_price is not None
             # Short rugi bila harga naik di atas harga masuk. Dibandingkan dengan sisi harga yang
             # sama saat masuk (bid), supaya spread sesaat setelah masuk tidak dihitung sebagai rugi.
-            price = self._market.quote(entry.symbol).bid
+            try:
+                price = self._market.quote(entry.symbol).bid
+            except MarketDataError as exc:
+                return f"harga {entry.symbol} tidak terbaca ({exc}); koin berikutnya ditahan"
             if price > entry.entry_price:
                 return (
                     f"posisi {entry.symbol} sedang rugi ({price:g} > masuk {entry.entry_price:g}); "
@@ -244,8 +254,14 @@ class SopTrader:
         chart = self._nav.capture_chart(shots / f"{name}_15m.png")
         entry.screenshots.append(str(chart))
 
-        data = data_ma_pattern(self._market.klines(symbol, "15m", limit=candles_needed()))
-        entry.pattern_data = data.as_dict()
+        try:
+            data: MaPattern | None = data_ma_pattern(
+                self._market.klines(symbol, "15m", limit=candles_needed())
+            )
+        except MarketDataError as exc:  # bursa tanpa sumber candle: hanya AI yang menilai
+            logger.info("Pembanding data tidak ada: %s", exc)
+            data = None
+        entry.pattern_data = data.as_dict() if data else None
         decisive = data
         if params.signal_source == "ai":
             if reading_source is None:
@@ -254,6 +270,8 @@ class SopTrader:
             entry.pattern_ai = reading.pattern.as_dict()
             entry.ai_summary = reading.summary
             decisive = reading.pattern
+        if decisive is None:
+            raise _Skip("bursa ini tidak punya data candle; pakai SINYAL=ai")
         entry.verdict = decisive.verdict(params.min_crosses)
         logger.info(
             "#%d %s garis kuning %s: %d kali di bawah MA25 -> %s (data: %d kali)%s",
@@ -262,7 +280,7 @@ class SopTrader:
             params.signal_source.upper(),
             decisive.below_count,
             _VERDICT_TEXT[entry.verdict],
-            data.below_count,
+            data.below_count if data else -1,
             f" | {entry.ai_summary}" if entry.ai_summary else "",
         )
         if entry.verdict != "ok":

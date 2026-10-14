@@ -32,7 +32,7 @@ const STATUS = {
 // Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
 const PLATFORMS = [
   { id: 'binance', name: 'Binance', logo: 'img/binance.png', note: 'Futures · pantau top gainers', ready: true },
-  { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Dalam pengembangan · tebbit.io', ready: false },
+  { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Website di Chrome · tebbit.io', ready: true },
 ];
 /** Top tugas pengikut: angka 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
 const rankLabel = (rank) => (rank === '*' ? 'Semua top' : `Top ${String(rank).split('').join(', ')}`);

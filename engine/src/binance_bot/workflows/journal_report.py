@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from binance_bot.exceptions import MarketDataError
-from binance_bot.market import FuturesMarket
+from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, summarize
 from binance_bot.strategy.params import REQUIRED_TEST_TRADES
 from binance_bot.workflows.sop import refresh_journal
@@ -37,7 +37,7 @@ class JournalWorkflow:
         self,
         params: SopParams,
         journal: Journal,
-        market: FuturesMarket,
+        market: MarketData,
         *,
         as_json: bool = False,
         output: Callable[[str], None] = print,

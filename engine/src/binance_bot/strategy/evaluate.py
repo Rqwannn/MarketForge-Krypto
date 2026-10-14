@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from binance_bot.market import Candle, FuturesMarket
+from binance_bot.market import Candle, MarketData
 from binance_bot.strategy.journal import JournalEntry
 from binance_bot.strategy.params import PASS_MARGIN, REQUIRED_TEST_TRADES, SopParams
 
@@ -92,7 +92,7 @@ def _close(
 
 
 def evaluate_open_trades(
-    entries: Sequence[JournalEntry], market: FuturesMarket, now_s: float, fee_pct: float
+    entries: Sequence[JournalEntry], market: MarketData, now_s: float, fee_pct: float
 ) -> list[JournalEntry]:
     updated = []
     for entry in entries:

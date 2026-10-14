@@ -14,7 +14,7 @@ from binance_bot.binance_desktop.layout import (
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
 from binance_bot.macos import AppController, Rect, WindowController
-from binance_bot.market import FuturesMarket
+from binance_bot.market import MarketData
 
 _PRIVACY = "System Settings > Privacy & Security"
 _SCREEN_BLOCKED = (
@@ -44,7 +44,7 @@ class ReadinessWorkflow:
         settings: Settings,
         apps: AppController,
         window: WindowController,
-        market: FuturesMarket,
+        market: MarketData,
         *,
         accessibility: Callable[[], bool],
         screen_capture: Callable[[], bool],

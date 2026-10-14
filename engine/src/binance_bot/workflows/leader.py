@@ -12,7 +12,7 @@ from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubServer
 from binance_bot.logging_setup import event
-from binance_bot.market import FuturesMarket
+from binance_bot.market import MarketData
 from binance_bot.strategy import SopParams
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import log_top_gainers
@@ -35,7 +35,7 @@ class LeaderWorkflow:
         settings: Settings,
         params: SopParams,
         navigator: TradingNavigator,
-        market: FuturesMarket,
+        market: MarketData,
         analyzer: PatternAnalyzer,
         store: AnalysisStore,
         hub: HubServer | None,
