@@ -104,7 +104,7 @@ Belum cukup data: 12/50 trade uji selesai
 | `Daftar Futures tidak terurut ...` | Halaman Pasar lambat | Naikkan `BOT_SETTLE_DELAY_S=3` |
 | `Kolom Jumlah menampilkan [...], bukan ...` | Klik tidak kena kolom / desimal berbeda | `make uji-isi`; bila desimal salah, `BOT_DECIMAL_SEPARATOR=.` |
 | `Margin di aplikasi: leverage 20x, SOP 2x` | Leverage aplikasi belum diubah | Ubah ke 2x sebelum order sungguhan |
-| `Klik ke zona tombol order ditolak` | Pengaman bekerja | Jangan diabaikan; posisi di `layout.py` perlu dicek |
+| `Klik ke zona terlarang ditolak` | Pengaman bekerja | Jangan diabaikan; posisi di `layout.py` perlu dicek |
 | `... stop-loss berturut-turut hari ini` | Aturan SOP | Berhenti hari itu dan tinjau jurnal |
 | `Layar terlalu kecil untuk jendela Binance 1470x859` | Area layar di luar menu bar dan Dock kurang dari 1470x859 | Pilih "More Space" di System Settings > Displays, atau sembunyikan Dock otomatis |
 | `Pengaturan otomatis tidak berhasil` | Binance dalam mode layar penuh | Keluarkan Binance dari layar penuh |

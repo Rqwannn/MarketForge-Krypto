@@ -6,10 +6,12 @@ import logging
 import os
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from binance_bot import __version__
 from binance_bot.analysis import VikeyPatternAnalyzer
+from binance_bot.analysis.pattern import PROMPT, TEBBIT_PROMPT
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
 from binance_bot.config import Settings, read_dotenv
@@ -17,10 +19,13 @@ from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubClient, HubServer
 from binance_bot.logging_setup import setup_logging
 from binance_bot.macos.keyboard import NUMBER_PATTERN
-from binance_bot.market import FuturesMarket
+from binance_bot.market import FuturesMarket, MarketData
 from binance_bot.strategy import DryRunOrderGate, Journal, SopParams
 from binance_bot.strategy.params import SIGNAL_SOURCES
-from binance_bot.system import build_system
+from binance_bot.system import System, build_system
+from binance_bot.tebbit_web.chrome import ChromeController, ChromeWindowController
+from binance_bot.tebbit_web.market import ScreenMarket
+from binance_bot.tebbit_web.navigator import TebbitNavigator
 from binance_bot.workflows import (
     FillTestWorkflow,
     FollowerWorkflow,
@@ -34,6 +39,7 @@ from binance_bot.workflows import (
     WindowSizeWorkflow,
     Workflow,
 )
+from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.positions import ALL
 
 logger = logging.getLogger(__name__)
@@ -145,6 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--events", action="store_true", help="Log sebagai JSON per baris di stdout (aplikasi)"
     )
+    parser.add_argument(
+        "--bursa",
+        choices=BURSA,
+        default="binance",
+        help="Platform: binance (aplikasi desktop) atau tebbit (website di Chrome)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     sop = _sop_options()
 
@@ -218,16 +230,44 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+BURSA = ("binance", "tebbit")
+TEBBIT_JOURNAL = Path("journal/sop-tebbit.jsonl")
+TEBBIT_COMMANDS = ("single", "leader", "follower", "jurnal", "posisi", "uji-isi")
+
+
+def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, MarketData]:
+    chrome = ChromeController()
+    navigator = TebbitNavigator(
+        settings,
+        system.apps,
+        ChromeWindowController(chrome),
+        system.reader,
+        chrome,
+        screens=system.screens,
+    )
+    return navigator, ScreenMarket(navigator)
+
+
 def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     system = build_system(settings)
     apps = system.apps
+    tebbit = args.bursa == "tebbit"
+    if tebbit and args.command not in TEBBIT_COMMANDS:
+        raise BotError(f"Perintah '{args.command}' belum tersedia untuk Tebbit")
+    if tebbit and settings.journal_path == Settings().journal_path:
+        settings = replace(settings, journal_path=TEBBIT_JOURNAL)  # jurnal terpisah per bursa
     if args.command == "open":
         return OpenBinanceWorkflow(settings, apps)
     if args.command == "window-size":
         return WindowSizeWorkflow(settings, system.window, resize=args.atur)
 
-    market = FuturesMarket()
     window = system.window
+    navigator: TradingNavigator
+    market: MarketData
+    if tebbit:
+        navigator, market = build_tebbit(settings, system)
+    else:
+        market = FuturesMarket()
     if args.command == "cek":
         return ReadinessWorkflow(
             settings,
@@ -245,7 +285,8 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
         return PositionsWorkflow(params_from(args), journal, market, close=target)
 
-    navigator = BinanceNavigator(settings, apps, window, system.reader, screens=system.screens)
+    if not tebbit:
+        navigator = BinanceNavigator(settings, apps, window, system.reader, screens=system.screens)
     if args.command == "uji-isi":
         return FillTestWorkflow(navigator, rank=args.rank, quantity_text=args.jumlah)
     if args.command == "leader":
@@ -255,7 +296,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             SopParams(min_gain_pct=args.min_naik, min_crosses=args.min_turun),
             navigator,
             market,
-            VikeyPatternAnalyzer(settings),
+            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT),
             store,
             HubServer(store, settings.hub_token, port=args.port or settings.hub_port),
             args.ranks,
@@ -275,7 +316,11 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     )
     uses_ai = params.signal_source == "ai"
     if args.command == "single":
-        analyzer = VikeyPatternAnalyzer(settings) if uses_ai else None
+        analyzer = (
+            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            if uses_ai
+            else None
+        )
         return SingleWorkflow(
             navigator, trader, analyzer, ranks=args.ranks, interval_s=args.interval * 60
         )

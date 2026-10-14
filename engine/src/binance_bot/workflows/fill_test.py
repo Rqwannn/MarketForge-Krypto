@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from binance_bot.binance_desktop import BinanceNavigator
+from binance_bot.workflows.base import TradingNavigator
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class FillTestWorkflow:
 
     name = "uji-isi"
 
-    def __init__(self, navigator: BinanceNavigator, *, rank: int, quantity_text: str) -> None:
+    def __init__(self, navigator: TradingNavigator, *, rank: int, quantity_text: str) -> None:
         self._nav = navigator
         self._rank = rank
         self._text = quantity_text

@@ -3,9 +3,10 @@
 from binance_bot.market.binance_futures import (
     Candle,
     FuturesMarket,
+    MarketData,
     Quote,
     SymbolRules,
     is_futures_symbol,
 )
 
-__all__ = ["Candle", "FuturesMarket", "Quote", "SymbolRules", "is_futures_symbol"]
+__all__ = ["Candle", "FuturesMarket", "MarketData", "Quote", "SymbolRules", "is_futures_symbol"]

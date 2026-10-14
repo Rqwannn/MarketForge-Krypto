@@ -19,11 +19,7 @@ from binance_bot.strategy.pattern import MaPattern
 
 _MAX_COUNT = 50  # hitungan di atas ini tidak masuk akal untuk satu layar grafik
 
-PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Binance Futures.
-Garis KUNING = MA7. Garis MAGENTA (merah muda) = MA25. Garis UNGU = MA99. Panel bawah = volume.
-Abaikan kotak tombol Beli/Long dan Jual/Short yang melayang di atas grafik, dan abaikan lilin.
-
-Tugas: ikuti garis KUNING terhadap garis MAGENTA di SELURUH grafik, dari kiri ke kanan.
+_TASK = """Tugas: ikuti garis KUNING terhadap garis MAGENTA di SELURUH grafik, dari kiri ke kanan.
 Hitung berapa kali garis kuning berada DI BAWAH garis magenta sebagai periode terpisah:
 - setiap kali garis kuning turun menembus ke bawah garis magenta dihitung 1;
 - bila di ujung kiri grafik garis kuning sudah di bawah garis magenta, itu juga dihitung 1;
@@ -36,6 +32,24 @@ Jawab HANYA dengan JSON valid, tanpa teks lain:
  "ma7_below_ma25_now": true jika di ujung kanan garis kuning berada di bawah garis magenta,
  "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia
 }"""
+
+PROMPT = (
+    """Ini screenshot grafik candlestick 15 MENIT dari Binance Futures.
+Garis KUNING = MA7. Garis MAGENTA (merah muda) = MA25. Garis UNGU = MA99. Panel bawah = volume.
+Abaikan kotak tombol Beli/Long dan Jual/Short yang melayang di atas grafik, dan abaikan lilin.
+
+"""
+    + _TASK
+)
+
+TEBBIT_PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Tebbit Futures (latar terang).
+Di kiri atas ada legenda "MA 7", "MA 25", "MA 99"; tiap label berwarna sama dengan garisnya.
+Cocokkan garis di grafik dengan warna di legenda. Panel bawah = volume.
+Abaikan tombol dan tulisan yang melayang di atas grafik, dan abaikan lilin dan garis MA 99.
+
+""" + _TASK.replace("KUNING", "MA 7").replace("kuning", "MA 7").replace("MAGENTA", "MA 25").replace(
+    "magenta", "MA 25"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,8 +80,11 @@ def pattern_from_dict(data: Any) -> PatternReading:
 
 
 class VikeyPatternAnalyzer:
-    def __init__(self, settings: Settings, *, post: PostJson = _post_json) -> None:
+    def __init__(
+        self, settings: Settings, *, post: PostJson = _post_json, prompt: str = PROMPT
+    ) -> None:
         self._client = VisionClient(settings, post=post)
+        self._prompt = prompt
 
     def analyze(self, image: Path) -> PatternReading:
-        return pattern_from_dict(extract_json(self._client.ask(image, PROMPT)))
+        return pattern_from_dict(extract_json(self._client.ask(image, self._prompt)))

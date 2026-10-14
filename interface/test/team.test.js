@@ -93,6 +93,24 @@ test('ajakan yang ditolak tidak muncul lagi; pemimpin mengeluarkan pengikut', ()
   assert.deepEqual(events.at(-1), ['removed', { leaderName: 'MacBook Pemimpin' }]);
 });
 
+test('ajakan yang pernah ditolak muncul lagi setelah dicabut lalu diajukan ulang', () => {
+  const { team, events } = follower();
+  team.evaluate([leaderPeer({ inv: '11111111:3' })]);
+  assert.equal(events.length, 1);
+  team.decline(LEADER, 3);
+  team.evaluate([leaderPeer({ inv: '11111111:3' })]); // masih diumumkan: tidak muncul lagi
+  assert.equal(events.length, 1);
+
+  team.evaluate([leaderPeer({})]); // pemimpin mencabut ajakan
+  team.evaluate([leaderPeer({ inv: '11111111:3' })]); // diajak lagi dengan Top yang sama
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.at(-1), ['invite', { leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: '3' }]);
+
+  team.evaluate([]); // pemimpin hilang dari jaringan lalu kembali
+  team.evaluate([leaderPeer({ inv: '11111111:3' })]);
+  assert.equal(events.length, 3);
+});
+
 test('daftar pemimpin: status diajak dan sudah menjadi pengikut', () => {
   const team = new Team({ myId: LEADER, token: TOKEN });
   team.invite(ME, 4);

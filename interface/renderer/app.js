@@ -32,7 +32,7 @@ const STATUS = {
 // Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
 const PLATFORMS = [
   { id: 'binance', name: 'Binance', logo: 'img/binance.png', note: 'Futures · pantau top gainers', ready: true },
-  { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Dalam pengembangan · tebbit.io', ready: false },
+  { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Website di Chrome · tebbit.io', ready: true },
 ];
 /** Top tugas pengikut: angka 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
 const rankLabel = (rank) => (rank === '*' ? 'Semua top' : `Top ${String(rank).split('').join(', ')}`);
@@ -84,6 +84,7 @@ const signClass = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 /** Alasan dari engine -> kalimat sederhana. Detail teknis tidak ditampilkan. */
 function plain(text) {
   const t = String(text || '');
+  const site = platform?.name || 'Binance';
   const rules = [
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
@@ -96,11 +97,13 @@ function plain(text) {
     [/naik .*dalam 24 jam|naik [\d.]+% </, 'Kenaikan 24 jam belum cukup'],
     [/bukan pair USDT/, 'Bukan pasangan USDT'],
     [/Grafik 15 menit|15 mnt/, 'Grafik belum termuat, koin dilewati'],
-    [/Ukuran jendela/, 'Ukuran jendela Binance berubah, kembalikan seperti semula'],
+    [/Ukuran jendela/, `Ukuran jendela ${site} berubah, kembalikan seperti semula`],
     [/belum berjalan|Buka aplikasi Binance|AppNotRunning/i, 'Aplikasi Binance belum dibuka'],
-    [/Kolom Jumlah/, 'Kolom Jumlah di Binance tidak terisi dengan benar'],
-    [/leverage .*SOP/i, 'Leverage di Binance belum 2x (ubah sebelum memakai uang sungguhan)'],
-    [/Isolated/i, 'Mode margin di Binance belum Isolated (ubah sebelum memakai uang sungguhan)'],
+    [/Kolom (Jumlah|Quantity)/, `Kolom jumlah di ${site} tidak terisi dengan benar`],
+    [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
+    [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
+    [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
+    [/Isolated/i, `Mode margin di ${site} belum Isolated (ubah sebelum memakai uang sungguhan)`],
     [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti untuk hari ini'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
@@ -110,7 +113,7 @@ function plain(text) {
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],
     [/[Aa]nalisis AI|model/, 'AI belum bisa membaca grafik koin ini'],
-    [/Top gainer|terurut|tidak terbaca|tidak ditemukan/i, 'Halaman Binance belum terbaca dengan benar'],
+    [/Top gainer|terurut|tidak terbaca|tidak ditemukan/i, `Halaman ${site} belum terbaca dengan benar`],
     [/notional|di bawah minimal|melebihi/i, 'Modal tidak cocok dengan aturan jumlah koin ini'],
   ];
   for (const [pattern, out] of rules) {

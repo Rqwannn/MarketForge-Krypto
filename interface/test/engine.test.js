@@ -58,9 +58,10 @@ test('pengikut beberapa top: --ranks terurut, satu top tetap --rank, tugas tidak
   }
 });
 
-test('hanya Binance yang bisa dijalankan; bursa lain ditolak', () => {
-  assert.deepEqual(buildArgs('single', { exchange: 'binance', ranks: [1], modal: '100' }).slice(0, 2), ['--events', 'single']);
-  for (const exchange of ['tebbit', 'bybit', '', 'BINANCE', null]) {
+test('Binance dan Tebbit bisa dijalankan; bursa lain ditolak', () => {
+  assert.deepEqual(buildArgs('single', { exchange: 'binance', ranks: [1], modal: '100' }).slice(0, 4), ['--bursa', 'binance', '--events', 'single']);
+  assert.deepEqual(buildArgs('single', { exchange: 'tebbit', ranks: [1], modal: '100' }).slice(0, 4), ['--bursa', 'tebbit', '--events', 'single']);
+  for (const exchange of ['bybit', '', 'BINANCE', null]) {
     assert.throws(() => buildArgs('single', { exchange, ranks: [1], modal: '100' }), InputError, String(exchange));
   }
 });

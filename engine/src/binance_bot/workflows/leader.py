@@ -8,13 +8,13 @@ from dataclasses import replace
 from datetime import datetime
 
 from binance_bot.analysis import AnalysisRecord, PatternAnalyzer
-from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubServer
 from binance_bot.logging_setup import event
-from binance_bot.market import FuturesMarket
+from binance_bot.market import MarketData
 from binance_bot.strategy import SopParams
+from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import log_top_gainers
 
 logger = logging.getLogger(__name__)
@@ -34,8 +34,8 @@ class LeaderWorkflow:
         self,
         settings: Settings,
         params: SopParams,
-        navigator: BinanceNavigator,
-        market: FuturesMarket,
+        navigator: TradingNavigator,
+        market: MarketData,
         analyzer: PatternAnalyzer,
         store: AnalysisStore,
         hub: HubServer | None,
