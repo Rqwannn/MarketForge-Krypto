@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from itertools import pairwise
 
 from binance_bot.binance_desktop import layout
 from binance_bot.exceptions import ScreenReadError
@@ -22,6 +23,7 @@ class GainerRow:
     rank: int
     symbol: str  # mis. "STRKUSDT"
     change_pct: float
+    y: float | None = field(default=None, compare=False)  # posisi baris di layar (relatif jendela)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +66,7 @@ def parse_gainer_rows(
 
     `lines` relatif terhadap gambar `area` (x0, y0, x1, y1 relatif jendela). Nomor baris
     dihitung dari posisi di layar, jadi baris yang gagal dibaca OCR tidak menggeser rank lain.
+    Jarak antarbaris diukur dari baris yang terbaca (tinggi baris berbeda di tiap laptop).
     `shift` = pergeseran vertikal daftar (relatif jendela) akibat banner di atasnya.
     """
     _, top, _, bottom = area
@@ -74,7 +77,7 @@ def parse_gainer_rows(
     percents: list[tuple[float, float]] = [
         (window_y(line), p) for line in lines if (p := parse_percent(line.text)) is not None
     ]
-    rows: dict[int, GainerRow] = {}
+    found: list[tuple[float, str, float]] = []
     for line in lines:
         match = FUTURES_SYMBOL_PATTERN.search(line.text)
         if not match:
@@ -83,9 +86,33 @@ def parse_gainer_rows(
         nearest = min(percents, key=lambda item: abs(item[0] - y), default=None)
         if nearest is None or abs(nearest[0] - y) > layout.FUTURES_ROW_STEP / 2:
             continue
-        rank = layout.rank_at(y - shift)
-        rows.setdefault(rank, GainerRow(rank, match.group(1), nearest[1]))
-    return [rows[rank] for rank in sorted(rows)]
+        found.append((y, match.group(1), nearest[1]))
+    found.sort()
+    step = row_step([y for y, _, _ in found])
+    rows: list[GainerRow] = []
+    last_y = 0.0
+    for y, symbol, change in found:
+        if rows:
+            if y - last_y < step / 2:
+                continue  # baris yang sama terbaca dua kali
+            rank = rows[-1].rank + max(1, round((y - last_y) / step))
+        else:
+            rank = 1 + round((y - (layout.FUTURES_FIRST_ROW_Y + shift)) / step)
+        rows.append(GainerRow(rank, symbol, change, y))
+        last_y = y
+    return rows
+
+
+def row_step(ys: Sequence[float]) -> float:
+    """Jarak antarbaris daftar: selisih terkecil antar baris yang terbaca, bila masuk akal.
+
+    Bila hanya satu baris terbaca atau selisihnya tidak wajar, pakai nilai kalibrasi.
+    """
+    nominal = layout.FUTURES_ROW_STEP
+    gaps = [b - a for a, b in pairwise(ys) if b - a > nominal * 0.4]
+    if gaps and 0.5 * nominal <= min(gaps) <= 1.5 * nominal:
+        return min(gaps)
+    return nominal
 
 
 def is_sorted_by_top_gain(rows: Sequence[GainerRow]) -> bool:

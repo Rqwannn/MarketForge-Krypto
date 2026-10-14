@@ -364,3 +364,90 @@ def test_futures_list_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) ->
     assert nav._shifted(layout.trade_icon(1)) == pytest.approx(
         (layout.trade_icon(1)[0], layout.trade_icon(1)[1] + shift)
     )
+
+
+# --------------------------------------------------------------------------- tampilan berbeda
+
+
+def tight_list(step: float, *rows: tuple[int, str, str]) -> list[TextLine]:
+    """Baris daftar dengan jarak antarbaris `step` (relatif jendela), bukan nilai kalibrasi."""
+    _, top, _, bottom = layout.FUTURES_LIST_AREA
+    lines = []
+    for rank, name, percent in rows:
+        window_y = layout.FUTURES_FIRST_ROW_Y + (rank - 1) * step
+        y = (window_y - top) / (bottom - top)
+        lines += [TextLine(f"{name} Perpetual", 0.2, y), TextLine(percent, 0.8, y + 0.002)]
+    return lines
+
+
+def test_rows_closer_together_than_calibration_keep_their_ranks() -> None:
+    from binance_bot.binance_desktop.screen_text import parse_gainer_rows
+
+    step = layout.FUTURES_ROW_STEP * 0.8
+    lines = tight_list(
+        step, (1, "AUSDT", "+60%"), (2, "BUSDT", "+50%"), (3, "CUSDT", "+40%"),
+        (4, "DUSDT", "+30%"), (5, "EUSDT", "+20%"),
+    )  # fmt: skip
+    rows = parse_gainer_rows(lines, layout.FUTURES_LIST_AREA)
+    assert [(r.rank, r.symbol) for r in rows] == [
+        (1, "AUSDT"), (2, "BUSDT"), (3, "CUSDT"), (4, "DUSDT"), (5, "EUSDT"),
+    ]  # fmt: skip
+
+
+def test_a_row_ocr_missed_does_not_shift_the_other_ranks() -> None:
+    from binance_bot.binance_desktop.screen_text import parse_gainer_rows
+
+    step = layout.FUTURES_ROW_STEP * 0.8
+    lines = tight_list(step, (1, "AUSDT", "+60%"), (2, "BUSDT", "+50%"), (4, "DUSDT", "+30%"))
+    rows = parse_gainer_rows(lines, layout.FUTURES_LIST_AREA)
+    assert [(r.rank, r.symbol) for r in rows] == [(1, "AUSDT"), (2, "BUSDT"), (4, "DUSDT")]
+
+
+def test_market_menu_is_found_by_ocr(monkeypatch: pytest.MonkeyPatch) -> None:
+    area = (0.0, 0.05, 0.14, 0.60)
+    monkeypatch.setattr(layout, "SIDEBAR_AREA", area)
+    screen = FakeScreen(texts={area: [[TextLine("Dasbor", 0.5, 0.1), TextLine("Pasar", 0.4, 0.3)]]})
+    nav = make_nav(screen)
+    nav.prepare()
+    found = (area[0] + 0.4 * (area[2] - area[0]), area[1] + 0.3 * (area[3] - area[1]))
+    assert nav._market_menu_position() == pytest.approx(found)
+
+
+def test_market_menu_falls_back_to_fixed_position(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(layout, "SIDEBAR_AREA", (0.0, 0.05, 0.14, 0.60))
+    nav = make_nav(FakeScreen())
+    nav.prepare()
+    assert nav._market_menu_position() == layout.SIDEBAR_MARKET
+
+
+def test_trade_icon_follows_the_action_header_and_the_rows_read_on_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    action_area = (0.60, 0.20, 1.0, 0.80)
+    monkeypatch.setattr(layout, "FUTURES_ACTION_AREA", action_area)
+    monkeypatch.setattr(layout, "FUTURES_TRADE_ICON_DX", 0.01)
+    header = (0.80, 0.47)  # judul "Tindakan" jauh dari posisi kalibrasi
+    header_rel = (
+        (header[0] - action_area[0]) / (action_area[2] - action_area[0]),
+        (header[1] - action_area[1]) / (action_area[3] - action_area[1]),
+    )
+    step = layout.FUTURES_ROW_STEP * 0.8
+    screen = FakeScreen(
+        texts={
+            action_area: [[TextLine("Tindakan", *header_rel)]],
+            layout.FUTURES_LIST_AREA: [
+                tight_list(step, (1, "AUSDT", "+60%"), (2, "BUSDT", "+50%"), (4, "DUSDT", "+30%"))
+            ],
+            layout.SYMBOL_AREA: [text_lines("BUSDT Perpetual")],
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    nav._locate_list()
+    nav.read_top_gainers()
+    icon_x = header[0] + 0.01
+    assert nav._trade_icon(2) == pytest.approx((icon_x, layout.FUTURES_FIRST_ROW_Y + step))
+    # baris 3 tidak terbaca: diperkirakan dari jarak antarbaris yang terukur
+    assert nav._trade_icon(3) == pytest.approx((icon_x, layout.FUTURES_FIRST_ROW_Y + 2 * step))
+    assert nav.open_gainer(2) == "BUSDT"
+    assert clicks(screen)[-1] == at((icon_x, layout.FUTURES_FIRST_ROW_Y + step))

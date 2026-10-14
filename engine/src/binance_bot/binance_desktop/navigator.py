@@ -52,6 +52,8 @@ _VERIFY_RETRY_DELAY_S = 0.4
 _CHART_TAB = re.compile(r"\bGrafik\b")
 _FUTURES_TAB = re.compile(r"\bFutures\b")
 _CHANGE_HEADER = re.compile(r"Perubahan")
+_MARKET_MENU = re.compile(r"^\s*Pasar\s*$", re.IGNORECASE)
+_ACTION_HEADER = re.compile(r"Tindakan", re.IGNORECASE)
 _EXTRA_SCROLL_SHIFT = 0.05  # banner setinggi ini atau lebih: gulir satu langkah lagi
 _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
 _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
@@ -84,6 +86,8 @@ class BinanceNavigator:
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
         self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
+        self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
+        self._row_y: dict[int, float] = {}  # y baris top gainer yang terbaca di layar
 
     def prepare(self) -> None:
         """Bawa Binance ke depan dan pastikan ukuran jendela sesuai kalibrasi posisi klik."""
@@ -152,8 +156,9 @@ class BinanceNavigator:
         Pasar menggeser tab dan daftar; bila layout mengaktifkannya, posisi keduanya dicari dengan
         OCR.
         """
-        self._click(layout.SIDEBAR_MARKET)
+        self._click(self._market_menu_position())
         self._on_trade_page = False
+        self._row_y = {}
         self._open_futures_list()
         rows: list[GainerRow] = []
         for _ in range(_SORT_ATTEMPTS):
@@ -182,6 +187,16 @@ class BinanceNavigator:
             logger.debug("Foto layar diagnosa gagal disimpan", exc_info=True)
             return "(tidak tersimpan)"
 
+    def _market_menu_position(self) -> tuple[float, float]:
+        """Posisi menu "Pasar" di sidebar: dicari dengan OCR, atau posisi tetap bila tak terbaca."""
+        if layout.SIDEBAR_AREA is None:
+            return layout.SIDEBAR_MARKET
+        found = self._find_text(layout.SIDEBAR_AREA, _MARKET_MENU)
+        if found is None:
+            logger.warning("Menu Pasar tidak terbaca di sidebar; memakai posisi tetap")
+            return layout.SIDEBAR_MARKET
+        return found
+
     def _futures_tab_position(self) -> tuple[float, float]:
         """Posisi tab Futures: dicari dengan OCR (banner bisa menggesernya), atau posisi tetap."""
         if layout.MARKET_TABS_AREA is None:
@@ -209,6 +224,13 @@ class BinanceNavigator:
         """Cari judul kolom "Perubahan" untuk tahu seberapa jauh daftar bergeser dari kalibrasi."""
         self._list_shift = 0.0
         self._header_pos = layout.FUTURES_CHANGE_HEADER
+        self._icon_x = layout.FUTURES_TRADE_ICON_X
+        if layout.FUTURES_ACTION_AREA is not None:
+            action = self._find_text(layout.FUTURES_ACTION_AREA, _ACTION_HEADER)
+            if action is None:
+                logger.warning("Judul kolom Tindakan tidak terbaca; memakai posisi ikon tetap")
+            else:
+                self._icon_x = min(0.999, action[0] + layout.FUTURES_TRADE_ICON_DX)
         if layout.FUTURES_HEADER_AREA is None:
             return
         found = self._find_text(layout.FUTURES_HEADER_AREA, _CHANGE_HEADER)
@@ -238,26 +260,52 @@ class BinanceNavigator:
         if layout.FUTURES_LIST_SCROLL_NOTCHES:
             # Halaman sudah tergulir: tab Futures tidak lagi di tempat semula. Muat ulang
             # halaman Pasar agar posisi gulir kembali ke awal.
-            self._click(layout.SIDEBAR_MARKET)
+            self._click(self._market_menu_position())
         self._open_futures_list()
 
     def read_top_gainers(self) -> list[GainerRow]:
         x0, y0, x1, y1 = layout.FUTURES_LIST_AREA
         shift = self._list_shift
         area = (x0, max(0.0, y0 + shift), x1, min(1.0, y1 + shift))
-        return parse_gainer_rows(self._read_lines(self.rect.sub(*area)), area, shift)
+        rows = parse_gainer_rows(self._read_lines(self.rect.sub(*area)), area, shift)
+        self._row_y = {row.rank: row.y for row in rows if row.y is not None}
+        return rows
 
     def open_gainer(self, rank: int) -> str:
         """Buka halaman trade Futures baris `rank`. Mengembalikan pair yang benar-benar terbuka.
 
         Peringkat bisa bergeser dalam hitungan detik, jadi pair dibaca ulang di halaman trade.
         """
-        self._click(self._shifted(layout.trade_icon(rank)))
+        self._click(self._trade_icon(rank))
         self._on_trade_page = True
         self._chart_shift = 0.0
-        symbol = self.read_symbol()
+        try:
+            symbol = self.read_symbol()
+        except ScreenReadError as exc:
+            shot = self._save_debug_shot("halaman-trade")
+            raise ScreenReadError(f"{exc} Foto layar yang dilihat bot: {shot}") from exc
         logger.info("Top gainer #%d: %s", rank, symbol)
         return symbol
+
+    def _trade_icon(self, rank: int) -> tuple[float, float]:
+        """Titik ikon trade baris `rank`.
+
+        Baris yang terbaca OCR dipakai langsung (tinggi baris berbeda di tiap laptop); baris yang
+        tidak terbaca diperkirakan dari baris lain yang terbaca, atau dari posisi kalibrasi.
+        """
+        fixed_x, fixed_y = layout.trade_icon(rank)
+        if self._row_y:
+            if rank in self._row_y:
+                return self._icon_x, self._row_y[rank]
+            known = sorted(self._row_y.items())
+            step = layout.FUTURES_ROW_STEP
+            if len(known) >= 2:
+                (r0, y0), (r1, y1) = known[0], known[-1]
+                step = (y1 - y0) / (r1 - r0)
+            near, near_y = min(known, key=lambda item: abs(item[0] - rank))
+            return self._icon_x, min(0.999, near_y + (rank - near) * step)
+        x = self._icon_x if layout.FUTURES_ACTION_AREA else fixed_x
+        return x, self._shifted((fixed_x, fixed_y))[1]
 
     def read_symbol(self) -> str:
         return parse_futures_symbol(self._read_texts(self.rect.sub(*layout.SYMBOL_AREA)))

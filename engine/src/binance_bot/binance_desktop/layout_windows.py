@@ -16,6 +16,9 @@ EXPECTED_WINDOW = (1920, 1020)
 
 # Sidebar "Pasar" (43, 195).
 SIDEBAR_MARKET = (0.0224, 0.1912)
+# Label "Pasar" di sidebar (44, 209) dicari dengan OCR: tinggi menu bergantung pada tampilan
+# Binance di tiap laptop (Dasbor, Pasar, Beli Kripto, ... dari y 120 sampai 560).
+SIDEBAR_AREA = (0.0, 0.05, 0.14, 0.60)
 # Tab "Futures" pada halaman Pasar (533, 418); sub-tab Futures USD-M terpilih secara default.
 MARKET_FUTURES_TAB = (0.2776, 0.4098)
 # Halaman Pasar harus digulir 1 langkah (125 px) agar 5 baris pertama tidak tertutup ticker
@@ -35,6 +38,11 @@ FUTURES_CHANGE_HEADER = (0.5328, 0.4618)
 FUTURES_LIST_AREA = (0.12, 0.49, 0.60, 0.965)
 # Ikon candle di kolom "Tindakan" (x=1742), baris 1 di y=538, jarak antarbaris 80 px.
 FUTURES_TRADE_ICON_X = 0.9073
+# Judul "Tindakan" (x 1724, y 471) dicari dengan OCR; ikon trade 18 px di kanan judulnya, dan di y
+# yang sama dengan nama pair pada barisnya. Lebar kolom dan jarak antarbaris berbeda di tiap
+# laptop, jadi posisi ikon tidak dihitung dari nilai tetap bila judulnya terbaca.
+FUTURES_ACTION_AREA = (0.60, 0.20, 1.0, 0.80)
+FUTURES_TRADE_ICON_DX = 0.0094
 FUTURES_FIRST_ROW_Y = 0.5275
 FUTURES_ROW_STEP = 0.0784
 MAX_RANK = 5
