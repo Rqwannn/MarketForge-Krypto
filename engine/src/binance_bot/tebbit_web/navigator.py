@@ -42,7 +42,8 @@ logger = logging.getLogger(__name__)
 
 _GAINERS = re.compile(r"\bGainers\b")
 _FUTURES = re.compile(r"\bFutures\b")
-_FIFTEEN = re.compile(r"\b15\s*m\b", re.IGNORECASE)
+# OCR kadang menempelkan garis pemisah setelah tombol ("15ml"), jadi tanpa batas kata di kanan.
+_FIFTEEN = re.compile(r"(?<![\d.])15\s*m", re.IGNORECASE)
 _MARKET = re.compile(r"\bMarket\b")
 _QUANTITY = re.compile(r"Quantity", re.IGNORECASE)
 _LOGIN = re.compile(r"\b(Log\s*in|Sign\s*up|Register)\b", re.IGNORECASE)
@@ -241,9 +242,12 @@ class TebbitNavigator(BinanceNavigator):
 
     def show_15m_chart(self) -> None:
         """Klik tombol 15m di grafik, lalu tunggu legenda MA muncul."""
-        found = self._find_text(lay.TIMEFRAME_AREA, _FIFTEEN)
-        if found is None:
-            raise ScreenReadError("Tombol '15m' tidak ditemukan di halaman koin Tebbit")
+        deadline = self._clock() + _PAGE_TIMEOUT_S
+        # Toolbar grafik baru tampil beberapa detik setelah halaman koin terbuka.
+        while (found := self._find_text(lay.TIMEFRAME_AREA, _FIFTEEN)) is None:
+            if self._clock() >= deadline:
+                raise ScreenReadError("Tombol '15m' tidak ditemukan di halaman koin Tebbit")
+            self._sleep(1.0)
         self._click(found)
         deadline = self._clock() + _PAGE_TIMEOUT_S
         while True:
