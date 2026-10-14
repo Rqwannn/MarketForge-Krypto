@@ -29,6 +29,11 @@ const STATUS = {
   timeout: ['Waktu habis', 'timeout'],
   manual: ['Ditutup (Sell)', 'manual'],
 };
+// Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
+const PLATFORMS = [
+  { id: 'binance', name: 'Binance', note: 'Futures · pantau top gainers, SOP V2', ready: true },
+  { id: 'tebbit', name: 'Tebbit', note: 'Dalam pengembangan · tebbit.io', ready: false },
+];
 const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin' };
 const ICONS = {
   play: ['M8 5v14l11-7z'],
@@ -268,6 +273,7 @@ function setState(next, title, sub) {
   engine.querySelector('strong').textContent = running ? 'Bot sedang bekerja' : next === 'stopping' ? 'Menghentikan bot' : 'Bot berhenti';
   engine.querySelector('span').textContent = running ? 'Jangan pakai mouse' : 'Siap dijalankan';
 
+  $('platform-change').disabled = next !== 'stopped'; // ganti platform hanya saat bot berhenti
   const toggle = $('toggle');
   toggle.disabled = next === 'stopping';
   toggle.classList.toggle('stop', next !== 'stopped');
@@ -307,7 +313,7 @@ async function toggleRun() {
     await window.bot.stop().catch(() => {});
     return;
   }
-  const params = { modal: form.modal, ranks: form.ranks, rank: form.rank, interval: form.interval };
+  const params = { exchange: platform.id, modal: form.modal, ranks: form.ranks, rank: form.rank, interval: form.interval };
   try {
     await window.bot.start(form.mode, params);
   } catch (err) {
@@ -1072,5 +1078,57 @@ emptyCoins('Belum ada koin yang dinilai. Tekan Mulai memantau.');
 resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
 emptyFeed('Aktivitas bot akan muncul di sini.');
 window.bot.status().then(({ running }) => {
-  if (running) setState('running', 'Sedang memantau', 'Bot sedang bekerja.');
+  if (running) {
+    setState('running', 'Sedang memantau', 'Bot sedang bekerja.');
+    choosePlatform('binance'); // bot sudah berjalan: langsung ke dashboard
+  }
 });
+
+// --------------------------------------------------------------------------- pilih platform
+
+let platform = null; // platform yang sedang dipakai
+
+function platformMark(p) {
+  const mark = el('span', { class: 'plat-mark', textContent: p.name[0] });
+  mark.setAttribute('aria-hidden', 'true');
+  return mark;
+}
+
+function renderPlatforms() {
+  $('platforms').replaceChildren(...PLATFORMS.map((p) => {
+    const card = el('button', { type: 'button', class: `platform ${p.ready ? '' : 'soon'}` },
+      platformMark(p),
+      el('div', {}, el('strong', { textContent: p.name }), el('span', { textContent: p.note })),
+      el('span', { class: `tag ${p.ready ? 'ok' : ''}`, textContent: p.ready ? 'Tersedia' : 'Segera hadir' }));
+    card.setAttribute('role', 'listitem');
+    if (p.ready) {
+      card.addEventListener('click', () => choosePlatform(p.id));
+    } else {
+      card.disabled = true; // belum bisa dipilih
+      card.title = 'Belum tersedia';
+    }
+    return card;
+  }));
+}
+
+function choosePlatform(id) {
+  const chosen = PLATFORMS.find((p) => p.id === id);
+  if (!chosen?.ready) return; // bursa yang belum siap tidak pernah menjadi platform aktif
+  platform = chosen;
+  $('platform-name').textContent = chosen.name;
+  $('platform-mark').textContent = chosen.name[0];
+  $('chooser').hidden = true;
+  $('app').inert = false;
+  showPage('run');
+}
+
+function showChooser() {
+  if (state !== 'stopped') return; // tidak bisa ganti platform saat bot berjalan
+  $('chooser').hidden = false;
+  $('app').inert = true;
+  $('platforms').querySelector('button:not(:disabled)')?.focus();
+}
+
+renderPlatforms();
+$('platform-change').addEventListener('click', showChooser);
+$('platforms').querySelector('button:not(:disabled)')?.focus();

@@ -8,6 +8,11 @@ detailnya tetap tersimpan di `engine/logs/bot.log` untuk admin.
 
 ## Untuk pengguna
 
+Saat aplikasi dibuka, pilih **platform** dulu: **Binance** (tersedia) atau **Tebbit**
+(tebbit.io, belum tersedia: kartunya redup dan tidak bisa dipilih). Platform aktif tampil di sidebar
+dengan tombol **Ganti**, yang terkunci selama bot berjalan. Mesin hanya menerima Binance; bursa lain
+ditolak walau dipaksa lewat konsol.
+
 | Halaman | Isi |
 |---|---|
 | **Pantau** | Pilih peran (Sendiri, Pemimpin, Pengikut), modal, top gainers (Sendiri dan Pemimpin bisa lebih dari satu; Pengikut satu), dan seberapa sering diulang. Kartu **Alur putaran** menyorot langkah yang sedang berjalan (mis. AI baca grafik) dan hitung mundur ke putaran berikutnya. Tabel "Putaran ini" menampilkan keputusan AI dan **tindakan**-nya (mis. Tunggu = tidak ada tindakan; Layak short = pengikut boleh membuka posisi uji). |

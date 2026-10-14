@@ -9,12 +9,29 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
+<!-- ==================================================================== pilih platform -->
+<div class="chooser" id="chooser" role="dialog" aria-modal="true" aria-labelledby="chooser-title">
+  <div class="chooser-box">
+    <img class="chooser-logo" src="img/logo.png" alt="">
+    <p class="crumb">MarketForge</p>
+    <h1 id="chooser-title">Pilih platform</h1>
+    <p class="lede">Pilih bursa yang akan dipantau. Pilihan bisa diganti kapan saja lewat sidebar selama bot tidak berjalan.</p>
+    <div class="platforms" id="platforms" role="list"></div>
+  </div>
+</div>
+
+<div class="app" id="app" inert>
   <!-- ================================================================== samping -->
   <aside class="side">
     <div class="brand">
       <img class="logo" src="img/logo.png" alt="">
       <strong>MarketForge</strong>
+    </div>
+
+    <div class="platform-chip" id="platform-chip">
+      <span class="plat-mark" id="platform-mark" aria-hidden="true"></span>
+      <div><small>Platform</small><strong id="platform-name">–</strong></div>
+      <button class="text-btn" id="platform-change">Ganti</button>
     </div>
 
     <p class="menu-label">Menu</p>

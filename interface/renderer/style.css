@@ -423,6 +423,38 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .f-pos { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 16px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
 .f-pos.none { display: block; color: var(--faint); font-size: 13px; }
 
+/* pilih platform */
+.chooser { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.chooser[hidden] { display: none; }
+.chooser-box { width: min(560px, 100%); display: grid; gap: 6px; justify-items: center; text-align: center; }
+.chooser-logo { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 0 0 1px rgba(169, 191, 227, 0.18); margin-bottom: 10px; }
+.chooser-box .lede { max-width: 430px; margin-bottom: 18px; }
+.platforms { width: 100%; display: grid; gap: 12px; text-align: left; }
+.platform {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--card);
+  transition: border-color 0.15s, background 0.15s;
+}
+.platform:hover:not(:disabled) { border-color: var(--accent); background: var(--card-2); }
+.platform div { display: grid; gap: 2px; min-width: 0; text-align: left; }
+.platform strong { font-size: 17px; }
+.platform div span { color: var(--muted); font-size: 13px; }
+.platform.soon { opacity: 0.55; cursor: not-allowed; border-style: dashed; }
+.plat-mark { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--card-2); border: 1px solid var(--line-2); color: var(--accent-2); font: 700 22px var(--mono); }
+.platform.soon .plat-mark { color: var(--faint); }
+.platform-chip { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; margin: 0 0 18px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.platform-chip .plat-mark { width: 36px; height: 36px; border-radius: 9px; font-size: 16px; }
+.platform-chip div { display: grid; line-height: 1.3; min-width: 0; }
+.platform-chip small { color: var(--faint); font-size: 11px; }
+.platform-chip strong { font-size: 14px; }
+.platform-chip .text-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* ------------------------------------------------------------------ layar sempit */
 @media (max-width: 1180px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }

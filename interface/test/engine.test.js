@@ -41,6 +41,13 @@ test('pengikut dari ajakan pemimpin: alamat hub ikut, dan divalidasi', () => {
   }
 });
 
+test('hanya Binance yang bisa dijalankan; bursa lain ditolak', () => {
+  assert.deepEqual(buildArgs('single', { exchange: 'binance', ranks: [1], modal: '100' }).slice(0, 2), ['--events', 'single']);
+  for (const exchange of ['tebbit', 'bybit', '', 'BINANCE', null]) {
+    assert.throws(() => buildArgs('single', { exchange, ranks: [1], modal: '100' }), InputError, String(exchange));
+  }
+});
+
 test('isian tidak valid ditolak sebelum menjadi argumen', () => {
   const bad = [
     ['jual', { modal: 100, ranks: [1] }],

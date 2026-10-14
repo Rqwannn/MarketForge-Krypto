@@ -42,6 +42,8 @@ const DEFAULT_BOT = findBot();
 const BOT = DEFAULT_BOT.command;
 
 const MODES = ['single', 'leader', 'follower'];
+// Bursa yang sudah didukung engine. Tebbit menyusul; sampai itu ditambahkan, hanya Binance yang jalan.
+const EXCHANGES = ['binance'];
 const MAX_RANK = 5;
 const MAX_INTERVAL_MIN = 1440;
 const STOP_GRACE_MS = 15000;
@@ -89,6 +91,9 @@ function modalOf(value) {
 function buildArgs(mode, params = {}) {
   if (!MODES.includes(mode)) throw new InputError(`Mode tidak dikenal: ${mode}`);
   const p = params || {};
+  if (p.exchange !== undefined && !EXCHANGES.includes(p.exchange)) {
+    throw new InputError('Bursa ini belum didukung. Saat ini hanya Binance.');
+  }
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
     const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];
@@ -254,6 +259,7 @@ function hubToken(env = process.env) {
 
 module.exports = {
   APP_ENV_KEYS,
+  EXCHANGES,
   BOT,
   ENGINE_DIR,
   EngineProcess,
