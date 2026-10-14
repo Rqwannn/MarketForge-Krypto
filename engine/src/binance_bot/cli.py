@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import logging
 import os
 import sys
@@ -301,6 +302,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         events=args.events,
     )
 
+    _enable_crash_dump(settings.log_dir)
     try:
         build_workflow(args, settings).run()
     except BotError as exc:
@@ -309,7 +311,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         logger.warning("Dihentikan oleh pengguna")
         return 130
+    except Exception as exc:
+        # Galat tak terduga (bukan BotError): catat lengkap dengan traceback di bot.log supaya
+        # penyebabnya bisa dibaca admin, bukan hanya pesan umum di aplikasi.
+        logger.exception("Galat tak terduga: %s: %s", type(exc).__name__, exc)
+        return 1
     return 0
+
+
+def _enable_crash_dump(log_dir: Path) -> None:
+    """Tulis jejak ke `crash.log` bila proses mati mendadak (mis. crash di pustaka native OCR)."""
+    try:
+        stream = (log_dir / "crash.log").open("a", encoding="utf-8")
+        faulthandler.enable(file=stream, all_threads=True)
+    except (OSError, RuntimeError):
+        logger.debug("Pencatat crash tidak aktif", exc_info=True)
 
 
 if __name__ == "__main__":
