@@ -16,6 +16,7 @@ from binance_bot.strategy import Journal, JournalEntry, SopParams
 from binance_bot.workflows import (
     ExampleWorkflow,
     FollowerWorkflow,
+    HistoryWorkflow,
     JournalWorkflow,
     LeaderWorkflow,
     PositionsWorkflow,
@@ -743,3 +744,26 @@ def test_example_chart_is_judged_and_kept_in_history_without_counting_as_trade(
             ExampleWorkflow(
                 tmp_path / name, symbol, "", FakePatternAnalyzer(OK), journal, shots, SopParams()
             ).run()
+
+
+def test_history_delete_one_entry_or_clear_everything_except_trades(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("STRKUSDT"))
+    journal.append(JournalEntry(id="s", created_at=0.0, symbol="WUSDT", rank=2, verdict="tunggu"))
+    journal.append(
+        JournalEntry(id="c", created_at=1.0, symbol="XUSDT", rank=0, status="contoh", role="contoh")
+    )
+    out: list[str] = []
+    HistoryWorkflow(journal, delete_id="s", output=out.append).run()
+    assert [e.id for e in journal.load()] == ["o-STRKUSDT", "c"]
+    assert json.loads(out[-1]) == {"removed": 1}
+    with pytest.raises(BotError):
+        HistoryWorkflow(journal, delete_id="tidak-ada", output=out.append).run()
+
+    journal.append(JournalEntry(id="s2", created_at=2.0, symbol="WUSDT", rank=2))
+    HistoryWorkflow(journal, clear=True, output=out.append).run()
+    assert [e.id for e in journal.load()] == ["o-STRKUSDT"]  # trade tidak ikut dibersihkan
+    HistoryWorkflow(journal, delete_id="o-STRKUSDT", output=out.append).run()  # kecuali dipilih
+    assert journal.load() == []
+    with pytest.raises(BotError):
+        HistoryWorkflow(journal)

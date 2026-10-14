@@ -29,6 +29,7 @@ from binance_bot.workflows import (
     ExampleWorkflow,
     FillTestWorkflow,
     FollowerWorkflow,
+    HistoryWorkflow,
     JournalWorkflow,
     LeaderWorkflow,
     OpenBinanceWorkflow,
@@ -228,6 +229,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--jumlah", type=parse_number, required=True, help="Ukuran order USDT, mis. 5 atau 5,5"
     )
 
+    history = sub.add_parser("riwayat", help="Hapus riwayat analisis AI (JSON).")
+    what = history.add_mutually_exclusive_group(required=True)
+    what.add_argument("--hapus", metavar="ID", help="Hapus satu entri riwayat")
+    what.add_argument(
+        "--bersihkan", action="store_true", help="Hapus semua yang bukan trade (dilewati, contoh)"
+    )
+
     example = sub.add_parser(
         "contoh", help="AI menilai gambar grafik 15 menit (PNG); hasilnya masuk riwayat analisis."
     )
@@ -239,7 +247,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 BURSA = ("binance", "tebbit")
 TEBBIT_JOURNAL = Path("journal/sop-tebbit.jsonl")
-TEBBIT_COMMANDS = ("single", "leader", "follower", "jurnal", "posisi", "uji-isi", "contoh")
+TEBBIT_COMMANDS = (
+    "single",
+    "leader",
+    "follower",
+    "jurnal",
+    "posisi",
+    "uji-isi",
+    "contoh",
+    "riwayat",
+)
 
 
 def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, MarketData]:
@@ -288,6 +305,8 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
         return JournalWorkflow(params_from(args), journal, market, as_json=args.json)
+    if args.command == "riwayat":
+        return HistoryWorkflow(journal, delete_id=args.hapus, clear=args.bersihkan)
     if args.command == "contoh":
         return ExampleWorkflow(
             args.gambar,

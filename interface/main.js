@@ -308,6 +308,16 @@ handle('platform:set', (id) => {
   return exchange;
 });
 handle('chart:image', (file) => engine.readChart(file));
+const HISTORY_ID = /^[A-Za-z0-9_.-]{1,120}$/;
+function editHistory(args) {
+  if (proc.running) throw new Error('Hentikan bot dulu sebelum menghapus riwayat.');
+  return engine.runJson(onExchange(['riwayat', ...args]));
+}
+handle('history:delete', (id) => {
+  if (!HISTORY_ID.test(String(id))) throw new Error('Riwayat tidak dikenal');
+  return editHistory(['--hapus', String(id)]);
+});
+handle('history:clear', () => editHistory(['--bersihkan']));
 handle('presence:update', (role) => {
   if (['single', 'follower'].includes(role) || (role === 'leader' && leaderKeys)) uiRole = role;
   syncPresence();

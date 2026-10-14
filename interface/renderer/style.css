@@ -510,6 +510,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .hist-item .chart-thumb.big { grid-column: 1 / -1; }
 .hist-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .hist-meta { color: var(--faint); font-size: 12px; }
+.hist-del { margin-top: 10px; }
 .hist-old { margin: 6px 0 0; color: var(--amber); font-size: 12.5px; }
 .hist-act { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 .hist-item small { display: block; margin-top: 4px; color: var(--faint); font-size: 12px; font-style: italic; }

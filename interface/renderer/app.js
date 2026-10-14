@@ -710,8 +710,42 @@ function analysisItem(a) {
         el('span', { class: 'hist-meta', textContent: `${where} · ${when}` })),
       a.old_rule ? el('p', { class: 'hist-old', textContent: 'Dinilai dengan aturan lama (tanpa syarat 6 jam terakhir). Dengan aturan sekarang hasilnya bisa berbeda.' }) : null,
       el('p', { class: 'hist-act', textContent: action }),
-      a.summary ? el('small', { textContent: `AI: ${a.summary}` }) : null));
+      a.summary ? el('small', { textContent: `AI: ${a.summary}` }) : null,
+      historyDelete(a)));
 }
+
+const NOT_TRADES = ['skipped', 'contoh'];
+
+/** Tombol hapus satu riwayat. Menghapus posisi uji juga menghapusnya dari hasil uji. */
+function historyDelete(a) {
+  const button = el('button', { type: 'button', class: 'secondary small hist-del', textContent: 'Hapus' });
+  button.addEventListener('click', async () => {
+    const trade = !NOT_TRADES.includes(a.status);
+    const ask = trade
+      ? `Hapus ${a.symbol}? Ini posisi uji: ikut terhapus dari hasil uji (50 trade).`
+      : `Hapus riwayat ${a.symbol}?`;
+    if (!window.confirm(ask)) return;
+    await editHistory(() => window.bot.history.remove(a.id));
+  });
+  return button;
+}
+
+async function editHistory(action) {
+  const notice = $('journal-notice');
+  try {
+    await action();
+    await loadJournal();
+  } catch (err) {
+    notice.hidden = false;
+    notice.className = 'notice bad';
+    notice.textContent = err.message;
+  }
+}
+
+$('history-clear').addEventListener('click', async () => {
+  if (!window.confirm('Bersihkan riwayat? Koin yang dilewati dan gambar contoh dihapus; posisi uji tetap ada.')) return;
+  await editHistory(() => window.bot.history.clear());
+});
 $('journal-refresh').addEventListener('click', loadJournal);
 
 // --------------------------------------------------------------------------- posisi (Sell)

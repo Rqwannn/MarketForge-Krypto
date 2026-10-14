@@ -161,6 +161,7 @@ def _crosses(entry: JournalEntry) -> str:
 def _analysis(entry: JournalEntry) -> dict[str, Any]:
     ai = entry.pattern_ai or {}
     return {
+        "id": entry.id,
         "created_at": entry.created_at,
         "symbol": entry.symbol,
         "rank": entry.rank,
