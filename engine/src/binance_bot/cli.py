@@ -183,6 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
     follower.add_argument("--hub", help="Alamat hub leader, mis. http://192.168.1.10:8765")
     follower.add_argument("--rank", type=parse_rank, default=1, help="Top gainer ke berapa")
     follower.add_argument(
+        "--ranks", type=parse_ranks, help="Beberapa Top sekaligus, mis. 2,4,5 (menimpa --rank)"
+    )
+    follower.add_argument(
         "--semua",
         action="store_true",
         help="Ikuti semua Top yang dimainkan leader di putaran ini (menimpa --rank)",
@@ -278,7 +281,11 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     if args.command == "follower":
         client = HubClient(args.hub or settings.hub_url, settings.hub_token) if uses_ai else None
         return FollowerWorkflow(
-            settings, navigator, trader, client, rank=None if args.semua else args.rank
+            settings,
+            navigator,
+            trader,
+            client,
+            ranks=None if args.semua else (args.ranks or [args.rank]),
         )
     raise ValueError(f"Command tidak dikenal: {args.command}")
 

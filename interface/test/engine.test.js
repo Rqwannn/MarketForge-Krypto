@@ -47,6 +47,17 @@ test('pengikut semua top: --semua; angka di luar 1..5 tetap ditolak', () => {
   for (const rank of [0, 6, '**', 'semua']) assert.throws(() => buildArgs('follower', { rank, modal: '100' }), InputError, String(rank));
 });
 
+test('pengikut beberapa top: --ranks terurut, satu top tetap --rank, tugas tidak valid ditolak', () => {
+  const tops = (rank) => buildArgs('follower', { rank, modal: '100' }).slice(2, 4);
+  assert.deepEqual(tops('245'), ['--ranks', '2,4,5']);
+  assert.deepEqual(tops([5, 2]), ['--ranks', '2,5']);
+  assert.deepEqual(tops('3'), ['--rank', '3']);
+  assert.deepEqual(tops([4]), ['--rank', '4']);
+  for (const bad of [[], [0], [6], '19', 'abc']) {
+    assert.throws(() => buildArgs('follower', { rank: bad, modal: '100' }), InputError, String(bad));
+  }
+});
+
 test('hanya Binance yang bisa dijalankan; bursa lain ditolak', () => {
   assert.deepEqual(buildArgs('single', { exchange: 'binance', ranks: [1], modal: '100' }).slice(0, 2), ['--events', 'single']);
   for (const exchange of ['tebbit', 'bybit', '', 'BINANCE', null]) {

@@ -3,7 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { CYCLE_FRESH_MS, Team, decodeInvites, encodeInvites, teamFieldsFrom, sign } = require('../team');
+const {
+  CYCLE_FRESH_MS, Team, decodeInvites, encodeInvites, normalizeRank, teamFieldsFrom, sign,
+} = require('../team');
 
 const TOKEN = 'token-uji';
 const LEADER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -28,8 +30,8 @@ function follower() {
 }
 
 test('ajakan dikodekan singkat dan bagian rusak diabaikan', () => {
-  assert.equal(encodeInvites(new Map([[ME, 2], [LEADER, 5]])), '11111111:2,aaaaaaaa:5');
-  assert.deepEqual([...decodeInvites('11111111:2,zzz:9,aaaaaaaa:7,aaaaaaaa:3')], [['11111111', 2], ['aaaaaaaa', 3]]);
+  assert.equal(encodeInvites(new Map([[ME, '2'], [LEADER, '5']])), '11111111:2,aaaaaaaa:5');
+  assert.deepEqual([...decodeInvites('11111111:2,zzz:9,aaaaaaaa:7,aaaaaaaa:3')], [['11111111', '2'], ['aaaaaaaa', '3']]);
 });
 
 test('pemimpin mengumumkan ajakan dan putaran; tanpa token tidak ada fitur kelompok', () => {
@@ -45,14 +47,14 @@ test('ajakan muncul sekali; setelah diterima, putaran baru pemimpin memicu bot p
   const { team, events } = follower();
   team.evaluate([leaderPeer({ inv: '11111111:2' })]);
   team.evaluate([leaderPeer({ inv: '11111111:2' })]); // tidak ditampilkan dua kali
-  assert.deepEqual(events, [['invite', { leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: 2 }]]);
+  assert.deepEqual(events, [['invite', { leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: '2' }]]);
 
   team.accept({ leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: 2, modal: '100' });
   assert.deepEqual(team.fields('follower'), { leader: 'aaaaaaaa', rank: '2' });
 
   team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000) })]);
   team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000) })]); // putaran sama: sekali
-  assert.deepEqual(events.at(-1), ['start', { leaderName: 'MacBook Pemimpin', rank: 2, modal: '100', hub: 'http://192.168.1.19:8765' }]);
+  assert.deepEqual(events.at(-1), ['start', { leaderName: 'MacBook Pemimpin', rank: '2', modal: '100', hub: 'http://192.168.1.19:8765' }]);
   assert.equal(events.filter(([name]) => name === 'start').length, 1);
 });
 
@@ -96,7 +98,7 @@ test('daftar pemimpin: status diajak dan sudah menjadi pengikut', () => {
   team.invite(ME, 4);
   const txt = { id: ME, name: 'Laptop', role: 'follower', state: 'idle', os: 'win32', leader: 'aaaaaaaa', rank: '4' };
   const peer = { id: ME, name: 'Laptop', role: 'follower', self: false, team: teamFieldsFrom({ ...txt, sig: sign(TOKEN, txt) }, TOKEN) };
-  assert.deepEqual([team.describe(peer).invitedRank, team.describe(peer).followerRank], [4, 4]);
+  assert.deepEqual([team.describe(peer).invitedRank, team.describe(peer).followerRank], ['4', '4']);
 });
 
 test('perintah Sell pemimpin: hanya untuk pengikutnya, sekali, masih baru, dan bukan dari sebelum bergabung', () => {
@@ -147,4 +149,38 @@ test('ajakan "semua top": dikodekan, dibaca pengikut, dan ikut diumumkan sebagai
   view.invite(ME, '*');
   const peer = { id: ME, name: 'L', role: 'follower', self: false, team: teamFieldsFrom({ ...txt, sig: sign(TOKEN, txt) }, TOKEN) };
   assert.deepEqual([view.describe(peer).invitedRank, view.describe(peer).followerRank], ['*', '*']);
+});
+
+test('tugas Top per pengikut: himpunan Top dibakukan, dikodekan, dan bisa diubah', () => {
+  assert.equal(normalizeRank([5, 2, 4, 2]), '245');
+  assert.equal(normalizeRank('542'), '245');
+  assert.equal(normalizeRank(3), '3');
+  assert.equal(normalizeRank('*'), '*');
+  for (const bad of [[], [0], [6], '', '9', '12x', null, undefined, 12, ['a']]) assert.equal(normalizeRank(bad), null, String(bad));
+
+  const leader = new Team({ myId: LEADER, token: TOKEN, now: () => NOW });
+  leader.invite(ME, [2, 4, 5]);
+  leader.invite('22222222-0000-0000-0000-000000000000', '2');
+  leader.invite('33333333-0000-0000-0000-000000000000', '*');
+  const inv = leader.fields('leader').inv;
+  assert.equal(inv, '11111111:245,22222222:2,33333333:*');
+  assert.deepEqual([...decodeInvites(inv)], [['11111111', '245'], ['22222222', '2'], ['33333333', '*']]);
+  assert.throws(() => leader.invite(ME, [7]), /Top tidak valid/);
+
+  assert.equal(leader.assignAll('*'), 3); // satu tombol: semua pengikut main semua Top pemimpin
+  assert.equal(leader.fields('leader').inv, '11111111:*,22222222:*,33333333:*');
+});
+
+test('pengikut menerima tugas beberapa Top, lalu pemimpin mengubahnya tanpa ajakan ulang', () => {
+  const { team, events } = follower();
+  team.evaluate([leaderPeer({ inv: '11111111:25' })]);
+  assert.deepEqual(events[0], ['invite', { leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: '25' }]);
+  team.accept({ leaderId: LEADER, leaderName: 'P', rank: '25', modal: '100' });
+  assert.deepEqual(team.fields('follower'), { leader: 'aaaaaaaa', rank: '25' });
+
+  assert.equal(team.evaluate([leaderPeer({ inv: '11111111:4' })]), true); // diubah pemimpin: Top 4 saja
+  assert.equal(team.membership.rank, '4');
+  assert.deepEqual(team.fields('follower'), { leader: 'aaaaaaaa', rank: '4' });
+  team.evaluate([leaderPeer({ inv: '11111111:*', cycle: String(NOW - 1000) })]);
+  assert.deepEqual(events.at(-1), ['start', { leaderName: 'MacBook Pemimpin', rank: '*', modal: '100', hub: 'http://192.168.1.19:8765' }]);
 });

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
@@ -28,8 +28,10 @@ class FollowerWorkflow:
     - pola OK: membuka koin YANG SAMA dengan leader (dicari dari nama pair di daftar top gainers,
       karena peringkat bisa bergeser), lalu menjalankan sisa SOP: biaya, slot, ukuran posisi,
       kolom Jumlah, dan pintu order dry run.
-    `rank` = satu Top tertentu; `rank=None` = semua Top yang dimainkan leader di putaran ini
-    (rencana putaran dari hub), diproses berurutan sampai slot posisi penuh.
+    `ranks` = Top yang ditugaskan leader ke follower ini (satu atau beberapa); `ranks=None` =
+    semua Top yang dimainkan leader di putaran ini (rencana putaran dari hub). Tugas dicocokkan
+    dengan Top yang benar-benar dimainkan leader di putaran itu, lalu diproses berurutan sampai
+    slot posisi penuh.
     Modal, ukuran posisi, dan jurnal milik laptop ini sendiri. Hasil terakhir ada di `self.result`.
     Dengan SINYAL=data, follower membaca pola sendiri dari data candle Top miliknya.
     """
@@ -43,7 +45,7 @@ class FollowerWorkflow:
         trader: SopTrader,
         client: HubClient | None,
         *,
-        rank: int | None = 1,
+        ranks: Sequence[int] | None = (1,),
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -51,7 +53,7 @@ class FollowerWorkflow:
         self._nav = navigator
         self._trader = trader
         self._client = client
-        self._rank = rank
+        self._ranks = None if ranks is None else sorted(set(ranks))
         self._sleep = sleep
         self._clock = clock
         self.result: JournalEntry | None = None
@@ -71,6 +73,9 @@ class FollowerWorkflow:
         except HubError as exc:
             logger.warning("Tidak masuk: %s", exc)
             return
+        if not ranks:
+            logger.info("Tidak ada Top yang perlu diikuti: leader tidak memainkan Top tugas ini")
+            return
 
         handled: set[str] = set()
         for rank in ranks:
@@ -83,11 +88,19 @@ class FollowerWorkflow:
                 self.result = outcome
 
     def _ranks_to_follow(self, uses_ai: bool) -> list[int]:
-        if self._rank is not None:
-            return [self._rank]
         if not uses_ai:
-            return list(range(1, MAX_RANK + 1))
-        return self._leader_ranks()
+            return list(self._ranks) if self._ranks is not None else list(range(1, MAX_RANK + 1))
+        planned = self._leader_ranks()
+        if self._ranks is None:
+            return planned
+        # Tugas yang tidak dimainkan leader di putaran ini dilewati, tanpa menunggu.
+        skipped = [r for r in self._ranks if r not in planned]
+        if skipped:
+            logger.info(
+                "Top %s tidak dimainkan leader putaran ini, dilewati",
+                ", ".join(str(r) for r in skipped),
+            )
+        return [r for r in self._ranks if r in planned]
 
     def _leader_ranks(self) -> list[int]:
         """Top yang dimainkan leader di putaran ini (menunggu rencana putaran yang masih baru)."""

@@ -35,7 +35,7 @@ const PLATFORMS = [
   { id: 'tebbit', name: 'Tebbit', logo: 'img/tebbit.png', note: 'Dalam pengembangan · tebbit.io', ready: false },
 ];
 /** Top tugas pengikut: angka 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
-const rankLabel = (rank) => (rank === '*' ? 'Semua top' : `Top ${rank}`);
+const rankLabel = (rank) => (rank === '*' ? 'Semua top' : `Top ${String(rank).split('').join(', ')}`);
 const ROLE_NAME = { single: 'Sendiri', follower: 'Pengikut', leader: 'Pemimpin' };
 const ICONS = {
   play: ['M8 5v14l11-7z'],
@@ -197,16 +197,21 @@ function mark(group, isOn) {
   }
 }
 
+/** Top yang diikuti laptop ini sebagai pengikut: '*' = kelimanya, atau deretan angka tugas. */
+function followedRanks() {
+  if (form.rank === '*') return RANKS;
+  return String(form.rank).split('').map(Number).filter((r) => RANKS.includes(r));
+}
+
 function watchedCount() {
-  if (form.mode !== 'follower') return form.ranks.length;
-  return form.rank === '*' ? RANKS.length : 1;
+  return form.mode !== 'follower' ? form.ranks.length : followedRanks().length;
 }
 
 function render() {
   const multi = form.mode !== 'follower';
   mark($('mode'), (v) => v === form.mode);
   mark($('interval'), (v) => Number(v) === Number(form.interval));
-  const chosen = multi ? form.ranks : form.rank === '*' ? RANKS : [form.rank];
+  const chosen = multi ? form.ranks : followedRanks();
   mark($('ranks'), (v) => chosen.includes(Number(v)));
   for (const node of document.querySelectorAll('[data-modes]')) {
     node.hidden = !node.dataset.modes.split(' ').includes(form.mode);
@@ -216,13 +221,14 @@ function render() {
   $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
   $('ranks-note').textContent = multi
     ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih`
-    : form.rank === '*' ? 'Mengikuti semua Top yang dimainkan pemimpin' : 'Pilih satu';
+    : form.rank === '*' ? 'Mengikuti semua Top yang dimainkan pemimpin' : `Ditugaskan: ${rankLabel(form.rank)}`;
   $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
   if (state === 'stopped') {
     $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
     if (!flow.done && flow.step < 0) resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
   }
   window.bot.setRole(form.mode).then(applyTeam).catch(() => {}); // peran untuk daftar laptop di WiFi
+  if (!$('peers-card').hidden) window.bot.peersNow().then(renderPeers).catch(() => {});
   saveForm();
 }
 
@@ -879,9 +885,10 @@ function renderPeers(peers) {
       if (!teamInfo.canLead) hint += 'Hanya laptop pemimpin yang bisa mengajak dan memantau laptop lain.';
       else if (!teamInfo.enabled) hint += 'Admin perlu mengisi token hub di laptop ini untuk mengajak pengikut.';
       else if (!leading) hint += 'Pilih peran Pemimpin di halaman Pantau untuk mengajak dan memantau laptop lain.';
-      else hint += 'Pilih top gainer, tekan Jadikan pengikut, lalu laptop itu menerima ajakannya.';
+      else hint += 'Pilih Top untuk tiap laptop, tekan Jadikan pengikut, lalu laptop itu menerima ajakannya.';
     }
     $('peers-sub').textContent = hint;
+    $('peers-all').hidden = !(leading && peers.some((p) => p.followerRank || p.invitedRank));
     $('peers').replaceChildren(...peers.map((p) => peerRow(p, leading)));
   }
 }
@@ -918,6 +925,8 @@ function peerRow(p, leading) {
   }
   // Hanya pemimpin yang bisa memantau laptop lain (aktivitas terenkripsi ke kunci pemimpin).
   const monitor = !p.self && leading;
+  const assigned = Boolean(p.followerRank || p.invitedRank);
+  const assignable = monitor && p.team.verified !== false && (!assigned || editing.has(p.id));
   const open = monitor && expandedPeers.has(p.id);
   const row = el('li', { class: `peer ${p.self ? 'self' : ''} ${monitor ? 'clickable' : ''} ${open ? 'open' : ''}` },
     el('span', { class: 'icon' }, icon('laptop')),
@@ -926,10 +935,11 @@ function peerRow(p, leading) {
       el('span', { textContent: monitor ? `${meta} · klik untuk memantau` : meta })),
     tags,
     el('div', { class: 'peer-actions' }, ...actions),
+    assignable ? assignPanel(p, assigned) : null,
     open ? peerDetail(p) : null);
   if (monitor) {
     row.addEventListener('click', (ev) => {
-      if (ev.target.closest('button, select')) return;
+      if (ev.target.closest('button, select, .peer-assign')) return;
       if (expandedPeers.has(p.id)) expandedPeers.delete(p.id);
       else expandedPeers.add(p.id);
       window.bot.peersNow().then(renderPeers).catch(() => {});
@@ -972,22 +982,104 @@ function peerActions(p) {
       $('peers-sub').textContent = err.message;
     }
   };
+  const edit = el('button', { class: 'secondary small', textContent: 'Ubah Top', onclick: () => startEdit(p) });
   if (p.followerRank) {
-    return [el('span', { class: 'tag follower', textContent: `Pengikut · ${rankLabel(p.followerRank)}` }),
+    return [el('span', { class: 'tag follower', textContent: `Pengikut · ${rankLabel(p.followerRank)}` }), edit,
       el('button', { class: 'secondary small', textContent: 'Lepas', onclick: act(() => window.bot.team.uninvite(p.id)) })];
   }
   if (p.invitedRank) {
-    return [el('span', { class: 'tag tunggu', textContent: `Menunggu jawaban · ${rankLabel(p.invitedRank)}` }),
+    return [el('span', { class: 'tag tunggu', textContent: `Menunggu jawaban · ${rankLabel(p.invitedRank)}` }), edit,
       el('button', { class: 'secondary small', textContent: 'Batal', onclick: act(() => window.bot.team.uninvite(p.id)) })];
   }
-  // Default "Semua top": pengikut mengikuti Top mana pun yang dimainkan pemimpin di putaran itu.
-  const select = el('select', { class: 'rank-select' },
-    el('option', { value: '*', textContent: 'Semua top' }),
-    ...RANKS.map((r) => el('option', { value: String(r), textContent: `Top ${r}` })));
-  select.setAttribute('aria-label', `Top gainer untuk ${p.name}`);
-  return [select,
-    el('button', { class: 'primary small', textContent: 'Jadikan pengikut', onclick: act(() => window.bot.team.invite(p.id, select.value === '*' ? '*' : Number(select.value))) })];
+  return []; // laptop yang belum diajak: panel penugasan di bawah barisnya
 }
+
+// --------------------------------------------------------------------------- tugas Top pengikut
+
+// Pilihan Top tiap laptop disimpan di sini (bukan di elemen), supaya tidak hilang saat daftar
+// digambar ulang karena perubahan dari jaringan.
+const picks = new Map(); // id laptop -> { all: boolean, tops: Set<number> }
+const editing = new Set(); // id pengikut yang tugasnya sedang diubah
+
+/** Top yang sedang dipilih pemimpin di halaman Pantau, itulah yang bisa dibagikan ke pengikut. */
+const leaderTops = () => [...form.ranks].sort((a, b) => a - b);
+
+function pickFor(p) {
+  if (!picks.has(p.id)) picks.set(p.id, { all: true, tops: new Set() });
+  return picks.get(p.id);
+}
+
+function startEdit(p) {
+  const current = p.followerRank || p.invitedRank;
+  picks.set(p.id, current === '*' || !current
+    ? { all: true, tops: new Set() }
+    : { all: false, tops: new Set(String(current).split('').map(Number)) });
+  editing.add(p.id);
+  window.bot.peersNow().then(renderPeers).catch(() => {});
+}
+
+/** Nilai tugas dari pilihan: '*' atau deretan angka dari Top pemimpin; null bila kosong. */
+function pickValue(pick) {
+  if (pick.all) return '*';
+  const chosen = leaderTops().filter((r) => pick.tops.has(r));
+  return chosen.length ? chosen.join('') : null;
+}
+
+function assignPanel(p, assigned) {
+  const pick = pickFor(p);
+  const rerender = () => window.bot.peersNow().then(renderPeers).catch(() => {});
+  const chip = (label, on, onclick) => {
+    const b = el('button', { type: 'button', class: `chip ${on ? 'on' : ''}`, textContent: label, onclick });
+    b.setAttribute('aria-pressed', String(on));
+    return b;
+  };
+  const chips = [
+    chip('Semua top pilihanku', pick.all, () => {
+      pick.all = !pick.all;
+      if (!pick.all && pick.tops.size === 0) leaderTops().forEach((r) => pick.tops.add(r));
+      rerender();
+    }),
+    ...leaderTops().map((r) => chip(`Top ${r}`, !pick.all && pick.tops.has(r), () => {
+      pick.all = false;
+      if (pick.tops.has(r)) pick.tops.delete(r); else pick.tops.add(r);
+      rerender();
+    })),
+  ];
+  const value = pickValue(pick);
+  const save = el('button', {
+    class: 'primary small',
+    textContent: assigned ? 'Simpan' : 'Jadikan pengikut',
+    disabled: value === null,
+    onclick: async () => {
+      try {
+        await window.bot.team.invite(p.id, value);
+        editing.delete(p.id);
+        await rerender();
+      } catch (err) {
+        $('peers-sub').textContent = err.message;
+      }
+    },
+  });
+  const cancel = assigned
+    ? el('button', { class: 'secondary small', textContent: 'Batal', onclick: () => { editing.delete(p.id); rerender(); } })
+    : null;
+  const hint = pick.all
+    ? 'Mengikuti semua Top yang dimainkan pemimpin.'
+    : value ? `Hanya ${rankLabel(value)}.` : 'Pilih minimal satu Top.';
+  return el('div', { class: 'peer-assign' },
+    el('div', { class: 'assign-chips' }, el('span', { class: 'assign-label', textContent: 'Top yang dimainkan' }), ...chips),
+    el('div', { class: 'assign-foot' }, el('span', { textContent: hint }), el('div', { class: 'assign-actions' }, cancel, save)));
+}
+
+$('peers-all').addEventListener('click', async () => {
+  try {
+    const count = await window.bot.team.assignAll('*');
+    $('peers-sub').textContent = `${count} pengikut kini memainkan semua Top yang dipilih pemimpin.`;
+    window.bot.peersNow().then(renderPeers).catch(() => {});
+  } catch (err) {
+    $('peers-sub').textContent = err.message;
+  }
+});
 
 // --------------------------------------------------------------------------- kelompok
 

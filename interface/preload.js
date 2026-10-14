@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('bot', {
     state: () => call('team:state'),
     invite: (peerId, rank) => call('team:invite', peerId, rank),
     uninvite: (peerId) => call('team:uninvite', peerId),
+    assignAll: (rank) => call('team:assignAll', rank),
     accept: (leaderId, modal) => call('team:accept', leaderId, modal),
     decline: (leaderId) => call('team:decline', leaderId),
     leave: () => call('team:leave'),

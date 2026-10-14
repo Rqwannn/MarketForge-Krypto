@@ -123,7 +123,7 @@ test('data dari jaringan divalidasi; field kelompok hanya dari tanda tangan yang
 
   const txt = { id: ATTA, name: 'Pemimpin', role: 'leader', state: 'idle', os: 'darwin', inv: '11111111:2' };
   const signed = { ...txt, sig: sign(TOKEN, txt) };
-  assert.equal(peerFrom({ txt: signed }, SELF, TOKEN).team.invites.get('11111111'), 2);
+  assert.equal(peerFrom({ txt: signed }, SELF, TOKEN).team.invites.get('11111111'), '2');
   assert.equal(peerFrom({ txt: signed }, SELF, 'token-lain').team.verified, false);
   assert.equal(peerFrom({ txt: { ...signed, inv: '11111111:5' } }, SELF, TOKEN).team.verified, false); // diubah
 });

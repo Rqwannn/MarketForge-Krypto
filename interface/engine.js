@@ -77,6 +77,20 @@ function hubOf(value) {
   return text;
 }
 
+/**
+ * Argumen Top untuk pengikut: '*' = semua Top yang dimainkan pemimpin; satu Top; atau beberapa
+ * Top sekaligus (angka, deretan angka seperti '245', atau larik).
+ */
+function followerTops(rank) {
+  if (rank === '*') return ['--semua'];
+  let list = [rank];
+  if (Array.isArray(rank)) list = rank;
+  else if (typeof rank === 'string' && /^[1-5]{2,5}$/.test(rank)) list = rank.split('');
+  const tops = [...new Set(list.map((r) => number(r, 'Top gainer', 1, MAX_RANK, true)))].sort();
+  if (tops.length === 0) throw new InputError('Pilih minimal satu top gainer');
+  return tops.length === 1 ? ['--rank', String(tops[0])] : ['--ranks', tops.join(',')];
+}
+
 function modalOf(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
     throw new InputError('Isi modal dalam USDT');
@@ -97,11 +111,7 @@ function buildArgs(mode, params = {}) {
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
     const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];
-    // '*' = ikuti semua Top yang dimainkan pemimpin di putaran ini.
-    const tops = p.rank === '*'
-      ? ['--semua']
-      : ['--rank', String(number(p.rank, 'Top gainer', 1, MAX_RANK, true))];
-    return ['--events', 'follower', ...tops, ...hub, '--modal', modalOf(p.modal)];
+    return ['--events', 'follower', ...followerTops(p.rank), ...hub, '--modal', modalOf(p.modal)];
   }
   const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN));
   const args = ['--events', mode, '--ranks', ranksOf(p.ranks).join(','), '--interval', interval];

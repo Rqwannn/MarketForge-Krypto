@@ -398,7 +398,9 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .peer-detail.empty { display: block; color: var(--muted); font-size: 13px; }
 
 /* posisi (Sell) */
-.head-actions { display: flex; gap: 10px; }
+.head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.head-actions button { white-space: nowrap; }
+.card-head > div:first-child { min-width: 0; flex: 1 1 260px; }
 .sell, .sell-all {
   border: 1px solid rgba(255, 125, 130, 0.45);
   background: var(--red-soft);
@@ -414,7 +416,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .locked { color: var(--faint); font-size: 12.5px; }
 .tag.manual { background: var(--accent-soft); border-color: rgba(169, 191, 227, 0.45); color: var(--accent-2); }
 .followers { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.follower { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 14px 16px; display: grid; gap: 12px; }
+.followers > .follower { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 14px 16px; display: grid; gap: 12px; }
 .f-head { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; align-items: center; }
 .f-head .icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
 .f-head div { display: grid; gap: 2px; min-width: 0; }
@@ -457,6 +459,18 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .platform-chip small { color: var(--faint); font-size: 11px; }
 .platform-chip strong { font-size: 14px; }
 .platform-chip .text-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* tugas Top per pengikut */
+.peer-assign { grid-column: 1 / -1; display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.assign-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.assign-label { color: var(--muted); font-size: 12.5px; font-weight: 600; margin-right: 4px; }
+.chip { border: 1px solid var(--line-2); background: var(--bg); color: var(--muted); border-radius: 999px; padding: 5px 13px; font-size: 13px; font-weight: 500; }
+.chip:hover { border-color: var(--faint); color: var(--text); }
+.chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.assign-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.assign-foot > span { color: var(--faint); font-size: 12.5px; }
+.assign-actions { display: flex; gap: 8px; }
+.primary.small:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ------------------------------------------------------------------ layar sempit */
 @media (max-width: 1180px) {

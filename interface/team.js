@@ -44,20 +44,35 @@ function isSigned(token, txt) {
   return got.length === want.length && crypto.timingSafeEqual(got, want);
 }
 
-/** Map(id lengkap -> top) -> "abcd1234:2,ef567890:3". */
+/** Map(id lengkap -> tugas Top) -> "abcd1234:245,ef567890:*". */
 function encodeInvites(invites) {
   return [...invites].map(([id, rank]) => `${shortId(id)}:${rank}`).join(',');
 }
 
-/** Top tugas pengikut: 1..5, atau '*' = semua Top yang dimainkan pemimpin. */
-const parseRank = (value) => (value === '*' ? '*' : Number(value));
+/**
+ * Tugas Top seorang pengikut, dalam bentuk baku: '*' (semua Top yang dimainkan pemimpin) atau
+ * deretan angka terurut tanpa duplikat, mis. '245' = Top 2, 4, dan 5. Menerima angka tunggal,
+ * deretan angka, atau larik. null bila tidak valid.
+ */
+function normalizeRank(value) {
+  if (value === '*') return '*';
+  let list;
+  if (Array.isArray(value)) list = value;
+  else if (typeof value === 'number') list = [value];
+  else if (typeof value === 'string' && /^[1-5]{1,5}$/.test(value)) list = value.split('');
+  else return null;
+  const nums = [...new Set(list.map(Number))];
+  if (nums.length === 0 || nums.some((n) => !Number.isInteger(n) || n < 1 || n > 5)) return null;
+  return nums.sort((a, b) => a - b).join('');
+}
 
-/** "abcd1234:2,ef567890:*" -> Map(id pendek -> top atau '*'). Bagian yang tidak valid diabaikan. */
+/** "abcd1234:245,ef567890:*" -> Map(id pendek -> tugas Top). Bagian yang tidak valid diabaikan. */
 function decodeInvites(text) {
   const invites = new Map();
   for (const part of String(text || '').split(',')) {
-    const match = /^([0-9a-f]{8}):([1-5]|\*)$/.exec(part);
-    if (match) invites.set(match[1], parseRank(match[2]));
+    const match = /^([0-9a-f]{8}):([1-5]{1,5}|\*)$/.exec(part);
+    const rank = match && normalizeRank(match[2]);
+    if (rank) invites.set(match[1], rank);
   }
   return invites;
 }
@@ -67,13 +82,13 @@ function teamFieldsFrom(txt, token) {
   if (!isSigned(token, txt)) {
     return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, close: null };
   }
-  const rank = txt.rank === '*' ? '*' : Number(txt.rank);
+  const rank = normalizeRank(txt.rank);
   const close = CLOSE.exec(txt.cls || '');
   return {
     verified: true,
     invites: decodeInvites(txt.inv),
     leader: /^[0-9a-f]{8}$/.test(txt.leader || '') ? txt.leader : '',
-    rank: rank === '*' || (Number.isInteger(rank) && rank >= 1 && rank <= 5) ? rank : null,
+    rank,
     cycle: Number.isFinite(Number(txt.cycle)) ? Number(txt.cycle) : 0,
     close: close ? { seq: Number(close[1]), target: close[2], symbol: close[3] } : null,
   };
@@ -112,8 +127,17 @@ class Team extends EventEmitter {
     return fields;
   }
 
+  /** Tugaskan pengikut ke Top tertentu (atau '*'); memanggil ulang = mengubah tugasnya. */
   invite(peerId, rank) {
-    this.invites.set(peerId, rank);
+    const normal = normalizeRank(rank);
+    if (!normal) throw new Error('Top tidak valid');
+    this.invites.set(peerId, normal);
+  }
+
+  /** Beri semua pengikut (yang diajak atau sudah bergabung) tugas yang sama. */
+  assignAll(rank) {
+    for (const id of this.invites.keys()) this.invite(id, rank);
+    return this.invites.size;
   }
 
   uninvite(peerId) {
@@ -130,7 +154,7 @@ class Team extends EventEmitter {
   }
 
   accept({ leaderId, leaderName, rank, modal }) {
-    this.membership = { leaderId, leaderName, rank, modal };
+    this.membership = { leaderId, leaderName, rank: normalizeRank(rank), modal };
     this.invites.clear();
     this.lastCycle = 0;
     this.lastClose = this.now(); // perintah Sell sebelum bergabung tidak berlaku
@@ -211,6 +235,7 @@ module.exports = {
   decodeInvites,
   encodeInvites,
   isSigned,
+  normalizeRank,
   shortId,
   sign,
   teamFieldsFrom,

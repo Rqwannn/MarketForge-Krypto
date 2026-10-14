@@ -12,7 +12,7 @@ const {
   COIN, Discovery, MAX_ACTIVITY, localAddress, primaryAddress, sealedFields,
 } = require('./discovery');
 const { loadLeaderKey, loadLeaderPublic, sealForLeader } = require('./leaderkey');
-const { Team } = require('./team');
+const { Team, normalizeRank } = require('./team');
 
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
 const ICON = path.join(__dirname, 'assets', 'icon.png'); // logo MarketForge (dari app_icon_adaptive)
@@ -178,7 +178,10 @@ async function startDiscovery() {
     });
     team = new Team({ myId: discovery.id, token });
     discovery.on('peers', (peers) => {
-      if (team.evaluate(peers)) syncPresence();
+      if (team.evaluate(peers)) {
+        syncPresence();
+        send('team:changed', teamState()); // tugas Top diubah pemimpin: segarkan banner pengikut
+      }
       send('peers:changed');
     });
     team.on('invite', (invite) => {
@@ -347,11 +350,21 @@ handle('team:invite', (peerId, rank) => {
   if (!team?.enabled) throw new Error('Token hub belum diatur di laptop ini. Hubungi admin.');
   if (team.membership || uiRole !== 'leader') throw new Error('Pilih peran Pemimpin di halaman Pantau dulu.');
   if (!discovery.peers.has(peerId)) throw new Error('Laptop itu sudah tidak terlihat. Cari ulang.');
-  if (rank !== '*' && (!Number.isInteger(rank) || rank < 1 || rank > 5)) throw new Error('Top gainer harus 1 sampai 5, atau semua');
-  team.invite(peerId, rank);
+  const assignment = normalizeRank(rank);
+  if (!assignment) throw new Error('Pilih Top 1 sampai 5, atau semua Top pemimpin');
+  team.invite(peerId, assignment);
   followerNames.set(peerId, discovery.peers.get(peerId).name);
   syncPresence();
   return true;
+});
+handle('team:assignAll', (rank) => {
+  if (!leaderKeys) throw new Error(LEADER_ONLY);
+  if (team.membership || uiRole !== 'leader') throw new Error('Pilih peran Pemimpin di halaman Pantau dulu.');
+  const assignment = normalizeRank(rank);
+  if (!assignment) throw new Error('Pilih Top 1 sampai 5, atau semua Top pemimpin');
+  const count = team.assignAll(assignment);
+  syncPresence();
+  return count;
 });
 handle('team:uninvite', (peerId) => {
   team?.uninvite(String(peerId));

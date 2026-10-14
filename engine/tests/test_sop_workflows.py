@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -347,7 +348,7 @@ def make_follower(
     client: FakeClient,
     symbols: dict[int, str | Any],
     wait_s: float = 300.0,
-    rank: int | None = 2,
+    ranks: Sequence[int] | None = (2,),
     **params: Any,
 ) -> tuple[FollowerWorkflow, FakeNavigator, Journal]:
     clock = Clock()
@@ -358,7 +359,7 @@ def make_follower(
         nav,
         trader,
         client,
-        rank=rank,
+        ranks=ranks,
         sleep=clock.sleep,
         clock=clock,  # type: ignore[arg-type]
     )
@@ -387,7 +388,7 @@ def test_follower_with_all_tops_follows_every_top_the_leader_plays(tmp_path: Pat
     }
     client = FakeClient(results, plan_done=True)
     symbols = {1: "WUSDT", 2: "CFXUSDT", 3: "SUSDT"}
-    follower, nav, journal = make_follower(tmp_path, client, symbols, rank=None, margin_pct=25)
+    follower, nav, journal = make_follower(tmp_path, client, symbols, ranks=None, margin_pct=25)
     follower.run()
     assert client.ranks == [1, 2, 3]  # semua Top milik leader, berurutan
     rows = {e.symbol: e for e in journal.load()}
@@ -401,20 +402,42 @@ def test_follower_with_all_tops_stops_when_two_slots_are_full(tmp_path: Path) ->
     results = {r: AnalysisRecord(f"C{r}USDT", r, 1000.0, reading(OK)) for r in (1, 2, 3)}
     client = FakeClient(results, plan_done=True)
     symbols = {r: f"C{r}USDT" for r in (1, 2, 3)}
-    follower, _nav, journal = make_follower(tmp_path, client, symbols, rank=None)
+    follower, _nav, journal = make_follower(tmp_path, client, symbols, ranks=None)
     follower.run()
     opened = [e.symbol for e in journal.load() if e.status == "open"]
     assert opened == ["C1USDT", "C2USDT"]  # maksimal 2 posisi (SOP)
     assert client.ranks == [1, 2]  # Top 3 tidak ditanyakan: slot sudah penuh
 
 
-def test_follower_skips_a_top_the_leader_finished_without_judging(tmp_path: Path) -> None:
-    # Putaran leader selesai dan tidak pernah menilai Top 2: jangan menunggu 300 detik.
+def test_follower_skips_a_top_the_leader_does_not_play_without_waiting(tmp_path: Path) -> None:
+    # Leader hanya memainkan Top 1; tugas pengikut Top 2: dilewati, tanpa bertanya apalagi menunggu.
     client = FakeClient({1: AnalysisRecord("WUSDT", 1, 1000.0, reading(OK))}, plan_done=True)
-    follower, nav, _ = make_follower(tmp_path, client, {1: "WUSDT"}, rank=2)
+    follower, nav, _ = make_follower(tmp_path, client, {1: "WUSDT"}, ranks=[2])
     follower.run()
     assert follower.result is None and nav.calls == []
-    assert client.ranks == [2]  # satu kali tanya, tidak menunggu
+    assert client.ranks == []
+
+
+def test_each_follower_plays_only_its_own_tops_of_the_leaders_selection(tmp_path: Path) -> None:
+    """Pemimpin memainkan Top 2, 4, 5; pengikut berbeda mendapat Top berbeda."""
+    results = {
+        2: AnalysisRecord("C2USDT", 2, 1000.0, reading(OK)),
+        4: AnalysisRecord("C4USDT", 4, 1000.0, reading(OK)),
+        5: AnalysisRecord("C5USDT", 5, 1000.0, reading(OK)),
+    }
+    symbols = {2: "C2USDT", 4: "C4USDT", 5: "C5USDT"}
+
+    def journal_of(ranks: Sequence[int] | None, name: str) -> tuple[list[int], list[str]]:
+        client = FakeClient(results, plan_done=True)
+        follower, _, journal = make_follower(tmp_path / name, client, symbols, ranks=ranks)
+        follower.run()
+        return client.ranks, [e.symbol for e in journal.load() if e.status == "open"]
+
+    assert journal_of([2], "a") == ([2], ["C2USDT"])  # satu Top
+    assert journal_of([4, 5], "b") == ([4, 5], ["C4USDT", "C5USDT"])  # dua Top
+    assert journal_of([2, 4, 5], "c")[0] == [2, 4]  # tiga Top: slot penuh setelah 2 posisi
+    assert journal_of(None, "d")[0] == [2, 4]  # "semua Top pemimpin"
+    assert journal_of([1, 3], "e") == ([], [])  # Top yang tidak dimainkan pemimpin
 
 
 def test_follower_does_not_touch_binance_when_leader_says_wait(tmp_path: Path) -> None:
@@ -629,7 +652,7 @@ def test_one_follower_covers_all_five_tops_the_leader_plays_over_a_real_hub(
             follower_nav,
             trader,
             HubClient(f"http://127.0.0.1:{server.port}", "token-uji"),
-            rank=None,  # "semua top"
+            ranks=None,  # "semua top"
             sleep=clock.sleep,
             clock=clock,  # type: ignore[arg-type]
         )
