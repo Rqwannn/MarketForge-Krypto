@@ -72,20 +72,25 @@ def test_sizing_refuses_orders_below_exchange_minimum() -> None:
 
 @pytest.mark.parametrize(("count", "verdict"), [(0, "jangan"), (1, "tunggu"), (2, "ok"), (5, "ok")])
 def test_yellow_line_rule(count: int, verdict: str) -> None:
-    assert MaPattern(count, below_now=False).verdict(min_crosses=2) == verdict
+    assert MaPattern(count, below_now=False, below_recent=True).verdict(min_crosses=2) == verdict
 
 
 def test_threshold_is_adjustable() -> None:
-    assert MaPattern(2, False).verdict(min_crosses=3) == "tunggu"
+    assert MaPattern(2, False, True).verdict(min_crosses=3) == "tunggu"
+
+
+def test_drops_before_the_rally_do_not_make_it_ok() -> None:
+    # SOP V2: kenaikan harus mulai habis. Turun 3x sebelum lonjakan, lalu naik terus = TUNGGU.
+    assert MaPattern(3, below_now=False, below_recent=False).verdict(min_crosses=2) == "tunggu"
 
 
 @pytest.mark.parametrize(
     ("drops", "expected"),
     [
-        (0, MaPattern(0, False)),
-        (1, MaPattern(1, False)),
-        (2, MaPattern(2, False)),
-        (3, MaPattern(3, True)),
+        (0, MaPattern(0, False, False)),
+        (1, MaPattern(1, False, False)),
+        (2, MaPattern(2, False, False)),  # dua kali turun, lalu naik terus 6 jam terakhir
+        (3, MaPattern(3, True, True)),
     ],
 )
 def test_data_counts_ma7_periods_below_ma25(drops: int, expected: MaPattern) -> None:

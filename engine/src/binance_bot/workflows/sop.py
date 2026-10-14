@@ -284,6 +284,11 @@ class SopTrader:
             f" | {entry.ai_summary}" if entry.ai_summary else "",
         )
         if entry.verdict != "ok":
+            if entry.verdict == "tunggu" and decisive.below_count >= params.min_crosses:
+                raise _Skip(
+                    f"pola garis kuning TUNGGU (sudah {decisive.below_count} kali di bawah, "
+                    "tapi 6 jam terakhir naik terus)"
+                )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
 
         # Ukuran posisi: margin % modal x leverage.

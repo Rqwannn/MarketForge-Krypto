@@ -97,8 +97,8 @@ def test_ok_pattern_is_sized_2x_filled_and_paper_traded(tmp_path: Path) -> None:
     assert (plan.side, plan.leverage, plan.margin_usdt) == ("SHORT", 2, pytest.approx(50.0))
     assert plan.target_price == pytest.approx(0.98)  # target 2% di bawah
     assert plan.stop_price == pytest.approx(1.02)  # stop-loss 2% di atas
-    assert entry.pattern_ai == {"below_count": 3, "below_now": True}
-    assert entry.pattern_data == {"below_count": 2, "below_now": False}
+    assert entry.pattern_ai == {"below_count": 3, "below_now": True, "below_recent": True}
+    assert entry.pattern_data == {"below_count": 2, "below_now": False, "below_recent": False}
     assert entry.max_price == pytest.approx(1.0)
     assert [e.status for e in journal.load()] == ["open"]
 

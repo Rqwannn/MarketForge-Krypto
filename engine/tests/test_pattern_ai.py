@@ -14,6 +14,7 @@ from binance_bot.strategy import MaPattern
 VALID = {
     "ma7_below_ma25_count": 3,
     "ma7_below_ma25_now": True,
+    "ma7_below_ma25_recent": True,
     "summary": "Garis kuning sudah tiga kali di bawah magenta.",
 }
 
@@ -25,7 +26,7 @@ def settings(**overrides: Any) -> Settings:
 
 def test_valid_answer_becomes_a_pattern() -> None:
     reading = pattern_from_dict(extract_json("```json\n" + json.dumps(VALID) + "\n```"))
-    assert reading.pattern == MaPattern(3, True)
+    assert reading.pattern == MaPattern(3, True, True)
     assert reading.pattern.verdict(2) == "ok"
 
 
@@ -38,6 +39,8 @@ def test_valid_answer_becomes_a_pattern() -> None:
         {**VALID, "ma7_below_ma25_count": -1},
         {**VALID, "ma7_below_ma25_count": 999},
         {**VALID, "ma7_below_ma25_now": "ya"},
+        {**VALID, "ma7_below_ma25_recent": None},
+        {k: v for k, v in VALID.items() if k != "ma7_below_ma25_recent"},
         {**VALID, "summary": ""},
         {k: v for k, v in VALID.items() if k != "ma7_below_ma25_now"},
         "bukan objek",

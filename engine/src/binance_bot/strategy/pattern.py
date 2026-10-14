@@ -3,6 +3,9 @@
 Aturan beliau: selalu di atas = JANGAN short; baru sekali di bawah = TUNGGU; berkali-kali di
 bawah = OK. "Berkali-kali" = minimal `min_crosses` (usulan 2). Hitungan = jumlah periode
 terpisah saat MA7 berada di bawah MA25 dalam grafik yang dinilai.
+
+OK juga menuntut kenaikan "mulai habis": MA7 pernah di bawah MA25 dalam 6 jam terakhir.
+Turun berkali-kali SEBELUM lonjakan, lalu naik terus sampai ujung kanan, tetap TUNGGU.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from binance_bot.market import Candle
 
 VERDICTS = ("jangan", "tunggu", "ok")
 LOOKBACK_CANDLES = 96  # 24 jam lilin 15 menit, kira-kira seluas grafik yang dilihat AI
+RECENT_CANDLES = 24  # 6 jam terakhir: MA7 harus pernah di bawah MA25 di sini untuk OK
 _SLOW, _FAST = 25, 7
 
 
@@ -22,13 +26,16 @@ _SLOW, _FAST = 25, 7
 class MaPattern:
     below_count: int  # berapa kali (periode terpisah) MA7 berada di bawah MA25
     below_now: bool  # di ujung kanan, MA7 di bawah MA25
+    below_recent: bool  # dalam 6 jam terakhir MA7 pernah di bawah MA25
 
     def verdict(self, min_crosses: int) -> str:
         if self.below_count == 0:
             return "jangan"  # selalu di atas: harga naik terus
         if self.below_count < min_crosses:
             return "tunggu"  # baru sekali di bawah: masih bisa naik besar
-        return "ok"  # berkali-kali di bawah: cenderung turun
+        if not self.below_recent:
+            return "tunggu"  # turunnya sebelum lonjakan; sekarang masih naik terus
+        return "ok"  # berkali-kali di bawah dan baru saja turun lagi: cenderung turun
 
     def as_dict(self) -> dict[str, int | bool]:
         return asdict(self)
@@ -46,7 +53,9 @@ def data_ma_pattern(candles: Sequence[Candle], lookback: int = LOOKBACK_CANDLES)
     window = range(len(closes) - lookback, len(closes))
     below = [_sma(closes, _FAST, i) < _sma(closes, _SLOW, i) for i in window]
     count = int(below[0]) + sum(1 for prev, now in pairwise(below) if now and not prev)
-    return MaPattern(below_count=count, below_now=below[-1])
+    return MaPattern(
+        below_count=count, below_now=below[-1], below_recent=any(below[-RECENT_CANDLES:])
+    )
 
 
 def candles_needed(lookback: int = LOOKBACK_CANDLES) -> int:

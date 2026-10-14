@@ -88,6 +88,7 @@ function plain(text) {
   const rules = [
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
+    [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
     [/sudah (\d+) posisi terbuka/, (m) => `Sudah ${m[1]} posisi berjalan, batas tercapai`],
     [/sedang rugi/, 'Posisi pertama sedang rugi, koin berikutnya ditunda'],

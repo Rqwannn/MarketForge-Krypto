@@ -30,6 +30,9 @@ Jawab HANYA dengan JSON valid, tanpa teks lain:
 {
  "ma7_below_ma25_count": <bilangan bulat>,
  "ma7_below_ma25_now": true jika di ujung kanan garis kuning berada di bawah garis magenta,
+ "ma7_below_ma25_recent": true jika dalam 6 JAM TERAKHIR (bagian paling kanan grafik, lihat label
+   waktu di sumbu bawah) garis kuning pernah berada di bawah garis magenta; false bila selama
+   6 jam terakhir garis kuning terus di atas garis magenta,
  "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia
 }"""
 
@@ -72,11 +75,13 @@ def pattern_from_dict(data: Any) -> PatternReading:
         or isinstance(count, bool)
         or not 0 <= count <= _MAX_COUNT
         or not isinstance(data.get("ma7_below_ma25_now"), bool)
+        or not isinstance(data.get("ma7_below_ma25_recent"), bool)
         or not isinstance(summary, str)
         or not summary
     ):
         raise AnalysisError(f"Jawaban pola garis kuning tidak sesuai skema: {str(data)[:200]}")
-    return PatternReading(MaPattern(count, data["ma7_below_ma25_now"]), summary)
+    pattern = MaPattern(count, data["ma7_below_ma25_now"], data["ma7_below_ma25_recent"])
+    return PatternReading(pattern, summary)
 
 
 class VikeyPatternAnalyzer:
