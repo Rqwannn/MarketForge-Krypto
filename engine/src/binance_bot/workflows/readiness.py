@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 
 from binance_bot.binance_desktop.layout import (
-    EXPECTED_WINDOW,
+    area_fits,
     screen_too_small,
     window_ready,
     window_target,
@@ -108,7 +108,7 @@ class ReadinessWorkflow:
         s = self._settings
         areas = self._screens()
         auto = "Jendela Binance ditampilkan dan diatur otomatis saat bot mulai."
-        fits = any(a.width >= EXPECTED_WINDOW[0] and a.height >= EXPECTED_WINDOW[1] for a in areas)
+        fits = any(area_fits(a) for a in areas)
         screen_check = Check("window", fits, auto if fits else screen_too_small(areas))
         if not self._apps.is_running(s.app_bundle_id):
             return [

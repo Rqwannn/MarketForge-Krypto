@@ -364,3 +364,14 @@ def test_futures_list_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) ->
     assert nav._shifted(layout.trade_icon(1)) == pytest.approx(
         (layout.trade_icon(1)[0], layout.trade_icon(1)[1] + shift)
     )
+
+
+def test_screen_slightly_smaller_than_calibration_still_fits() -> None:
+    from binance_bot.binance_desktop.layout import EXPECTED_WINDOW, area_fits, window_target
+    from binance_bot.macos import Rect
+
+    width, height = EXPECTED_WINDOW
+    dock = Rect(0, 33, width, height - 1)  # Dock tampil: 1 pt lebih pendek
+    assert area_fits(dock)
+    assert window_target(Rect(0, 33, 800, 600), [dock]) == Rect(0, 33, width, height - 1)
+    assert not area_fits(Rect(0, 33, width, int(height * 0.9)))

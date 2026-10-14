@@ -51,12 +51,18 @@ def window_target(window: Rect, areas: Sequence[Rect]) -> Rect | None:
         return area.contains(Rect(center_x, center_y, 0, 0))
 
     for area in sorted(areas, key=lambda a: not holds_center(a)):
-        # Toleransi sama dengan cek ukuran: area sedikit lebih kecil (mis. Dock) tetap dipakai.
-        if area.width >= want_w * (1 - WINDOW_TOLERANCE) and area.height >= want_h * (
-            1 - WINDOW_TOLERANCE
-        ):
+        if area_fits(area):
             return Rect(area.x, area.y, min(want_w, area.width), min(want_h, area.height))
     return None
+
+
+def area_fits(area: Rect) -> bool:
+    """Area layar cukup untuk jendela kalibrasi, dengan toleransi yang sama dengan cek ukuran
+    jendela (area sedikit lebih kecil, mis. karena Dock, tetap bisa dipakai)."""
+    want_w, want_h = EXPECTED_WINDOW
+    return area.width >= want_w * (1 - WINDOW_TOLERANCE) and area.height >= want_h * (
+        1 - WINDOW_TOLERANCE
+    )
 
 
 def screen_too_small(areas: Sequence[Rect]) -> str:
