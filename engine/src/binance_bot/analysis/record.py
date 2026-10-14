@@ -32,6 +32,7 @@ class AnalysisRecord:
             "analyzed_at": self.analyzed_at,
             "ma7_below_ma25_count": pattern.below_count,
             "ma7_below_ma25_now": pattern.below_now,
+            "ma7_below_ma25_recent": pattern.below_recent,
             "summary": self.reading.summary,
         }
 

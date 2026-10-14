@@ -65,7 +65,13 @@ def coin_event(entry: JournalEntry) -> dict[str, dict[str, Any]]:
         entry_price=entry.entry_price,
         target_price=entry.target_price,
         stop_price=entry.stop_price,
+        chart=chart_of(entry),
     )
+
+
+def chart_of(entry: JournalEntry) -> str | None:
+    """Screenshot grafik 15 menit yang dibaca AI (yang terakhir diambil), bila ada."""
+    return next((s for s in reversed(entry.screenshots) if s.endswith("_15m.png")), None)
 
 
 class _Skip(Exception):
@@ -230,9 +236,6 @@ class SopTrader:
             raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
-        blocker = self.slot_blocker()
-        if blocker:
-            raise _Skip(blocker)
 
         # Saringan biaya (gratis, sebelum AI): funding, spread, dan kenaikan minimal bila diisi.
         quote = self._market.quote(symbol)
@@ -284,7 +287,17 @@ class SopTrader:
             f" | {entry.ai_summary}" if entry.ai_summary else "",
         )
         if entry.verdict != "ok":
+            if entry.verdict == "tunggu" and decisive.below_count >= params.min_crosses:
+                raise _Skip(
+                    f"pola garis kuning TUNGGU (sudah {decisive.below_count} kali di bawah, "
+                    "tapi 6 jam terakhir naik terus)"
+                )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
+
+        # Langkah 4 SOP (setelah pola dan biaya): slot posisi.
+        blocker = self.slot_blocker()
+        if blocker:
+            raise _Skip(blocker)
 
         # Ukuran posisi: margin % modal x leverage.
         rules = self._market.rules(symbol)

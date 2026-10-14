@@ -10,7 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from binance_bot import __version__
-from binance_bot.analysis import VikeyPatternAnalyzer
+from binance_bot.analysis import ConsensusAnalyzer, VikeyPatternAnalyzer
 from binance_bot.analysis.pattern import PROMPT, TEBBIT_PROMPT
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
@@ -27,8 +27,10 @@ from binance_bot.tebbit_web.chrome import ChromeController, ChromeWindowControll
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import TebbitNavigator
 from binance_bot.workflows import (
+    ExampleWorkflow,
     FillTestWorkflow,
     FollowerWorkflow,
+    HistoryWorkflow,
     JournalWorkflow,
     LeaderWorkflow,
     OpenBinanceWorkflow,
@@ -227,15 +229,40 @@ def build_parser() -> argparse.ArgumentParser:
     fill.add_argument(
         "--jumlah", type=parse_number, required=True, help="Ukuran order USDT, mis. 5 atau 5,5"
     )
+
+    history = sub.add_parser("riwayat", help="Hapus riwayat analisis AI (JSON).")
+    what = history.add_mutually_exclusive_group(required=True)
+    what.add_argument("--hapus", metavar="ID", help="Hapus satu entri riwayat")
+    what.add_argument(
+        "--bersihkan", action="store_true", help="Hapus semua yang bukan trade (dilewati, contoh)"
+    )
+
+    example = sub.add_parser(
+        "contoh", help="AI menilai gambar grafik 15 menit (PNG); hasilnya masuk riwayat analisis."
+    )
+    example.add_argument("gambar", type=Path, help="File PNG grafik 15 menit")
+    example.add_argument("--koin", required=True, help="Pair, mis. MAGICUSDT")
+    example.add_argument("--catatan", default="", help="Mis. penilaian Pak Saputra")
     return parser
 
 
 BURSA = ("binance", "tebbit")
 TEBBIT_JOURNAL = Path("journal/sop-tebbit.jsonl")
-TEBBIT_COMMANDS = ("single", "leader", "follower", "jurnal", "posisi", "uji-isi")
+TEBBIT_COMMANDS = (
+    "single",
+    "leader",
+    "follower",
+    "jurnal",
+    "posisi",
+    "uji-isi",
+    "contoh",
+    "riwayat",
+)
 
 
-def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, MarketData]:
+def build_tebbit(
+    settings: Settings, system: System, *, browse: bool = False
+) -> tuple[TradingNavigator, MarketData]:
     chrome = ChromeController()
     navigator = TebbitNavigator(
         settings,
@@ -245,7 +272,7 @@ def build_tebbit(settings: Settings, system: System) -> tuple[TradingNavigator, 
         chrome,
         screens=system.screens,
     )
-    return navigator, ScreenMarket(navigator)
+    return navigator, ScreenMarket(navigator, browse=browse)
 
 
 def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
@@ -265,7 +292,11 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     navigator: TradingNavigator
     market: MarketData
     if tebbit:
-        navigator, market = build_tebbit(settings, system)
+        # Membuka halaman koin lain untuk membaca harganya hanya saat bot bekerja atau Sell.
+        browse = args.command in ("single", "leader", "follower") or (
+            args.command == "posisi" and args.tutup is not None
+        )
+        navigator, market = build_tebbit(settings, system, browse=browse)
     else:
         market = FuturesMarket()
     if args.command == "cek":
@@ -281,6 +312,20 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
         return JournalWorkflow(params_from(args), journal, market, as_json=args.json)
+    if args.command == "riwayat":
+        return HistoryWorkflow(journal, delete_id=args.hapus, clear=args.bersihkan)
+    if args.command == "contoh":
+        return ExampleWorkflow(
+            args.gambar,
+            args.koin,
+            args.catatan,
+            ConsensusAnalyzer(
+                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            ),
+            journal,
+            settings.screenshot_dir,
+            SopParams(),
+        )
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
         return PositionsWorkflow(params_from(args), journal, market, close=target)
@@ -296,7 +341,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             SopParams(min_gain_pct=args.min_naik, min_crosses=args.min_turun),
             navigator,
             market,
-            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT),
+            ConsensusAnalyzer(
+                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            ),
             store,
             HubServer(store, settings.hub_token, port=args.port or settings.hub_port),
             args.ranks,
@@ -317,7 +364,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     uses_ai = params.signal_source == "ai"
     if args.command == "single":
         analyzer = (
-            VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            ConsensusAnalyzer(
+                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
+            )
             if uses_ai
             else None
         )

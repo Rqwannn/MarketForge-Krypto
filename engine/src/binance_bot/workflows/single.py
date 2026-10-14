@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from binance_bot.analysis import PatternAnalyzer
 from binance_bot.exceptions import BotError
 from binance_bot.logging_setup import event
+from binance_bot.market import is_futures_symbol
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import SopTrader, log_top_gainers
 
@@ -74,10 +75,6 @@ class SingleWorkflow:
         on_list = True
         seen: set[str] = set()
         for rank in self._ranks:
-            blocker = self._trader.slot_blocker()
-            if blocker:
-                logger.info("Berhenti memantau: %s", blocker)
-                break
             row = rows.get(rank)
             if row is not None and row.change_pct < min_gain:
                 logger.info(
@@ -89,10 +86,16 @@ class SingleWorkflow:
                 )
                 continue
             try:
-                if not on_list:
-                    self._nav.open_top_gainers()
+                # Bila bisa (Tebbit), buka pair dari daftar awal lewat namanya: peringkat sering
+                # bertukar di tengah putaran sehingga klik baris membuka pair yang sama lagi.
+                open_symbol = getattr(self._nav, "open_symbol", None)
+                if open_symbol is not None and row is not None and is_futures_symbol(row.symbol):
+                    symbol = open_symbol(row.symbol)
+                else:
+                    if not on_list:
+                        self._nav.open_top_gainers()
+                    symbol = self._nav.open_gainer(rank)
                 on_list = False
-                symbol = self._nav.open_gainer(rank)
             except BotError as exc:
                 logger.error("Rank #%d dilewati: %s", rank, exc)
                 continue

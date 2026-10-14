@@ -1,13 +1,17 @@
 """Data pasar Tebbit dari layar (tanpa API): harga, spread, dan perubahan 24 jam.
 
 Tebbit tidak punya sumber candle atau funding yang kita pakai, jadi `klines` dan `funding_history`
-melempar MarketDataError (SOP menanganinya sebagai "tanpa pembanding"; hanya AI yang menilai pola).
+melempar NoHistoryError (SOP menanganinya sebagai "tanpa pembanding"; hanya AI yang menilai pola).
 Funding tidak tampil di halaman: dianggap 0, sehingga saringan funding tidak menolak koin.
+
+Harga koin lain (mis. posisi uji yang masih terbuka) hanya dibaca bila `browse` aktif: bot
+membuka halaman koin itu sebentar lalu kembali. Saat aplikasi sekadar menampilkan daftar posisi,
+`browse` mati agar Chrome tidak dibuka.
 """
 
 from __future__ import annotations
 
-from binance_bot.exceptions import MarketDataError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.market.binance_futures import Candle, Quote, SymbolRules
 from binance_bot.tebbit_web.navigator import TebbitNavigator
 
@@ -16,16 +20,32 @@ _RULES = SymbolRules(step=0.01, min_qty=0.01, min_notional=5.0)
 
 
 class ScreenMarket:
-    def __init__(self, navigator: TebbitNavigator) -> None:
+    def __init__(self, navigator: TebbitNavigator, *, browse: bool = False) -> None:
         self._nav = navigator
+        self._browse = browse
 
     def rules(self, symbol: str) -> SymbolRules:
         return _RULES
 
     def quote(self, symbol: str) -> Quote:
-        """Hanya untuk koin yang halamannya sedang terbuka di Chrome."""
-        if self._nav.read_symbol() != symbol:
+        try:
+            opened: str | None = self._nav.read_symbol()
+        except BotError:
+            opened = None  # jendela belum dibuka atau bukan halaman koin
+        if opened == symbol:
+            return self._read()
+        if not self._browse:
             raise MarketDataError(f"{symbol} tidak sedang terbuka di Tebbit, harga tidak terbaca")
+        if opened is None:
+            self._nav.prepare()
+        self._nav.open_symbol(symbol)
+        try:
+            return self._read()
+        finally:
+            if opened is not None:
+                self._nav.open_symbol(opened)  # kembali ke koin yang sedang dinilai
+
+    def _read(self) -> Quote:
         bid, ask, _price, change = self._nav.read_quote()
         return Quote(bid=bid, ask=ask, funding_rate=0.0, change_pct=change)
 
@@ -38,7 +58,7 @@ class ScreenMarket:
         start_ms: int | None = None,
         end_ms: int | None = None,
     ) -> list[Candle]:
-        raise MarketDataError("Tebbit tidak punya sumber candle")
+        raise NoHistoryError("Tebbit tidak punya sumber candle")
 
     def funding_history(self, symbol: str, start_ms: int, end_ms: int) -> list[tuple[int, float]]:
-        raise MarketDataError("Tebbit tidak punya sumber funding")
+        raise NoHistoryError("Tebbit tidak punya sumber funding")

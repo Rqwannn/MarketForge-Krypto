@@ -22,10 +22,9 @@ class JournalEntry:
     created_at: float  # epoch detik; juga waktu masuk uji kertas
     symbol: str
     rank: int
-    status: str = (
-        "skipped"  # skipped | open | target | stop | timeout | manual (ditutup lewat Sell)
-    )
-    role: str = "single"  # peran laptop saat masuk: single (Sendiri) | follower (Pengikut)
+    # skipped | open | target | stop | timeout | manual (Sell) | contoh (gambar contoh)
+    status: str = "skipped"
+    role: str = "single"  # single (Sendiri) | follower (Pengikut) | contoh (gambar contoh)
     reason: str = ""
     change_pct: float | None = None
     funding_rate: float | None = None

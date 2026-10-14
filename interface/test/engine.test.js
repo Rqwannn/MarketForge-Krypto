@@ -179,3 +179,19 @@ test('proses engine: log per baris, lingkungan dari .env, berhenti', async () =>
     assert.ok(logs.some((l) => l.level === 'ERROR' && l.message === 'berhenti'));
   }
 });
+
+test('grafik hanya dibaca dari folder screenshots engine', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { readChart } = require('../engine');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mf-engine-'));
+  fs.mkdirSync(path.join(dir, 'screenshots'));
+  fs.writeFileSync(path.join(dir, 'screenshots', 'x_rank1_BTWUSDT_15m.png'), Buffer.from([0x89, 0x50]));
+  fs.writeFileSync(path.join(dir, '.env'), 'VIKEY_API_KEY=rahasia');
+  assert.equal(readChart('screenshots/x_rank1_BTWUSDT_15m.png', dir), 'data:image/png;base64,iVA=');
+  for (const bad of ['.env', '../.env', 'screenshots/../.env', 'screenshots/x.png', '/etc/passwd',
+    'screenshots/sub/a_15m.png', 'screenshots/hilang_15m.png', '', null]) {
+    assert.throws(() => readChart(bad, dir), InputError, String(bad));
+  }
+});

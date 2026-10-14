@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld('bot', {
   status: () => call('engine:status'),
   checks: () => call('engine:checks'),
   summary: () => call('engine:summary'),
+  setPlatform: (id) => call('platform:set', id),
+  chartImage: (file) => call('chart:image', file),
+  history: {
+    remove: (id) => call('history:delete', id),
+    clear: () => call('history:clear'),
+  },
   peers: () => call('peers:list'),
   peersNow: () => call('peers:now'),
   reportActivity: (update) => call('presence:activity', update),

@@ -8,6 +8,7 @@ prompt dan keputusan AI bisa dibandingkan dengan hitungan data.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -19,17 +20,28 @@ from binance_bot.strategy.pattern import MaPattern
 
 _MAX_COUNT = 50  # hitungan di atas ini tidak masuk akal untuk satu layar grafik
 
-_TASK = """Tugas: ikuti garis KUNING terhadap garis MAGENTA di SELURUH grafik, dari kiri ke kanan.
+_TASK = """Tugas: nilai KENAIKAN TERAKHIR saja, yaitu dari titik terendah tepat sebelum harga naik
+besar sampai ujung kanan grafik (bagian yang biasa dilingkari trader). Naik-turun garis SEBELUM
+kenaikan itu dimulai TIDAK dihitung, karena belum termasuk kenaikan yang mau di-short.
+Di bagian kenaikan itu, ikuti garis KUNING terhadap garis MAGENTA dari kiri ke kanan.
 Hitung berapa kali garis kuning berada DI BAWAH garis magenta sebagai periode terpisah:
 - setiap kali garis kuning turun menembus ke bawah garis magenta dihitung 1;
-- bila di ujung kiri grafik garis kuning sudah di bawah garis magenta, itu juga dihitung 1;
-- bila garis kuning selalu di atas garis magenta, jawabannya 0.
+- bila garis kuning selalu di atas garis magenta selama kenaikan, jawabannya 0.
+Penurunan SINGKAT tetap dihitung: walau hanya beberapa lilin dan garis kuning hanya sedikit
+menembus ke bawah garis magenta (garis berpotongan lalu kembali ke atas), itu 1 kali.
+Perhatikan khususnya bagian kanan grafik setelah harga naik: saat harga mendatar di puncak,
+garis kuning sering berpotongan dengan garis magenta berkali-kali.
 Telusuri satu per satu dengan teliti sebelum menjawab.
 
 Jawab HANYA dengan JSON valid, tanpa teks lain:
 {
  "ma7_below_ma25_count": <bilangan bulat>,
  "ma7_below_ma25_now": true jika di ujung kanan garis kuning berada di bawah garis magenta,
+ "ma7_below_ma25_recent": true jika dalam 6 JAM TERAKHIR, yaitu sekitar 24 LILIN TERAKHIR di ujung
+   kanan grafik (1 lilin = 15 menit), garis kuning pernah berada di bawah garis magenta; false bila
+   di 24 lilin terakhir itu garis kuning terus di atas garis magenta. Hitung lilinnya, jangan
+   menebak dari label sumbu waktu: angka tanpa titik dua di sumbu (mis. "13", "14", "10/14")
+   adalah TANGGAL (pergantian hari), bukan jam,
  "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia
 }"""
 
@@ -43,13 +55,15 @@ Abaikan kotak tombol Beli/Long dan Jual/Short yang melayang di atas grafik, dan 
 )
 
 TEBBIT_PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Tebbit Futures (latar terang).
-Di kiri atas ada legenda "MA 7", "MA 25", "MA 99"; tiap label berwarna sama dengan garisnya.
-Cocokkan garis di grafik dengan warna di legenda. Panel bawah = volume.
-Abaikan tombol dan tulisan yang melayang di atas grafik, dan abaikan lilin dan garis MA 99.
+Di kiri atas ada legenda garis rata-rata, mis. "MA 7", "MA 25", "MA 99" atau "MA 5", "MA 10",
+"MA 30"; tiap label berwarna sama dengan garisnya. Cocokkan garis dengan warna di legenda.
+- GARIS CEPAT = garis berlabel MA 7; bila tidak ada MA 7, pakai garis MA 5.
+- GARIS PEMBANDING = garis berlabel MA 25; bila tidak ada MA 25, pakai garis MA 30.
+Abaikan garis lain, lilin, panel volume di bawah, dan tombol atau tulisan yang melayang.
 
-""" + _TASK.replace("KUNING", "MA 7").replace("kuning", "MA 7").replace("MAGENTA", "MA 25").replace(
-    "magenta", "MA 25"
-)
+""" + _TASK.replace("KUNING", "CEPAT").replace("kuning", "cepat").replace(
+    "MAGENTA", "PEMBANDING"
+).replace("magenta", "pembanding")
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,11 +86,13 @@ def pattern_from_dict(data: Any) -> PatternReading:
         or isinstance(count, bool)
         or not 0 <= count <= _MAX_COUNT
         or not isinstance(data.get("ma7_below_ma25_now"), bool)
+        or not isinstance(data.get("ma7_below_ma25_recent"), bool)
         or not isinstance(summary, str)
         or not summary
     ):
         raise AnalysisError(f"Jawaban pola garis kuning tidak sesuai skema: {str(data)[:200]}")
-    return PatternReading(MaPattern(count, data["ma7_below_ma25_now"]), summary)
+    pattern = MaPattern(count, data["ma7_below_ma25_now"], data["ma7_below_ma25_recent"])
+    return PatternReading(pattern, summary)
 
 
 class VikeyPatternAnalyzer:
@@ -88,3 +104,39 @@ class VikeyPatternAnalyzer:
 
     def analyze(self, image: Path) -> PatternReading:
         return pattern_from_dict(extract_json(self._client.ask(image, self._prompt)))
+
+
+class ConsensusAnalyzer:
+    """AI membaca grafik yang sama beberapa kali sekaligus; hasilnya suara terbanyak.
+
+    Satu bacaan AI bisa berbeda dari bacaan berikutnya untuk gambar yang sama. Hitungan diambil
+    nilai tengahnya, "di bawah sekarang" dan "6 jam terakhir" diambil suara terbanyak.
+    """
+
+    def __init__(self, analyzer: PatternAnalyzer, reads: int = 5) -> None:
+        self._inner = analyzer
+        self._reads = reads
+
+    def analyze(self, image: Path) -> PatternReading:
+        with ThreadPoolExecutor(self._reads) as pool:
+            results = list(pool.map(self._try, [image] * self._reads))
+        readings = [r for r in results if isinstance(r, PatternReading)]
+        if len(readings) * 2 <= self._reads:
+            error = next(r for r in results if isinstance(r, AnalysisError))
+            raise AnalysisError(f"Mayoritas bacaan AI gagal: {error}")
+        counts = sorted(r.pattern.below_count for r in readings)
+        now = sum(r.pattern.below_now for r in readings) * 2 > len(readings)
+        recent = sum(r.pattern.below_recent for r in readings) * 2 > len(readings)
+        pattern = MaPattern(counts[len(counts) // 2], now, recent)
+        same = [r for r in readings if r.pattern.below_recent == recent]
+        summary = min(same, key=lambda r: abs(r.pattern.below_count - pattern.below_count)).summary
+        votes = ", ".join(
+            f"{r.pattern.below_count}{'+' if r.pattern.below_recent else ''}" for r in readings
+        )
+        return PatternReading(pattern, f"{summary} ({len(readings)} bacaan AI: {votes})")
+
+    def _try(self, image: Path) -> PatternReading | AnalysisError:
+        try:
+            return self._inner.analyze(image)
+        except AnalysisError as exc:
+            return exc

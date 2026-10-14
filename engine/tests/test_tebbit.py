@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from binance_bot.exceptions import MarketDataError, NoHistoryError, WindowError
 from binance_bot.tebbit_web import layout_tebbit as lay
-from binance_bot.tebbit_web.chrome import ChromeController
+from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import _FIFTEEN
 
 
@@ -20,17 +21,18 @@ def test_tombol_lain_bukan_15m(text: str) -> None:
 
 
 def test_hanya_angka_yang_diketik_tanpa_enter() -> None:
+    from binance_bot.macos.keyboard import clear_field, type_number
+
     calls: list[list[str]] = []
-    chrome = ChromeController(runner=lambda args: calls.append(args) or "")
-    chrome.type_digits("100,5")
-    script = calls[0][-1]
-    assert [line.strip() for line in script.splitlines()[1:-1]] == [
-        f'keystroke "{c}"' for c in "100,5"
-    ]
-    for bad in ["7\n", "1e3", "", "12a", "1;2"]:
+    type_number("100,5", run=lambda args: calls.append(args) or "")
+    lines = [line.strip() for line in calls[0][-1].splitlines()[1:-1]]
+    assert lines == [f'keystroke "{c}"' for c in "100,5"]
+    for bad in ["7\n", "1e3", "", "12a", "1;2", '1"']:
         with pytest.raises(ValueError):
-            chrome.type_digits(bad)
+            type_number(bad, run=lambda args: calls.append(args) or "")
     assert len(calls) == 1
+    clear_field(run=lambda args: calls.append(args) or "")
+    assert "return" not in calls[-1][-1].lower() and "key code 36" not in calls[-1][-1]
 
 
 @pytest.mark.parametrize(
@@ -50,3 +52,56 @@ def test_kolom_quantity_dan_grafik_tidak_terlarang() -> None:
     forbidden = lay.ALWAYS_FORBIDDEN + lay.CONTRACT_FORBIDDEN
     assert not lay.in_zone((lay.QTY_CLICK_X, 0.345), forbidden)
     assert not lay.in_zone((0.068, 0.286), forbidden)  # tombol 15m
+
+
+class _Nav:
+    def __init__(self, symbol: str | None) -> None:
+        self.symbol = symbol
+        self.visits: list[str] = []
+        self.prices = {"BTWUSDT": (2.50, 2.51), "TRUTHUSDT": (0.021, 0.0211)}
+
+    def read_symbol(self) -> str:
+        if self.symbol is None:
+            raise WindowError("Jendela Tebbit belum dibuka")
+        return self.symbol
+
+    def prepare(self) -> None:
+        self.visits.append("beranda")
+
+    def open_symbol(self, symbol: str) -> str:
+        self.visits.append(symbol)
+        self.symbol = symbol
+        return symbol
+
+    def read_quote(self) -> tuple[float, float, float, float]:
+        assert self.symbol is not None
+        bid, ask = self.prices[self.symbol]
+        return bid, ask, bid, 30.0
+
+
+def test_harga_koin_lain_hanya_dibaca_saat_bot_bekerja_lalu_kembali() -> None:
+    # Daftar posisi di aplikasi (browse mati): Chrome tidak dibuka, harga tidak terbaca.
+    for nav in (_Nav(None), _Nav("OPUSDT")):
+        with pytest.raises(MarketDataError):
+            ScreenMarket(nav).quote("BTWUSDT")  # type: ignore[arg-type]
+        assert nav.visits == []
+    # Saat bot menilai OPUSDT: buka TRUTHUSDT sebentar untuk cek slot, lalu kembali ke OPUSDT.
+    nav = _Nav("BTWUSDT")
+    quote = ScreenMarket(nav, browse=True).quote("TRUTHUSDT")  # type: ignore[arg-type]
+    assert (quote.bid, quote.ask, quote.funding_rate) == (0.021, 0.0211, 0.0)
+    assert nav.visits == ["TRUTHUSDT", "BTWUSDT"]
+    # Belum ada jendela (cek slot di awal putaran): siapkan Chrome dulu.
+    nav = _Nav(None)
+    ScreenMarket(nav, browse=True).quote("BTWUSDT")  # type: ignore[arg-type]
+    assert nav.visits == ["beranda", "BTWUSDT"]
+    with pytest.raises(NoHistoryError):
+        ScreenMarket(nav).klines("BTWUSDT", "1m")  # type: ignore[arg-type]
+
+
+def test_header_harga_dan_perubahan_walau_ocr_menyisipkan_spasi() -> None:
+    from binance_bot.tebbit_web.screen_text import parse_header
+
+    texts = ["24H Low", "24H High", "0.15384 + 11.35%", "OPUSDT Perpetual", "0.13448", "0.16230"]
+    assert parse_header(texts) == (0.15384, 11.35)
+    assert parse_header(["BTWUSDT Perpetual", "2.5528 +44.60%", "2.6047"]) == (2.5528, 44.6)
+    assert parse_header(["1,234.5 -2.5%"]) == (1234.5, -2.5)

@@ -9,18 +9,21 @@ import pytest
 from binance_bot.analysis import AnalysisRecord
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
-from binance_bot.exceptions import MarketDataError, ScreenReadError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError, ScreenReadError
 from binance_bot.hub import AnalysisStore, HubClient, HubServer, LeaderPlan, SharedAnalysis
 from binance_bot.market import Quote
 from binance_bot.strategy import Journal, JournalEntry, SopParams
 from binance_bot.workflows import (
+    ExampleWorkflow,
     FollowerWorkflow,
+    HistoryWorkflow,
     JournalWorkflow,
     LeaderWorkflow,
     PositionsWorkflow,
     SingleWorkflow,
     SopTrader,
 )
+from binance_bot.workflows.sop import coin_event
 from fakes import (
     NEVER,
     OK,
@@ -97,8 +100,8 @@ def test_ok_pattern_is_sized_2x_filled_and_paper_traded(tmp_path: Path) -> None:
     assert (plan.side, plan.leverage, plan.margin_usdt) == ("SHORT", 2, pytest.approx(50.0))
     assert plan.target_price == pytest.approx(0.98)  # target 2% di bawah
     assert plan.stop_price == pytest.approx(1.02)  # stop-loss 2% di atas
-    assert entry.pattern_ai == {"below_count": 3, "below_now": True}
-    assert entry.pattern_data == {"below_count": 2, "below_now": False}
+    assert entry.pattern_ai == {"below_count": 3, "below_now": True, "below_recent": True}
+    assert entry.pattern_data == {"below_count": 2, "below_now": False, "below_recent": False}
     assert entry.max_price == pytest.approx(1.0)
     assert [e.status for e in journal.load()] == ["open"]
 
@@ -513,6 +516,35 @@ def test_journal_report_json_for_the_desktop_app(tmp_path: Path) -> None:
     assert [t["symbol"] for t in report["trades"]] == ["STRKUSDT"]  # yang dilewati tidak ikut
 
 
+def test_journal_report_lists_ai_analyses_with_their_chart(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    shots = ["screenshots/a_rank2.png", "screenshots/a_rank2_15m.png"]
+    journal.append(
+        JournalEntry(
+            id="t",
+            created_at=0.0,
+            symbol="WUSDT",
+            rank=2,
+            verdict="tunggu",
+            reason="pola garis kuning TUNGGU",
+            ai_summary="Baru sekali di bawah.",
+            screenshots=shots,
+        )
+    )
+    journal.append(JournalEntry(id="x", created_at=1.0, symbol="XUSDT", rank=3, reason="gagal"))
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(), journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
+    ).run()  # type: ignore[arg-type]
+    (analysis,) = json.loads(out[0])["analyses"]  # yang tidak dinilai AI tidak ikut
+    assert analysis["symbol"] == "WUSDT"
+    assert analysis["verdict"] == "tunggu"
+    assert analysis["chart"] == "screenshots/a_rank2_15m.png"
+    assert analysis["summary"] == "Baru sekali di bawah."
+    assert analysis["old_rule"] is False  # tanpa pola AI: bukan catatan aturan lama
+    assert coin_event(journal.load()[0])["event"]["chart"] == "screenshots/a_rank2_15m.png"
+
+
 def test_journal_report_still_works_when_binance_api_is_blocked(tmp_path: Path) -> None:
     class BlockedMarket(FakeMarket):
         def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
@@ -669,3 +701,85 @@ def test_one_follower_covers_all_five_tops_the_leader_plays_over_a_real_hub(
         "C5USDT": "open",
     }
     assert follower_nav.filled == ["100", "100"]
+
+
+def test_example_chart_is_judged_and_kept_in_history_without_counting_as_trade(
+    tmp_path: Path,
+) -> None:
+    image = tmp_path / "magic.png"
+    image.write_bytes(b"\x89PNG")
+    journal = Journal(tmp_path / "sop.jsonl")
+    shots = tmp_path / "screenshots"
+    ExampleWorkflow(
+        image,
+        "magicusdt",
+        "menarik (Pak Saputra)",
+        FakePatternAnalyzer(OK),
+        journal,
+        shots,
+        SopParams(),
+        wall_clock=lambda: NOW.timestamp(),
+    ).run()  # type: ignore[arg-type]
+    (entry,) = journal.load()
+    assert (entry.symbol, entry.status, entry.role, entry.verdict) == (
+        "MAGICUSDT",
+        "contoh",
+        "contoh",
+        "ok",
+    )
+    assert entry.reason == "Contoh: menarik (Pak Saputra)"
+    assert entry.screenshots[0].endswith("_contoh_MAGICUSDT_15m.png")
+    assert Path(entry.screenshots[0]).read_bytes() == b"\x89PNG"
+
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(), journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
+    ).run()  # type: ignore[arg-type]
+    report = json.loads(out[0])
+    assert report["stats"]["skipped"] == 0 and report["trades"] == []
+    assert [a["symbol"] for a in report["analyses"]] == ["MAGICUSDT"]
+
+    for symbol, name in [("MAGIC", "magic.png"), ("MAGICUSDT", "tidak-ada.png")]:
+        with pytest.raises(BotError):
+            ExampleWorkflow(
+                tmp_path / name, symbol, "", FakePatternAnalyzer(OK), journal, shots, SopParams()
+            ).run()
+
+
+def test_history_delete_one_entry_or_clear_everything_except_trades(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("STRKUSDT"))
+    journal.append(JournalEntry(id="s", created_at=0.0, symbol="WUSDT", rank=2, verdict="tunggu"))
+    journal.append(
+        JournalEntry(id="c", created_at=1.0, symbol="XUSDT", rank=0, status="contoh", role="contoh")
+    )
+    out: list[str] = []
+    HistoryWorkflow(journal, delete_id="s", output=out.append).run()
+    assert [e.id for e in journal.load()] == ["o-STRKUSDT", "c"]
+    assert json.loads(out[-1]) == {"removed": 1}
+    with pytest.raises(BotError):
+        HistoryWorkflow(journal, delete_id="tidak-ada", output=out.append).run()
+
+    journal.append(JournalEntry(id="s2", created_at=2.0, symbol="WUSDT", rank=2))
+    HistoryWorkflow(journal, clear=True, output=out.append).run()
+    assert [e.id for e in journal.load()] == ["o-STRKUSDT"]  # trade tidak ikut dibersihkan
+    HistoryWorkflow(journal, delete_id="o-STRKUSDT", output=out.append).run()  # kecuali dipilih
+    assert journal.load() == []
+    with pytest.raises(BotError):
+        HistoryWorkflow(journal)
+
+
+def test_sell_works_on_exchange_without_price_history(tmp_path: Path) -> None:
+    class ScreenOnly(FakeMarket):  # seperti Tebbit: harga terkini ada, candle dan funding tidak
+        def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
+            raise NoHistoryError("tidak punya sumber candle")
+
+        def funding_history(self, symbol: str, start_ms: int, end_ms: int) -> list[Any]:
+            raise NoHistoryError("tidak punya sumber funding")
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT"))
+    result = run_positions(journal, ScreenOnly(), close="CKBUSDT")
+    assert "error" not in result
+    assert [c["symbol"] for c in result["closed"]] == ["CKBUSDT"]
+    assert journal.load()[0].status == "manual"

@@ -17,9 +17,9 @@ BUNDLE = DEFAULT_APP_ID
 WINDOW = Rect(x=0, y=33, width=1470, height=859)
 # Area layar MacBook Air 13" M4 tanpa menu bar dan Dock (tempat ukuran kalibrasi diukur).
 AREA = Rect(x=0, y=33, width=1470, height=862)
-OK = MaPattern(below_count=3, below_now=True)  # berkali-kali di bawah: boleh
-WAIT = MaPattern(below_count=1, below_now=False)  # baru sekali: tunggu
-NEVER = MaPattern(below_count=0, below_now=False)  # selalu di atas: jangan
+OK = MaPattern(below_count=3, below_now=True, below_recent=True)  # berkali-kali di bawah: boleh
+WAIT = MaPattern(below_count=1, below_now=False, below_recent=False)  # baru sekali: tunggu
+NEVER = MaPattern(below_count=0, below_now=False, below_recent=False)  # selalu di atas: jangan
 
 
 def reading(pattern: MaPattern = OK) -> PatternReading:
@@ -132,7 +132,7 @@ def ma_candles(drops: int) -> list[Candle]:
     shapes = {
         0: [(need, 1.0)],
         1: [(70, 1.0), (8, -6.0), (need - 78, 1.5)],
-        2: [(40, 1.0), (8, -6.0), (30, 1.5), (8, -6.0), (need - 86, 1.5)],
+        2: [(20, 1.0), (8, -6.0), (30, 1.5), (8, -6.0), (need - 66, 1.5)],  # lalu naik terus
         3: [(30, 1.0), (8, -6.0), (25, 1.5), (8, -6.0), (25, 1.5), (need - 96, -3.0)],
     }
     closes, price = [], 100.0

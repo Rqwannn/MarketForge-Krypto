@@ -25,6 +25,12 @@ let team = null; // kelompok pemimpin-pengikut (team.js)
 let uiRole = 'single'; // peran yang dipilih di halaman Pantau
 let runningMode = null; // mode engine yang sedang berjalan
 const invitations = new Map(); // id pemimpin -> ajakan yang belum dijawab
+let exchange = 'binance'; // platform aktif: jurnal dan posisi dibaca dari bursa ini
+
+/** Argumen engine untuk platform aktif (jurnal dan posisi terpisah per bursa). */
+function onExchange(args) {
+  return ['--bursa', exchange, ...args];
+}
 // Aktivitas terakhir laptop ini, diumumkan ke laptop lain (hanya bila token hub diatur).
 let activity = { text: '', coin: '', at: 0 };
 let activityTimer = null;
@@ -57,7 +63,7 @@ function activityFields() {
 /** Baca ulang posisi terbuka laptop ini dari jurnal (tanpa menyentuh Binance). */
 async function refreshPositions() {
   try {
-    const result = await engine.runJson(['posisi']);
+    const result = await engine.runJson(onExchange(['posisi']));
     if (Array.isArray(result.positions)) ownPositions = result.positions;
   } catch {
     return;
@@ -99,7 +105,7 @@ async function closeForLeader({ leaderName, symbol }) {
   }
   let text;
   try {
-    const result = await engine.runJson(['posisi', '--tutup', symbol === '*' ? 'semua' : symbol]);
+    const result = await engine.runJson(onExchange(['posisi', '--tutup', symbol === '*' ? 'semua' : symbol]));
     if (Array.isArray(result.positions)) ownPositions = result.positions;
     const done = (result.closed || []).map((c) => c.symbol).join(', ');
     if (result.error) text = 'Gagal menutup posisi: harga Binance tidak bisa diambil';
@@ -281,6 +287,7 @@ handle('engine:start', (mode, params) => {
     ? engine.buildArgs(mode, { ...params, rank: team.membership.rank })
     : engine.buildArgs(mode, params);
   proc.start(args);
+  exchange = params?.exchange || 'binance';
   runningMode = mode;
   uiRole = mode;
   syncPresence();
@@ -292,9 +299,25 @@ handle('engine:stop', () => {
   proc.stop();
   return true;
 });
-handle('engine:status', () => ({ running: proc.running }));
+handle('engine:status', () => ({ running: proc.running, exchange }));
 handle('engine:checks', () => engine.runJson(['cek']));
-handle('engine:summary', () => engine.runJson(['jurnal', '--json']));
+handle('engine:summary', () => engine.runJson(onExchange(['jurnal', '--json'])));
+handle('platform:set', (id) => {
+  if (!engine.EXCHANGES.includes(id)) throw new Error('Platform tidak dikenal');
+  if (!proc.running) exchange = id; // saat bot berjalan, platform mengikuti bot
+  return exchange;
+});
+handle('chart:image', (file) => engine.readChart(file));
+const HISTORY_ID = /^[A-Za-z0-9_.-]{1,120}$/;
+function editHistory(args) {
+  if (proc.running) throw new Error('Hentikan bot dulu sebelum menghapus riwayat.');
+  return engine.runJson(onExchange(['riwayat', ...args]));
+}
+handle('history:delete', (id) => {
+  if (!HISTORY_ID.test(String(id))) throw new Error('Riwayat tidak dikenal');
+  return editHistory(['--hapus', String(id)]);
+});
+handle('history:clear', () => editHistory(['--bersihkan']));
 handle('presence:update', (role) => {
   if (['single', 'follower'].includes(role) || (role === 'leader' && leaderKeys)) uiRole = role;
   syncPresence();
@@ -311,7 +334,7 @@ handle('presence:activity', (update) => {
 });
 handle('team:state', () => teamState());
 handle('positions:list', async () => {
-  const result = await engine.runJson(['posisi']);
+  const result = await engine.runJson(onExchange(['posisi']));
   if (Array.isArray(result.positions)) ownPositions = result.positions;
   return result;
 });
@@ -321,7 +344,7 @@ handle('positions:close', async (symbol) => {
     throw new Error('Hanya mode Sendiri yang bisa menutup posisinya sendiri. Posisi pengikut ditutup oleh pemimpin.');
   }
   if (symbol !== 'semua' && !PAIR.test(String(symbol))) throw new Error('Pair tidak valid');
-  const result = await engine.runJson(['posisi', '--tutup', symbol]);
+  const result = await engine.runJson(onExchange(['posisi', '--tutup', symbol]));
   if (result.error) throw new Error('Harga Binance tidak bisa diambil, posisi belum ditutup.');
   if (Array.isArray(result.positions)) ownPositions = result.positions;
   syncPresence();

@@ -237,7 +237,8 @@ class TebbitNavigator(BinanceNavigator):
         return symbol_from_url(url)
 
     def read_symbol(self) -> str:
-        assert self._window_id is not None
+        if self._window_id is None:
+            raise WindowError("Jendela Tebbit belum dibuka")
         return symbol_from_url(self._chrome.current_url(self._window_id))
 
     def show_15m_chart(self) -> None:
@@ -257,10 +258,13 @@ class TebbitNavigator(BinanceNavigator):
             if self._clock() >= deadline:
                 raise ScreenReadError("Grafik 15 menit Tebbit belum termuat (legenda MA tidak ada)")
             self._sleep(1.0)
+        # Tebbit menyimpan indikator per koin (bawaan MA 5/10/30). AI memakai MA 7 bila ada,
+        # selain itu MA 5 (garis tercepat); pembandingnya MA 25, selain itu MA 30.
         periods = {int(n) for n in re.findall(r"MA\s*(\d+)", legend)}
-        if not {7, 25} <= periods:
+        if not (periods & {7, 5} and periods & {25, 30}):
             raise ScreenReadError(
-                f"Indikator MA di grafik Tebbit {sorted(periods)}; SOP butuh MA 7 dan MA 25."
+                f"Indikator MA di grafik Tebbit {sorted(periods)}; butuh MA 7 (atau 5) dan "
+                "MA 25 (atau 30)."
             )
 
     def _chart_area(self) -> Rect:
