@@ -226,7 +226,9 @@ class TebbitNavigator(BinanceNavigator):
         self._load(contract_url(symbol))
         opened = self._wait_contract()
         if opened != symbol:
-            raise ScreenReadError(f"Yang terbuka {opened}, bukan {symbol}")
+            raise ScreenReadError(
+                f"{symbol} tidak tersedia sebagai kontrak di Tebbit (yang terbuka: {opened})"
+            )
         return opened
 
     def _wait_contract(self) -> str:

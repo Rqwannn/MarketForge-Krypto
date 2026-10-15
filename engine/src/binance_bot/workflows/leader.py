@@ -136,10 +136,11 @@ class LeaderWorkflow:
             pattern = record.reading.pattern
             verdict = self._profile.verdict(pattern, self._params.min_crosses)
             logger.info(
-                "#%d %s garis kuning AI: %d kali di bawah MA25 -> %s | %s",
+                "#%d %s garis kuning AI: %d kali di bawah MA%d -> %s | %s",
                 rank,
                 symbol,
                 pattern.below_count,
+                self._profile.mid,
                 verdict.upper(),
                 record.reading.summary,
                 extra=event(

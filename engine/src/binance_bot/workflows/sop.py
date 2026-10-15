@@ -285,11 +285,12 @@ class SopTrader:
             raise _Skip("bursa ini tidak punya data candle; pakai SINYAL=ai")
         entry.verdict = self.profile.verdict(decisive, params.min_crosses)
         logger.info(
-            "#%d %s garis kuning %s: %d kali di bawah MA25 -> %s (data: %d kali)%s",
+            "#%d %s garis kuning %s: %d kali di bawah MA%d -> %s (data: %d kali)%s",
             entry.rank,
             symbol,
             params.signal_source.upper(),
             decisive.below_count,
+            self.profile.mid,
             _VERDICT_TEXT[entry.verdict],
             data.below_count if data else -1,
             f" | {entry.ai_summary}" if entry.ai_summary else "",

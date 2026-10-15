@@ -81,9 +81,10 @@ class ExampleWorkflow:
             )
         )
         logger.info(
-            "Contoh %s: AI %d kali di bawah MA25 (6 jam terakhir: %s) -> %s | %s",
+            "Contoh %s: AI %d kali di bawah MA%d (6 jam terakhir: %s) -> %s | %s",
             self._symbol,
             reading.pattern.below_count,
+            self._profile.mid,
             "ya" if reading.pattern.below_recent else "tidak",
             verdict.upper(),
             reading.summary,
