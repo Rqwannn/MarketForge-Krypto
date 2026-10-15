@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from binance_bot.analysis import PatternReading
+from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError, MarketDataError
@@ -27,6 +28,7 @@ from binance_bot.strategy import (
     JournalEntry,
     MaPattern,
     OrderPlan,
+    PatternProfile,
     SopParams,
     candles_needed,
     data_ma_pattern,
@@ -119,6 +121,7 @@ class SopTrader:
         *,
         fill_form: bool = True,
         role: str = "single",
+        profile: PatternProfile = BINANCE,
         wall_clock: Callable[[], float] = time.time,
         now: Callable[[], datetime] = datetime.now,
     ) -> None:
@@ -131,6 +134,7 @@ class SopTrader:
         self._gate = gate
         self._fill_form = fill_form
         self._role = role
+        self.profile = profile  # aturan pola platform ini
         self._wall_clock = wall_clock
         self._now = now
 
@@ -211,7 +215,7 @@ class SopTrader:
         if reading is not None:
             entry.pattern_ai = reading.pattern.as_dict()
             entry.ai_summary = reading.summary
-            entry.verdict = reading.pattern.verdict(self.params.min_crosses)
+            entry.verdict = self.profile.verdict(reading.pattern, self.params.min_crosses)
         return self._finish(entry)
 
     def _finish(self, entry: JournalEntry) -> JournalEntry:
@@ -258,8 +262,12 @@ class SopTrader:
         entry.screenshots.append(str(chart))
 
         try:
+            profile = self.profile
             data: MaPattern | None = data_ma_pattern(
-                self._market.klines(symbol, "15m", limit=candles_needed())
+                self._market.klines(symbol, "15m", limit=candles_needed(mid=profile.mid)),
+                fast=profile.fast,
+                mid=profile.mid,
+                recent=profile.recent_candles,
             )
         except MarketDataError as exc:  # bursa tanpa sumber candle: hanya AI yang menilai
             logger.info("Pembanding data tidak ada: %s", exc)
@@ -275,7 +283,7 @@ class SopTrader:
             decisive = reading.pattern
         if decisive is None:
             raise _Skip("bursa ini tidak punya data candle; pakai SINYAL=ai")
-        entry.verdict = decisive.verdict(params.min_crosses)
+        entry.verdict = self.profile.verdict(decisive, params.min_crosses)
         logger.info(
             "#%d %s garis kuning %s: %d kali di bawah MA25 -> %s (data: %d kali)%s",
             entry.rank,

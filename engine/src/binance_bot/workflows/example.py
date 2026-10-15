@@ -14,9 +14,10 @@ from datetime import datetime
 from pathlib import Path
 
 from binance_bot.analysis import PatternAnalyzer
+from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.exceptions import BotError
 from binance_bot.market import is_futures_symbol
-from binance_bot.strategy import Journal, JournalEntry, SopParams
+from binance_bot.strategy import Journal, JournalEntry, PatternProfile, SopParams
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,10 @@ class ExampleWorkflow:
         screenshot_dir: Path,
         params: SopParams,
         *,
+        profile: PatternProfile = BINANCE,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
+        self._profile = profile
         self._image = image
         self._symbol = symbol.upper()
         self._note = note.strip()
@@ -61,7 +64,7 @@ class ExampleWorkflow:
         shutil.copyfile(self._image, chart)
 
         reading = self._analyzer.analyze(chart)
-        verdict = reading.pattern.verdict(self._params.min_crosses)
+        verdict = self._profile.verdict(reading.pattern, self._params.min_crosses)
         self._journal.append(
             JournalEntry(
                 id=f"{stamp}_contoh_{self._symbol}",

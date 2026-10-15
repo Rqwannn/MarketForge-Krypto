@@ -11,9 +11,9 @@ from pathlib import Path
 
 from binance_bot import __version__
 from binance_bot.analysis import ConsensusAnalyzer, VikeyPatternAnalyzer
-from binance_bot.analysis.pattern import PROMPT, TEBBIT_PROMPT
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
+from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.config import Settings, read_dotenv
 from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubClient, HubServer
@@ -26,6 +26,7 @@ from binance_bot.system import System, build_system
 from binance_bot.tebbit_web.chrome import ChromeController, ChromeWindowController
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import TebbitNavigator
+from binance_bot.tebbit_web.pattern_rules import TEBBIT
 from binance_bot.workflows import (
     ExampleWorkflow,
     FillTestWorkflow,
@@ -279,6 +280,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     system = build_system(settings)
     apps = system.apps
     tebbit = args.bursa == "tebbit"
+    profile = TEBBIT if tebbit else BINANCE  # aturan pola dipisah per platform
     if tebbit and args.command not in TEBBIT_COMMANDS:
         raise BotError(f"Perintah '{args.command}' belum tersedia untuk Tebbit")
     if tebbit and settings.journal_path == Settings().journal_path:
@@ -319,12 +321,11 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             args.gambar,
             args.koin,
             args.catatan,
-            ConsensusAnalyzer(
-                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
-            ),
+            ConsensusAnalyzer(VikeyPatternAnalyzer(settings, profile.prompt)),
             journal,
             settings.screenshot_dir,
             SopParams(),
+            profile=profile,
         )
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
@@ -341,13 +342,12 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             SopParams(min_gain_pct=args.min_naik, min_crosses=args.min_turun),
             navigator,
             market,
-            ConsensusAnalyzer(
-                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
-            ),
+            ConsensusAnalyzer(VikeyPatternAnalyzer(settings, profile.prompt)),
             store,
             HubServer(store, settings.hub_token, port=args.port or settings.hub_port),
             args.ranks,
             interval_s=args.interval * 60,
+            profile=profile,
         )
 
     params = params_from(args)
@@ -360,15 +360,12 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         DryRunOrderGate(),
         fill_form=not args.no_fill,
         role="follower" if args.command == "follower" else "single",
+        profile=profile,
     )
     uses_ai = params.signal_source == "ai"
     if args.command == "single":
         analyzer = (
-            ConsensusAnalyzer(
-                VikeyPatternAnalyzer(settings, prompt=TEBBIT_PROMPT if tebbit else PROMPT)
-            )
-            if uses_ai
-            else None
+            ConsensusAnalyzer(VikeyPatternAnalyzer(settings, profile.prompt)) if uses_ai else None
         )
         return SingleWorkflow(
             navigator, trader, analyzer, ranks=args.ranks, interval_s=args.interval * 60

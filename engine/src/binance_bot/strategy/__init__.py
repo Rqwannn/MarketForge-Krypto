@@ -11,6 +11,7 @@ from binance_bot.strategy.execution import DryRunOrderGate, OrderPlan
 from binance_bot.strategy.journal import Journal, JournalEntry
 from binance_bot.strategy.params import SopParams
 from binance_bot.strategy.pattern import MaPattern, candles_needed, data_ma_pattern
+from binance_bot.strategy.profile import PatternProfile
 from binance_bot.strategy.sizing import Sizing, size_position
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "JournalEntry",
     "MaPattern",
     "OrderPlan",
+    "PatternProfile",
     "Sizing",
     "SopParams",
     "Stats",

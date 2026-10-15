@@ -1,9 +1,17 @@
 import pytest
 
+from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.exceptions import ConfigError
 from binance_bot.market import SymbolRules
-from binance_bot.strategy import MaPattern, SopParams, data_ma_pattern, size_position
+from binance_bot.strategy import (
+    MaPattern,
+    PatternProfile,
+    SopParams,
+    data_ma_pattern,
+    size_position,
+)
 from binance_bot.strategy.sizing import Sizing
+from binance_bot.tebbit_web.pattern_rules import TEBBIT
 from fakes import ma_candles
 
 
@@ -70,18 +78,25 @@ def test_sizing_refuses_orders_below_exchange_minimum() -> None:
     assert "minimum" in str(size_position(SopParams(capital_usdt=2), 1.0, RULES))
 
 
+PROFILES = [BINANCE, TEBBIT]  # pemahaman yang sama untuk sementara, aturannya dipisah
+
+
+@pytest.mark.parametrize("profile", PROFILES, ids=lambda p: p.platform)
 @pytest.mark.parametrize(("count", "verdict"), [(0, "jangan"), (1, "tunggu"), (2, "ok"), (5, "ok")])
-def test_yellow_line_rule(count: int, verdict: str) -> None:
-    assert MaPattern(count, below_now=False, below_recent=True).verdict(min_crosses=2) == verdict
+def test_yellow_line_rule(profile: PatternProfile, count: int, verdict: str) -> None:
+    pattern = MaPattern(count, below_now=False, below_recent=True)
+    assert profile.verdict(pattern, 2) == verdict
 
 
-def test_threshold_is_adjustable() -> None:
-    assert MaPattern(2, False, True).verdict(min_crosses=3) == "tunggu"
+@pytest.mark.parametrize("profile", PROFILES, ids=lambda p: p.platform)
+def test_threshold_is_adjustable(profile: PatternProfile) -> None:
+    assert profile.verdict(MaPattern(2, False, True), 3) == "tunggu"
 
 
-def test_drops_before_the_rally_do_not_make_it_ok() -> None:
+@pytest.mark.parametrize("profile", PROFILES, ids=lambda p: p.platform)
+def test_drops_before_the_rally_do_not_make_it_ok(profile: PatternProfile) -> None:
     # SOP V2: kenaikan harus mulai habis. Turun 3x sebelum lonjakan, lalu naik terus = TUNGGU.
-    assert MaPattern(3, below_now=False, below_recent=False).verdict(min_crosses=2) == "tunggu"
+    assert profile.verdict(MaPattern(3, below_now=False, below_recent=False), 2) == "tunggu"
 
 
 @pytest.mark.parametrize(

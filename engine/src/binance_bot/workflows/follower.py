@@ -133,7 +133,7 @@ class FollowerWorkflow:
             return None
         record = shared.record
         reading = record.reading
-        verdict = reading.pattern.verdict(self._trader.params.min_crosses)
+        verdict = self._trader.profile.verdict(reading.pattern, self._trader.params.min_crosses)
         logger.info(
             "Hasil leader untuk Top %d: %s, garis kuning %d kali di bawah MA25 -> %s "
             "(umur %.1f menit)",
