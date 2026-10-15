@@ -753,10 +753,15 @@ class BinanceNavigator:
         if tab is None:
             raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
         self._click(tab)
+        # Tabel bisa masih tergeser ke kanan (kolom nama koin tersembunyi): kembalikan ke kiri.
+        x0, y0, x1, y1 = layout.POSITIONS_TABLE_AREA
+        center = self.rect.point_at((x0 + x1) / 2, (y0 + y1) / 2)
+        self._ensure_front()
+        self._window.scroll_horizontal(*center, -layout.POSITIONS_SCROLL_NOTCHES)
+        self._sleep(0.5)
         row_y = self._position_row(symbol)
         if row_y is None:
             raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
-        x0, y0, x1, y1 = layout.POSITIONS_TABLE_AREA
         middle = self.rect.point_at((x0 + x1) / 2, row_y)
         self._ensure_front()
         self._window.scroll_horizontal(*middle, layout.POSITIONS_SCROLL_NOTCHES)

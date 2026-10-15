@@ -231,6 +231,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--tutup", help="Tutup (uji kertas) posisi pair ini, atau 'semua'", metavar="PAIR"
     )
     positions.add_argument(
+        "--pantau",
+        action="store_true",
+        help="Pantau posisi terbuka terus (tiap menit) dan jual otomatis saat target tercapai",
+    )
+    positions.add_argument(
         "--cek",
         action="store_true",
         help="Tebbit: baca harga posisi dari layar sekarang dan jual otomatis bila sudah target",
@@ -381,7 +386,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
         closer = None
-        if args.uang_sungguhan and target is not None:  # Sell manual, Real Fund Trading
+        if args.uang_sungguhan and (target is not None or args.pantau):  # Real Fund Trading
             if tebbit:
                 raise BotError("Real Fund Trading untuk Tebbit belum tersedia (Binance dulu)")
             enable_live_orders()
@@ -394,7 +399,13 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
                 windows=on_screen_windows,
             )
         return PositionsWorkflow(
-            params_from(args), journal, market, close=target, check=args.cek, closer=closer
+            params_from(args),
+            journal,
+            market,
+            close=target,
+            check=args.cek,
+            closer=closer,
+            watch_s=60.0 if args.pantau else 0.0,
         )
 
     if not tebbit:

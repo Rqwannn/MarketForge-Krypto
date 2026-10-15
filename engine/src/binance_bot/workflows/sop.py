@@ -119,8 +119,15 @@ def refresh_by_price(
     """Jual otomatis untuk bursa tanpa candle (Tebbit): harga ask terkini dari layar (OCR)."""
     entries = journal.load()
     updated = []
+    live = live_orders_enabled() and closer is not None
     for entry in entries:
-        if entry.status == "open" and entry.entry_price and entry.target_price:
+        # Posisi sungguhan hanya dinilai oleh proses mode real (yang bisa menutupnya di bursa).
+        if (
+            entry.status == "open"
+            and entry.entry_price
+            and entry.target_price
+            and (live or not entry.real)
+        ):
             try:
                 ask = market.quote(entry.symbol).ask
             except BotError as exc:
@@ -219,7 +226,13 @@ class SopTrader:
         return WATCH_INTERVAL_S.get(self.profile.platform, 60.0)
 
     def refresh_journal(self) -> list[JournalEntry]:
-        """Jual otomatis: posisi yang sudah mencapai target ditutup dan dicatat."""
+        """Jual otomatis: posisi yang sudah mencapai target ditutup dan dicatat.
+
+        Real Fund Trading memakai harga SAAT INI, bukan riwayat candle: posisi sungguhan hanya
+        ditutup bila harga sekarang sudah di target (bukan bila tadi sempat menyentuhnya).
+        """
+        if live_orders_enabled():
+            return self._refresh_by_price()
         try:
             return refresh_journal(
                 self._journal, self._market, self.params.fee_pct, self._wall_clock(), self._nav
@@ -457,6 +470,7 @@ class SopTrader:
         self._gate.submit(plan)
 
         entry.status = "open"
+        entry.real = live_orders_enabled()  # tombol Short ditekan sungguhan
         entry.entry_price = plan.entry_price
         entry.max_price = plan.entry_price
         entry.min_price = plan.entry_price

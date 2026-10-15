@@ -41,6 +41,8 @@ class PositionsWorkflow:
         close: str | None = None,  # None = hanya daftar, "semua", atau nama pair
         check: bool = False,  # Tebbit: baca harga dari layar sekarang (jual otomatis bila target)
         closer: PositionCloser | None = None,  # Real Fund Trading: tutup posisi di bursa
+        watch_s: float = 0.0,  # >0: pantau terus (jual otomatis) sampai tidak ada posisi terbuka
+        sleep: Callable[[float], None] = time.sleep,
         output: Callable[[str], None] = print,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
@@ -50,10 +52,49 @@ class PositionsWorkflow:
         self._close = close
         self._check = check
         self._closer = closer
+        self._watch_s = watch_s
+        self._sleep = sleep
         self._output = output
         self._wall_clock = wall_clock
 
     def run(self) -> None:
+        if self._watch_s > 0:
+            self._watch()
+            return
+        self._run_once()
+
+    def _watch(self) -> None:
+        """Pantau posisi terbuka saja (tanpa membuka posisi baru): jual otomatis saat target."""
+        live = live_orders_enabled() and self._closer is not None
+        while True:
+            entries = (
+                refresh_by_price(
+                    self._journal,
+                    self._market,
+                    self._params.fee_pct,
+                    self._wall_clock(),
+                    self._closer,
+                )
+                if live
+                else refresh_journal(
+                    self._journal, self._market, self._params.fee_pct, self._wall_clock()
+                )
+            )
+            opened = [e for e in entries if e.status == "open"]
+            if not opened:
+                logger.info("Tidak ada posisi terbuka lagi: pemantauan selesai")
+                return
+            for entry in opened:
+                logger.info(
+                    "Pantau %s%s: masuk %g, jual otomatis di %g",
+                    entry.symbol,
+                    " (uang sungguhan)" if entry.real else "",
+                    entry.entry_price or 0,
+                    entry.target_price or 0,
+                )
+            self._sleep(self._watch_s)
+
+    def _run_once(self) -> None:
         now = self._wall_clock()
         warning = ""
         try:
@@ -98,6 +139,10 @@ class PositionsWorkflow:
         for entry in entries:
             if entry.status == "open" and wanted in (ALL, entry.symbol):
                 live = live_orders_enabled() and self._closer is not None
+                if entry.real and not live:
+                    raise BotError(
+                        f"{entry.symbol} posisi sungguhan: tutup lewat Real Fund Trading"
+                    )
                 if live and self._closer is not None:
                     # Real Fund Trading: tutup dulu di bursa; gagal = posisi tetap tercatat terbuka.
                     self._closer.close_position(entry.symbol)
