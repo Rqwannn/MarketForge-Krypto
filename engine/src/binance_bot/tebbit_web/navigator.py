@@ -17,9 +17,8 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from binance_bot.binance_desktop.margin_dialogs import MarginDialogs
 from binance_bot.binance_desktop.navigator import BinanceNavigator
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings, same_number
 from binance_bot.config import Settings
@@ -224,34 +223,6 @@ class TebbitNavigator(BinanceNavigator):
                 gray.resize(size, Image.Resampling.LANCZOS).save(big)
             return self._reader.read_lines(big)
 
-    def _dialog_lines(self, area: tuple[float, float, float, float]) -> list[TextLine]:
-        return self._read_lines_merged(self.rect.sub(*area), lay.OCR_DIALOG_VARIANTS)
-
-    def _margin_dialogs(self) -> MarginDialogs | None:
-        """Dialog "Modify leverage" dan "Trading Mode" Tebbit (profil Windows; macOS: tidak ada)."""
-        if lay.MARGIN_DIALOG_AREA is None:
-            return None
-        return MarginDialogs(
-            bar_area=lay.MARGIN_AREA,
-            dialog_area=lay.MARGIN_DIALOG_AREA,
-            field_band=lay.MARGIN_FIELD_BAND,
-            leverage_close_x=lay.LEVERAGE_CLOSE_X,
-            mode_close_x=lay.MODE_CLOSE_X,
-            leverage_title=re.compile(r"Mod\S{1,3}\s*leverage", re.IGNORECASE),
-            leverage_name="Modify leverage",
-            mode_title=re.compile(r"Trading\s*Mode", re.IGNORECASE),
-            mode_name="Trading Mode",
-            confirm=re.compile(r"^\s*Confirm\s*$", re.IGNORECASE),
-            isolated_option=re.compile(r"^\s*Isolated\s*$", re.IGNORECASE),
-            mode_button=re.compile(r"Cross|Isolated", re.IGNORECASE),
-            leverage_click=lay.LEVERAGE_CLICK,
-            mode_click=lay.MODE_CLICK,
-            replace_by_select_all=True,
-            value_box_x=lay.VALUE_BOX_X,
-            field_x_range=lay.FIELD_X_RANGE,
-            blur_after_typing=True,
-        )
-
     # ------------------------------------------------------------------ keamanan
     def _forbidden(self, target: tuple[float, float]) -> bool:
         if lay.in_zone(target, lay.ALWAYS_FORBIDDEN):
@@ -418,13 +389,19 @@ class TebbitNavigator(BinanceNavigator):
     def _quantity_area(self) -> tuple[float, float, float, float]:
         return lay.ORDER_FORM_AREA
 
+    def _margin_area(self) -> tuple[float, float, float, float]:
+        return lay.MARGIN_AREA
+
+    def _leverage_dialog_area(self) -> tuple[float, float, float, float]:
+        return lay.LEVERAGE_DIALOG_AREA
+
     def _chart_area(self) -> Rect:
         return self.rect.sub(*lay.CHART_AREA)
 
     # ------------------------------------------------------------------ form dan data
     def read_margin_settings(self) -> MarginSettings:
         # Teks kecil berwarna: beberapa varian OCR digabung ("50X" kadang terbaca "sox").
-        lines = self._read_lines_merged(self.rect.sub(*lay.MARGIN_AREA))
+        lines = self._read_lines_merged(self.rect.sub(*self._margin_area()))
         texts = [line.text for line in lines]
         try:
             return parse_margin(texts)
@@ -435,11 +412,35 @@ class TebbitNavigator(BinanceNavigator):
         return parse_margin(texts + self._leverage_with_companion())
 
     def _leverage_with_companion(self) -> list[str]:
-        """Teks kotak leverage di atas form, dibaca sebagai baris "Leverage 2X"."""
+        """Teks kotak leverage, dibaca sebagai baris "Leverage 2X" (kata pendamping digambar)."""
+        from PIL import Image, ImageChops, ImageDraw, ImageFont
+
         assert lay.LEVERAGE_BOX_X is not None
-        x0, y0, x1, y1 = lay.MARGIN_AREA
         left, right = lay.LEVERAGE_BOX_X
-        return self._read_with_companion((x0 + (x1 - x0) * left, y0, x0 + (x1 - x0) * right, y1))
+        found: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            raw, composed = Path(tmp) / "m.png", Path(tmp) / "m_c.png"
+            self._ensure_front()
+            self._window.capture(self.rect.sub(*self._margin_area()), raw)
+            with Image.open(raw) as image:
+                rgb = image.convert("RGB")
+                r, g, b = rgb.split()
+                box = ImageChops.lighter(ImageChops.lighter(r, g), b)
+                box = box.crop((int(box.width * left), 0, int(box.width * right), box.height))
+            for scale in (4, 3):
+                big = box.resize((box.width * scale, box.height * scale), Image.Resampling.LANCZOS)
+                font: Any
+                try:
+                    font = ImageFont.truetype("arial.ttf", int(big.height * 0.42))
+                except OSError:
+                    font = ImageFont.load_default()
+                canvas = Image.new("L", (big.width + 900, big.height + 40), 0)
+                draw = ImageDraw.Draw(canvas)
+                draw.text((20, 20 + int(big.height * 0.18)), "Leverage", fill=235, font=font)
+                canvas.paste(big, (20 + int(draw.textlength("Leverage  ", font=font)), 20))
+                canvas.save(composed)
+                found += [line.text for line in self._reader.read_lines(composed)]
+        return found
 
     def read_quote(self) -> tuple[float, float, float, float]:
         """(bid, ask, harga terakhir, perubahan 24 jam %) dari halaman koin yang terbuka."""

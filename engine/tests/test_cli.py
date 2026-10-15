@@ -118,25 +118,3 @@ def test_cleanups_run_when_the_workflow_ends_or_fails(
         monkeypatch.setattr(cli, "build_workflow", lambda args, settings, f=fail: Workflow(f))
         assert cli.main(["cek"]) == code
         assert called == ["tutup"] and cli._cleanups == []
-
-
-def test_auto_margin_is_chosen_per_platform() -> None:
-    from binance_bot.config import Settings
-
-    assert not Settings().auto_margin_for("tebbit")  # mati secara bawaan
-    only_tebbit = Settings(auto_margin="tebbit")
-    assert only_tebbit.auto_margin_for("tebbit") and not only_tebbit.auto_margin_for("binance")
-    both = Settings(auto_margin="Binance, Tebbit")
-    assert both.auto_margin_for("tebbit") and both.auto_margin_for("binance")
-    for everything in ("1", "true", "semua"):
-        assert Settings(auto_margin=everything).auto_margin_for("binance")
-    assert Settings.from_env({"BOT_ATUR_MARGIN": "tebbit"}).auto_margin_for("tebbit")
-
-
-def test_margin_mode_is_selected_separately_from_the_leverage() -> None:
-    from binance_bot.config import Settings
-
-    leverage_only = Settings(auto_margin="tebbit")
-    assert leverage_only.auto_margin_for("tebbit") and not leverage_only.auto_mode_for("tebbit")
-    assert Settings(auto_mode="tebbit").auto_mode_for("tebbit")
-    assert Settings.from_env({"BOT_ATUR_MODE_MARGIN": "semua"}).auto_mode_for("binance")

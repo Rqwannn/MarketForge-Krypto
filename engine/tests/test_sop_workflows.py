@@ -1,6 +1,5 @@
 import json
 from collections.abc import Sequence
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -177,58 +176,26 @@ def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
     assert entry.verdict == "tunggu" and entry.pattern_ai is None
 
 
-def with_auto_margin(trader: SopTrader, mode: bool = False) -> None:
-    trader._settings = replace(trader._settings, auto_margin="1", auto_mode="1" if mode else "")
-
-
-def test_margin_is_left_alone_unless_auto_margin_is_on(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
-    trader, *_ = make_trader(tmp_path, nav)
-    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert nav.margin_applied == []
-
-
-def test_auto_margin_sets_leverage_and_isolated_before_the_form_is_filled(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    caplog.set_level("INFO")
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
-    trader, *_ = make_trader(tmp_path, nav)
-    with_auto_margin(trader, mode=True)  # leverage dan mode Isolated sama-sama diminta
-    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert nav.margin_applied == [(2, True)]
-    assert entry.status == "open" and entry.margin == "Isolated 2x"
-    assert not any("Margin di aplikasi" in r.getMessage() for r in caplog.records)
-
-
-def test_auto_margin_does_nothing_when_the_margin_already_matches(tmp_path: Path) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(True, 2))
-    trader, *_ = make_trader(tmp_path, nav)
-    with_auto_margin(trader)
-    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert nav.margin_applied == []
-
-
-def test_a_failed_auto_margin_is_logged_and_the_paper_trade_continues(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    caplog.set_level("INFO")
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
-    nav.margin_apply_fails = True
-    trader, *_ = make_trader(tmp_path, nav)
-    with_auto_margin(trader)
-    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert entry.status == "open"  # uji kertas tetap jalan
-    messages = [r.getMessage() for r in caplog.records]
-    assert any("tidak bisa diatur otomatis" in m for m in messages)
-    assert any("leverage 20x, SOP 2x" in m for m in messages)  # peringatan lama tetap muncul
-
-
-def test_margin_differences_are_warned_but_paper_trade_continues(tmp_path: Path) -> None:
+def test_the_bot_sets_leverage_to_2x_before_filling(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
     trader, _, _, _ = make_trader(tmp_path, nav)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert (entry.status, entry.margin) == ("open", "Cross 2x")
+    assert nav.calls.index("leverage:2") < nav.calls.index("fill:100")
+
+
+def test_a_refused_leverage_change_is_warned_but_paper_trade_continues(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    class Refusing(FakeNavigator):
+        def ensure_leverage(self, leverage: int) -> MarginSettings:
+            raise ScreenReadError("Bursa tidak mengubah leverage (masih 20x, bukan 2x)")
+
+    nav = Refusing({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert (entry.status, entry.margin) == ("open", "Cross 20x")
+    assert "Leverage tidak bisa diubah ke 2x" in caplog.text
 
 
 # --------------------------------------------------------------------------- slot (langkah 4)
@@ -999,56 +966,6 @@ def test_follower_held_by_a_losing_position_still_records_the_leaders_decisions(
     assert rows["C1USDT"].status == "skipped" and "CFXUSDT sedang rugi" in rows["C1USDT"].reason
     assert rows["C2USDT"].verdict == "tunggu"
     assert nav.filled == []  # bursa tidak dibuka untuk koin yang tertahan
-
-
-def test_auto_margin_changes_only_the_leverage_unless_the_mode_is_also_enabled(
-    tmp_path: Path,
-) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 25))
-    trader, *_ = make_trader(tmp_path, nav)
-    with_auto_margin(trader)  # hanya leverage
-    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert nav.margin_applied == [(2, False)]  # mode Cross tidak disentuh
-    assert entry.margin == "Cross 2x"
-
-
-def test_auto_margin_leaves_a_coin_alone_when_its_leverage_is_already_right(
-    tmp_path: Path,
-) -> None:
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 2))  # Cross 2x
-    trader, *_ = make_trader(tmp_path, nav)
-    with_auto_margin(trader)
-    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert nav.margin_applied == []  # mode Cross dibiarkan karena mode tidak diminta
-
-
-def test_leverage_is_set_for_every_coin_that_is_opened_even_if_it_is_then_skipped(
-    tmp_path: Path,
-) -> None:
-    """Koin yang dilewati (di sini: kenaikan kurang dari batas) juga diatur ke 2x."""
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 50))
-    trader, *_ = make_trader(tmp_path, nav, min_gain_pct=1000.0)
-    with_auto_margin(trader)
-    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert entry.status == "skipped"
-    assert nav.margin_applied == [(2, False)]
-
-
-def test_an_unreadable_margin_panel_does_not_stop_the_coin_from_being_evaluated(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    caplog.set_level("INFO")
-    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 50))
-
-    def unreadable() -> MarginSettings:
-        raise ScreenReadError("Leverage tidak terbaca di panel margin")
-
-    nav.read_margin_settings = unreadable  # type: ignore[method-assign]
-    trader, *_ = make_trader(tmp_path, nav, min_gain_pct=1000.0)
-    with_auto_margin(trader)
-    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
-    assert entry.status == "skipped" and nav.margin_applied == []
-    assert any("tidak terbaca, tidak diatur otomatis" in r.getMessage() for r in caplog.records)
 
 
 def cycle_events(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
