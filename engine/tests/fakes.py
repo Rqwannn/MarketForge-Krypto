@@ -8,7 +8,7 @@ from binance_bot.analysis import AnalysisRecord, PatternReading
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import DEFAULT_APP_ID
-from binance_bot.exceptions import BotError
+from binance_bot.exceptions import BotError, ScreenReadError
 from binance_bot.macos import Rect, TextLine
 from binance_bot.market import Candle, Quote, SymbolRules
 from binance_bot.strategy import MaPattern, OrderPlan, candles_needed
@@ -196,6 +196,8 @@ class FakeNavigator:
         self.margin = margin
         self.calls: list[str] = []
         self.filled: list[str] = []
+        self.margin_applied: list[tuple[int, bool]] = []
+        self.margin_apply_fails = False
 
     def prepare(self) -> None:
         self.calls.append("prepare")
@@ -222,6 +224,13 @@ class FakeNavigator:
 
     def read_margin_settings(self) -> MarginSettings:
         return self.margin
+
+    def apply_margin(self, leverage: int, isolated: bool = True) -> bool:
+        self.margin_applied.append((leverage, isolated))
+        if self.margin_apply_fails:
+            raise ScreenReadError("dialog tidak terbuka")
+        self.margin = MarginSettings(isolated, leverage)
+        return True
 
     def fill_quantity(self, text: str) -> None:
         self.filled.append(text)

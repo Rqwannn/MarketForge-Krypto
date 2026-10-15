@@ -1,5 +1,6 @@
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -168,6 +169,53 @@ def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
     )
     entry = trader.trade(1, "STRKUSDT", None)
     assert entry.verdict == "tunggu" and entry.pattern_ai is None
+
+
+def with_auto_margin(trader: SopTrader) -> None:
+    trader._settings = replace(trader._settings, auto_margin=True)
+
+
+def test_margin_is_left_alone_unless_auto_margin_is_on(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    trader, *_ = make_trader(tmp_path, nav)
+    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == []
+
+
+def test_auto_margin_sets_leverage_and_isolated_before_the_form_is_filled(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == [(2, True)]
+    assert entry.status == "open" and entry.margin == "Isolated 2x"
+    assert not any("Margin di aplikasi" in r.getMessage() for r in caplog.records)
+
+
+def test_auto_margin_does_nothing_when_the_margin_already_matches(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(True, 2))
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == []
+
+
+def test_a_failed_auto_margin_is_logged_and_the_paper_trade_continues(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    nav.margin_apply_fails = True
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert entry.status == "open"  # uji kertas tetap jalan
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("tidak bisa diatur otomatis" in m for m in messages)
+    assert any("leverage 20x, SOP 2x" in m for m in messages)  # peringatan lama tetap muncul
 
 
 def test_margin_differences_are_warned_but_paper_trade_continues(tmp_path: Path) -> None:

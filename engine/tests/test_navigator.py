@@ -596,3 +596,138 @@ def test_market_menu_is_retried_when_ocr_misses_it_once(monkeypatch: pytest.Monk
     nav.prepare()
     found = (area[0] + 0.4 * (area[2] - area[0]), area[1] + 0.3 * (area[3] - area[1]))
     assert nav._market_menu_position() == pytest.approx(found)
+
+
+# ---------------------------------------------------------------------- leverage dan mode margin
+
+DIALOG_AREA = (0.36, 0.20, 0.70, 0.92)
+CROSS_20 = [TextLine("Cross", 0.2, 0.5), TextLine("20x", 0.6, 0.5)]
+CROSS_2 = [TextLine("Cross", 0.2, 0.5), TextLine("2x", 0.6, 0.5)]
+
+
+def leverage_dialog(value: str | None = "20x") -> list[TextLine]:
+    """Dialog "Sesuaikan Leverage": judul, kolom nilai, label slider (jebakan), dan Konfirmasi."""
+    lines = [
+        TextLine("Sesuaikan Leverage", 0.3, 0.1),
+        TextLine("20x", 0.5, 0.45),  # label slider: lebih jauh di bawah judul; BUKAN kolom nilai
+        TextLine("Konfirmasi", 0.5, 0.9),
+    ]
+    if value is not None:
+        lines.append(TextLine(value, 0.5, 0.25))  # kolom nilai
+    return lines
+
+
+def margin_nav(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    bar: list[list[TextLine]],
+    dialog: list[list[TextLine]],
+) -> tuple[BinanceNavigator, FakeScreen]:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(layout, "MARGIN_DIALOG_AREA", DIALOG_AREA)
+    monkeypatch.setattr(layout, "MARGIN_FIELD_BAND", (0.06, 0.16))
+    screen = FakeScreen(texts={layout.MARGIN_AREA: bar, DIALOG_AREA: dialog})
+    nav = make_nav(screen)
+    nav.prepare()
+    return nav, screen
+
+
+def dialog_point(x: float, y: float) -> tuple[int, int]:
+    x0, y0, x1, y1 = DIALOG_AREA
+    return at((x0 + x * (x1 - x0), y0 + y * (y1 - y0)))
+
+
+FIELD = dialog_point(0.5, 0.25)
+SLIDER_LABEL = dialog_point(0.5, 0.45)
+CONFIRM = dialog_point(0.5, 0.9)
+
+
+def test_apply_margin_types_the_leverage_and_confirms_only_after_checking_the_field(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before, after = leverage_dialog("20x"), leverage_dialog("2x")
+    nav, screen = margin_nav(
+        monkeypatch,
+        tmp_path,
+        bar=[CROSS_20, CROSS_20, CROSS_2],  # sebelum, mencari tombol, sesudah
+        # judul; kolom nilai (judul+baris) sebelum; kolom nilai sesudah mengetik; Konfirmasi; tutup
+        dialog=[before, before, before, after, after, after, after, []],
+    )
+    assert nav.apply_margin(2, isolated=False) is True
+    done = clicks(screen)
+    assert FIELD in done and CONFIRM in done and done.index(FIELD) < done.index(CONFIRM)
+    assert SLIDER_LABEL not in done  # label slider tidak pernah diklik
+    kinds = [kind for kind, _ in screen.events]
+    assert kinds.index("clear") < kinds.index("type") and ("type", "2") in screen.events
+
+
+def test_a_slider_label_is_never_mistaken_for_the_value_field(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Kasus nyata: OCR gagal membaca kolom nilai "2x", hanya label slider "20x" yang terbaca."""
+    nav, screen = margin_nav(
+        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(value=None)]
+    )
+    with pytest.raises(ScreenReadError, match="tidak terbaca pasti"):
+        nav.apply_margin(2, isolated=False)
+    assert SLIDER_LABEL not in clicks(screen) and CONFIRM not in clicks(screen)
+    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
+
+
+def test_confirm_is_refused_when_the_field_did_not_change_after_typing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = margin_nav(
+        monkeypatch,
+        tmp_path,
+        bar=[CROSS_20],
+        dialog=[leverage_dialog("20x")],  # tetap 20x
+    )
+    with pytest.raises(SafetyError, match="kolom leverage 20x, bukan 2x"):
+        nav.apply_margin(2, isolated=False)
+    assert CONFIRM not in clicks(screen)
+
+
+def test_apply_margin_does_not_type_or_confirm_when_the_dialog_never_opens(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[[]])
+    with pytest.raises(ScreenReadError, match="tidak terbuka"):
+        nav.apply_margin(2, isolated=False)
+    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
+    assert CONFIRM not in clicks(screen)
+
+
+def test_apply_margin_cancels_instead_of_confirming_if_the_dialog_vanishes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before, after = leverage_dialog("20x"), leverage_dialog("2x")
+    nav, screen = margin_nav(
+        monkeypatch,
+        tmp_path,
+        bar=[CROSS_20],
+        dialog=[before, before, before, after, after, []],  # hilang sebelum Konfirmasi
+    )
+    with pytest.raises(SafetyError, match="tidak terbukti terbuka"):
+        nav.apply_margin(2, isolated=False)
+    assert CONFIRM not in clicks(screen)
+
+
+def test_apply_margin_cancels_with_x_when_the_leverage_is_already_right(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = margin_nav(
+        monkeypatch,
+        tmp_path,
+        bar=[CROSS_20, CROSS_20, CROSS_20],  # tombol di atas form membuat bot membuka dialog
+        dialog=[leverage_dialog("2x")],  # tetapi dialog menunjukkan nilai yang sudah 2x
+    )
+    nav.apply_margin(2, isolated=False)
+    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
+    assert CONFIRM not in clicks(screen)  # Konfirmasi tidak ditekan
+    _, y0, _, y1 = DIALOG_AREA
+    assert at((layout.MARGIN_DIALOG_CLOSE_X, y0 + 0.1 * (y1 - y0))) in clicks(screen)  # X
+
+
+def test_margin_is_not_automated_without_a_dialog_profile() -> None:
+    assert make_nav().apply_margin(2) is False

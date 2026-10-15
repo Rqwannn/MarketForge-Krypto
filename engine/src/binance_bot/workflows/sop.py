@@ -17,7 +17,7 @@ from typing import Any
 
 from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop.pattern_rules import BINANCE
-from binance_bot.binance_desktop.screen_text import GainerRow
+from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.logging_setup import event
@@ -237,6 +237,19 @@ class SopTrader:
         )
         logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry))
 
+    def _fix_margin(self, symbol: str, leverage: int, before: MarginSettings) -> MarginSettings:
+        """Atur leverage dan mode margin koin ini sesuai SOP (hanya bila ATUR_MARGIN=1).
+
+        Gagal bukan masalah bagi uji kertas: dicatat, lalu pembacaan terakhir dipakai dan
+        peringatan seperti biasa muncul.
+        """
+        logger.info("Mengatur margin %s: %s -> Isolated %dx", symbol, before.describe(), leverage)
+        try:
+            self._nav.apply_margin(leverage, isolated=True)
+        except BotError as exc:
+            logger.warning("Margin %s tidak bisa diatur otomatis: %s", symbol, exc)
+        return self._nav.read_margin_settings()
+
     def _finish(self, entry: JournalEntry) -> JournalEntry:
         rank, symbol = entry.rank, entry.symbol
         self._journal.append(entry)
@@ -342,6 +355,8 @@ class SopTrader:
             raise _Skip(sizing)
 
         margin = self._nav.read_margin_settings()
+        if margin.problems(params.leverage) and self._settings.auto_margin:
+            margin = self._fix_margin(symbol, params.leverage, margin)
         entry.margin = margin.describe()
         for issue in margin.problems(params.leverage):
             logger.warning("Margin di aplikasi: %s. Wajib diubah sebelum order sungguhan.", issue)

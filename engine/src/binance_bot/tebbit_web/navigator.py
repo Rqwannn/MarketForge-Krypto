@@ -203,6 +203,10 @@ class TebbitNavigator(BinanceNavigator):
                 gray.resize(size, Image.Resampling.LANCZOS).save(big)
             return self._reader.read_lines(big)
 
+    def apply_margin(self, leverage: int, isolated: bool = True) -> bool:
+        """Pengaturan margin Tebbit belum diotomatiskan: hanya diperingatkan."""
+        return False
+
     # ------------------------------------------------------------------ keamanan
     def _forbidden(self, target: tuple[float, float]) -> bool:
         if lay.in_zone(target, lay.ALWAYS_FORBIDDEN):

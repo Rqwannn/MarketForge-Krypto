@@ -44,6 +44,9 @@ class Settings:
     journal_path: Path = Path("journal/sop.jsonl")
     # Tanda desimal saat mengetik di kolom Jumlah (Binance bahasa Indonesia memakai koma).
     decimal_separator: str = ","
+    # Bot mengubah leverage dan mode margin koin yang dibuka agar sesuai SOP (mengubah pengaturan
+    # akun Binance). Mati secara bawaan; nyalakan dengan ATUR_MARGIN=1.
+    auto_margin: bool = False
     # Analisis AI
     analyzer_model: str = "anthropic/haiku-5.5"
     analyzer_timeout_s: float = 60.0
@@ -79,6 +82,8 @@ class Settings:
             screenshot_dir=Path(get("SCREENSHOT_DIR", defaults.screenshot_dir)),
             journal_path=Path(get("JOURNAL_PATH", defaults.journal_path)),
             decimal_separator=get("DECIMAL_SEPARATOR", defaults.decimal_separator),
+            auto_margin=str(get("ATUR_MARGIN", defaults.auto_margin)).strip().lower()
+            in ("1", "true", "ya", "yes"),
             analyzer_model=get("ANALYZER_MODEL", defaults.analyzer_model),
             analyzer_timeout_s=float(get("ANALYZER_TIMEOUT_S", defaults.analyzer_timeout_s)),
             analyzer_thinking=get("ANALYZER_THINKING", "true").lower()

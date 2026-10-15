@@ -57,8 +57,9 @@ TIMEFRAME_15M = (0.1214, 0.2549)
 CHART_TOOLBAR_AREA = (0.047, 0.19, 0.642, 0.29)
 # Grafik: dari baris OHLC/MA sampai sumbu waktu, termasuk panel volume (x 90..1232, y 285..845).
 CHART_AREA = (0.047, 0.28, 0.642, 0.828)
-# Label "Cross" dan "20x" di atas form (x 1563..1800, y 120..158).
-MARGIN_AREA = (0.81, 0.118, 0.945, 0.155)
+# Tombol "Cross", leverage ("2x"/"20x"), dan "M" di atas form (x 1563..1800, y 120..158); area
+# dibuat cukup lebar karena OCR sering melewatkan "2x" pada potongan yang sempit.
+MARGIN_AREA = (0.80, 0.11, 1.0, 0.17)
 # Tab "Pasar" (1641, 193), lalu kolom "Jumlah" pada tab itu (1730, 315).
 ORDER_TAB_MARKET = (0.8547, 0.1892)
 ORDER_QTY_FIELD = (0.9010, 0.3088)
@@ -71,6 +72,13 @@ ORDER_QTY_AREA = (0.80, 0.26, 1.0, 0.345)
 ORDER_UNIT_BUTTON = (0.9740, 0.3088)
 ORDER_UNIT_MENU_AREA = (0.60, 0.30, 1.0, 0.70)
 ORDER_UNIT_MIN_Y = 0.575
+
+# Dialog "Sesuaikan Leverage" (judul y 0,27, kolom nilai y 0,38, Konfirmasi y 0,78) dan "Mode
+# Margin" (judul y 0,29, Cross/Isolated y 0,36, Konfirmasi y 0,76). Keduanya modal di tengah
+# jendela (x 0,39..0,66), jauh dari tombol order (x >= 0,81). Tombol X: x 0,636 di baris judul.
+MARGIN_DIALOG_AREA = (0.36, 0.20, 0.70, 0.92)
+MARGIN_DIALOG_CLOSE_X = 0.636
+MARGIN_FIELD_BAND = (0.06, 0.16)  # kolom nilai y 0,38; judul y 0,27; label slider y 0,46
 
 # Zona tombol order (Beli/Long, Jual/Short, dan tombol "Aktifkan Akun Futures" yang menempati
 # tempat yang sama bila akun belum aktif). Klik ke sini SELALU ditolak oleh navigator.
