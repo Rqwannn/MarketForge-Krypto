@@ -1258,7 +1258,7 @@ window.bot.team.onError((message) => addFeed({ text: message, css: 'bad' }, Date
 window.bot.team.onStarted(({ leaderName, rank }) => {
   Object.assign(counts, { seen: 0, ok: 0, open: 0 });
   setCounts();
-  emptyCoins('Menyiapkan Binance…');
+  emptyCoins(`Menyiapkan ${platform?.name || 'Binance'}…`);
   emptyFeed('Menunggu aktivitas pertama…');
   setState('running', 'Mengikuti pemimpin', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
   resetFlow('follower', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
@@ -1310,9 +1310,52 @@ function renderPlatforms() {
   }));
 }
 
+// Tampilan putaran per platform (koin, aktivitas, angka, status, alur): Binance dan Tebbit tidak
+// saling menimpa saat platform diganti. Hanya di memori; riwayat AI tetap di jurnal masing-masing.
+const views = new Map();
+
+function saveView(id) {
+  views.set(id, {
+    coins: [...$('coins').childNodes],
+    feed: [...$('feed').childNodes],
+    counts: { ...counts },
+    cycle: $('cycle-info').textContent,
+    status: [$('status-title').textContent, $('status-sub').textContent],
+    flow: { ...flow, sub: $('flow-sub').textContent },
+  });
+}
+
+function restoreView(id) {
+  const view = views.get(id);
+  if (!view) {
+    Object.assign(counts, { seen: 0, ok: 0, open: 0 });
+    setCounts();
+    emptyCoins('Belum ada koin yang dinilai. Tekan Mulai memantau.');
+    emptyFeed('Aktivitas bot akan muncul di sini.');
+    $('cycle-info').textContent = 'Belum ada putaran.';
+    $('status-title').textContent = 'Belum berjalan';
+    $('status-sub').textContent = 'Tekan Mulai memantau.';
+    resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
+    return;
+  }
+  $('coins').replaceChildren(...view.coins);
+  $('feed').replaceChildren(...view.feed);
+  Object.assign(counts, view.counts);
+  setCounts();
+  $('cycle-info').textContent = view.cycle;
+  [$('status-title').textContent, $('status-sub').textContent] = view.status;
+  const { sub: flowSub, ...rest } = view.flow;
+  Object.assign(flow, rest);
+  setFlow(rest.step, flowSub, rest.done);
+}
+
 function choosePlatform(id) {
   const chosen = PLATFORMS.find((p) => p.id === id);
   if (!chosen?.ready) return; // bursa yang belum siap tidak pernah menjadi platform aktif
+  if (platform && platform.id !== chosen.id) {
+    saveView(platform.id);
+    restoreView(chosen.id);
+  }
   platform = chosen;
   window.bot.setPlatform(chosen.id).catch(() => {});
   $('platform-name').textContent = chosen.name;

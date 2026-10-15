@@ -916,3 +916,20 @@ def test_a_rank_that_fails_to_open_still_appears_as_a_row_in_the_app(
             "reason": "Yang terbuka DUSKUSDT, bukan RATSUSDT (peringkat bergeser)",
         }
     ]
+
+
+def test_follower_held_by_a_losing_position_still_records_the_leaders_decisions(
+    tmp_path: Path,
+) -> None:
+    results = {
+        1: AnalysisRecord("C1USDT", 1, 1000.0, reading(OK)),
+        2: AnalysisRecord("C2USDT", 2, 1000.0, reading(WAIT)),
+    }
+    client = FakeClient(results, plan_done=True)
+    follower, nav, journal = make_follower(tmp_path, client, {1: "C1USDT", 2: "C2USDT"}, ranks=None)
+    journal.append(open_trade("CFXUSDT", entry_price=0.9))  # sedang rugi
+    follower.run()
+    rows = {e.symbol: e for e in journal.load()}
+    assert rows["C1USDT"].status == "skipped" and "CFXUSDT sedang rugi" in rows["C1USDT"].reason
+    assert rows["C2USDT"].verdict == "tunggu"
+    assert nav.filled == []  # bursa tidak dibuka untuk koin yang tertahan

@@ -64,10 +64,6 @@ class FollowerWorkflow:
             raise ConfigError("SINYAL=ai butuh hub leader: isi --hub atau BOT_HUB_URL")
         if self._trader.halted(self._trader.refresh_journal()):
             return
-        blocker = self._trader.slot_blocker()
-        if blocker:
-            logger.info("Tidak masuk: %s", blocker)
-            return
         try:
             ranks = self._ranks_to_follow(uses_ai)
         except HubError as exc:
@@ -79,10 +75,6 @@ class FollowerWorkflow:
 
         handled: set[str] = set()
         for rank in ranks:
-            blocker = self._trader.slot_blocker()
-            if blocker:
-                logger.info("Berhenti mengikuti: %s", blocker)
-                break
             outcome = self._follow(rank, uses_ai, handled)
             if outcome is not None:
                 self.result = outcome
@@ -153,6 +145,11 @@ class FollowerWorkflow:
             return self._trader.skip(
                 rank, record.symbol, f"pola garis kuning {verdict.upper()} (dari leader)", reading
             )
+        # Slot (SOP: posisi terbuka tidak sedang rugi) dicek sebelum membuka bursa. Keputusan
+        # leader tetap dicatat dan tampil di aplikasi walau koin ini tidak dimasuki.
+        blocker = self._trader.slot_blocker()
+        if blocker:
+            return self._trader.skip(rank, record.symbol, blocker, reading)
 
         self._nav.prepare()
         rows = self._nav.open_top_gainers()
