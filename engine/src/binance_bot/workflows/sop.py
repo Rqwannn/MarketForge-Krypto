@@ -237,15 +237,18 @@ class SopTrader:
         )
         logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry))
 
-    def _fix_margin(self, symbol: str, leverage: int, before: MarginSettings) -> MarginSettings:
+    def _fix_margin(
+        self, symbol: str, leverage: int, before: MarginSettings, isolated: bool
+    ) -> MarginSettings:
         """Atur leverage dan mode margin koin ini sesuai SOP (hanya bila ATUR_MARGIN=1).
 
         Gagal bukan masalah bagi uji kertas: dicatat, lalu pembacaan terakhir dipakai dan
         peringatan seperti biasa muncul.
         """
-        logger.info("Mengatur margin %s: %s -> Isolated %dx", symbol, before.describe(), leverage)
+        target = f"Isolated {leverage}x" if isolated else f"leverage {leverage}x"
+        logger.info("Mengatur margin %s: %s -> %s", symbol, before.describe(), target)
         try:
-            self._nav.apply_margin(leverage, isolated=True)
+            self._nav.apply_margin(leverage, isolated=isolated)
         except BotError as exc:
             logger.warning("Margin %s tidak bisa diatur otomatis: %s", symbol, exc)
         return self._nav.read_margin_settings()
@@ -355,10 +358,12 @@ class SopTrader:
             raise _Skip(sizing)
 
         margin = self._nav.read_margin_settings()
-        if margin.problems(params.leverage) and self._settings.auto_margin_for(
-            self.profile.platform
+        platform = self.profile.platform
+        wants_mode = self._settings.auto_mode_for(platform)
+        if self._settings.auto_margin_for(platform) and (
+            margin.leverage != params.leverage or (wants_mode and margin.isolated is not True)
         ):
-            margin = self._fix_margin(symbol, params.leverage, margin)
+            margin = self._fix_margin(symbol, params.leverage, margin, wants_mode)
         entry.margin = margin.describe()
         for issue in margin.problems(params.leverage):
             logger.warning("Margin di aplikasi: %s. Wajib diubah sebelum order sungguhan.", issue)

@@ -29,6 +29,12 @@ def read_dotenv(path: Path) -> dict[str, str]:
     return values
 
 
+def _platform_selected(value: str, platform: str) -> bool:
+    """`value` = "tebbit", "binance,tebbit", atau "1"/"semua" (semua platform); kosong = tidak."""
+    tokens = {t.strip() for t in value.lower().replace(";", ",").split(",") if t.strip()}
+    return bool(tokens & {"1", "true", "ya", "yes", "semua", "all", platform})
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     # Aplikasi
@@ -48,6 +54,8 @@ class Settings:
     # akun Binance). Mati secara bawaan; nyalakan dengan ATUR_MARGIN=1.
     # Per platform: ATUR_MARGIN=tebbit, =binance, =binance,tebbit, atau =1 (semua). Kosong = mati.
     auto_margin: str = ""
+    # Mode margin (Cross -> Isolated) diatur terpisah dari leverage; formatnya sama. Kosong = mati.
+    auto_mode: str = ""
     # Analisis AI
     analyzer_model: str = "anthropic/haiku-5.5"
     analyzer_timeout_s: float = 60.0
@@ -64,12 +72,13 @@ class Settings:
     hub_token: str = field(default="", repr=False)
     follower_wait_s: float = 300.0  # leader menilai Top 1..5 berurutan, sekitar 30 detik per koin
 
+    def auto_mode_for(self, platform: str) -> bool:
+        """Apakah bot juga boleh mengubah mode margin ke Isolated di `platform`."""
+        return _platform_selected(self.auto_mode, platform)
+
     def auto_margin_for(self, platform: str) -> bool:
         """Apakah bot boleh mengatur leverage dan mode margin di `platform` ("binance"/"tebbit")."""
-        tokens = {
-            t.strip() for t in self.auto_margin.lower().replace(";", ",").split(",") if t.strip()
-        }
-        return bool(tokens & {"1", "true", "ya", "yes", "semua", "all", platform})
+        return _platform_selected(self.auto_margin, platform)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -91,6 +100,7 @@ class Settings:
             journal_path=Path(get("JOURNAL_PATH", defaults.journal_path)),
             decimal_separator=get("DECIMAL_SEPARATOR", defaults.decimal_separator),
             auto_margin=str(get("ATUR_MARGIN", defaults.auto_margin)).strip().lower(),
+            auto_mode=str(get("ATUR_MODE_MARGIN", defaults.auto_mode)).strip().lower(),
             analyzer_model=get("ANALYZER_MODEL", defaults.analyzer_model),
             analyzer_timeout_s=float(get("ANALYZER_TIMEOUT_S", defaults.analyzer_timeout_s)),
             analyzer_thinking=get("ANALYZER_THINKING", "true").lower()

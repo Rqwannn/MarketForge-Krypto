@@ -171,8 +171,8 @@ def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
     assert entry.verdict == "tunggu" and entry.pattern_ai is None
 
 
-def with_auto_margin(trader: SopTrader) -> None:
-    trader._settings = replace(trader._settings, auto_margin="1")
+def with_auto_margin(trader: SopTrader, mode: bool = False) -> None:
+    trader._settings = replace(trader._settings, auto_margin="1", auto_mode="1" if mode else "")
 
 
 def test_margin_is_left_alone_unless_auto_margin_is_on(tmp_path: Path) -> None:
@@ -188,7 +188,7 @@ def test_auto_margin_sets_leverage_and_isolated_before_the_form_is_filled(
     caplog.set_level("INFO")
     nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
     trader, *_ = make_trader(tmp_path, nav)
-    with_auto_margin(trader)
+    with_auto_margin(trader, mode=True)  # leverage dan mode Isolated sama-sama diminta
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
     assert nav.margin_applied == [(2, True)]
     assert entry.status == "open" and entry.margin == "Isolated 2x"
@@ -904,3 +904,24 @@ def test_sell_works_on_exchange_without_price_history(tmp_path: Path) -> None:
     assert "error" not in result
     assert [c["symbol"] for c in result["closed"]] == ["CKBUSDT"]
     assert journal.load()[0].status == "manual"
+
+
+def test_auto_margin_changes_only_the_leverage_unless_the_mode_is_also_enabled(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 25))
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)  # hanya leverage
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == [(2, False)]  # mode Cross tidak disentuh
+    assert entry.margin == "Cross 2x"
+
+
+def test_auto_margin_leaves_a_coin_alone_when_its_leverage_is_already_right(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 2))  # Cross 2x
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == []  # mode Cross dibiarkan karena mode tidak diminta
