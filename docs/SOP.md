@@ -16,7 +16,7 @@ hanya siapa yang memanggil AI. Kode intinya ada di `engine/src/binance_bot/workf
 | 1. Pantau top 5 Futures | Pasar → Futures → urutkan "Perubahan 24jam" (diverifikasi OCR) → buka rank 1..5 → baca pair di halaman trade | Layar Binance + OCR macOS |
 | 2. Baca garis kuning (MA7) | Tab "Grafik" dan tombol "15 mnt" dicari dengan OCR, tunggu grafik termuat, screenshot, **Haiku menghitung berapa kali MA7 di bawah MA25** | AI visual (default) atau data candle (`SINYAL=data`) |
 | 3. Cek biaya | Lewati bila funding terlalu negatif atau spread lebar | API publik Binance |
-| 4. Cek slot | Maksimal 2 posisi; koin kedua hanya bila posisi pertama tidak sedang rugi | Jurnal + harga terkini |
+| 4. Cek slot | Jumlah posisi tidak dibatasi (keputusan 15 Okt); koin berikutnya hanya bila posisi terbuka tidak sedang rugi | Jurnal + harga terkini |
 | 5. Masuk short 2x, margin 50% | Ukuran posisi, isi kolom **Jumlah**, pintu order **dry run** | Layar Binance |
 | 6. Monitor | `make jurnal`: target / stop-loss / batas waktu dari candle 1 menit; tandai posisi > 1 jam untuk ditinjau | API publik Binance |
 | 7. Catat | `engine/journal/sop.jsonl`: semua isi "Yang dicatat tiap trade" di PDF | File lokal |

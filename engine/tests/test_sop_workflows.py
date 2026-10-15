@@ -201,12 +201,12 @@ def test_a_refused_leverage_change_is_warned_but_paper_trade_continues(
 # --------------------------------------------------------------------------- slot (langkah 4)
 
 
-def test_no_third_position_while_two_are_open(tmp_path: Path) -> None:
+def test_the_number_of_open_positions_is_not_limited(tmp_path: Path) -> None:
     trader, gate, journal, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}))
-    journal.append(open_trade("CFXUSDT"))
-    journal.append(open_trade("MBLUSDT"))
+    for symbol in ("CFXUSDT", "MBLUSDT", "WUSDT"):
+        journal.append(open_trade(symbol, entry_price=1.01))  # tidak rugi (harga 1.0 < masuk)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
-    assert "sudah 2 posisi terbuka" in entry.reason and gate.plans == []
+    assert entry.status == "open" and len(gate.plans) == 1
 
 
 def test_second_coin_only_when_first_is_not_losing(tmp_path: Path) -> None:
@@ -268,15 +268,14 @@ def test_single_still_judges_and_records_coins_when_slots_are_full(tmp_path: Pat
     # Slot penuh hanya menahan posisi baru: koin tetap dibuka, dinilai AI, dan tampil di riwayat.
     nav = FakeNavigator({1: "STRKUSDT"})
     trader, _, journal, _ = make_trader(tmp_path, nav)
-    journal.append(open_trade("CFXUSDT"))
-    journal.append(open_trade("MBLUSDT"))
+    journal.append(open_trade("CFXUSDT", entry_price=0.9))  # sedang rugi: harga 1.0 > masuk
     analyzer = FakePatternAnalyzer(OK)
     SingleWorkflow(nav, trader, analyzer, ranks=[1]).run()  # type: ignore[arg-type]
     assert len(analyzer.calls) == 1
     new = next(e for e in journal.load() if e.symbol == "STRKUSDT")
     assert (new.status, new.verdict) == ("skipped", "ok")  # dinilai Layak, tapi tidak dibuka
-    assert "2 posisi terbuka" in new.reason
-    assert len([e for e in journal.load() if e.status == "open"]) == 2
+    assert "CFXUSDT sedang rugi" in new.reason
+    assert len([e for e in journal.load() if e.status == "open"]) == 1
 
 
 def test_single_evaluates_a_pair_once_when_ranks_shift_onto_it(tmp_path: Path) -> None:
@@ -449,15 +448,15 @@ def test_follower_with_all_tops_follows_every_top_the_leader_plays(tmp_path: Pat
     assert nav.filled == ["50"]  # hanya koin OK yang membuka form; margin 25% x 2x x 100
 
 
-def test_follower_with_all_tops_stops_when_two_slots_are_full(tmp_path: Path) -> None:
+def test_follower_with_all_tops_opens_every_ok_coin(tmp_path: Path) -> None:
     results = {r: AnalysisRecord(f"C{r}USDT", r, 1000.0, reading(OK)) for r in (1, 2, 3)}
     client = FakeClient(results, plan_done=True)
     symbols = {r: f"C{r}USDT" for r in (1, 2, 3)}
     follower, _nav, journal = make_follower(tmp_path, client, symbols, ranks=None)
     follower.run()
     opened = [e.symbol for e in journal.load() if e.status == "open"]
-    assert opened == ["C1USDT", "C2USDT"]  # maksimal 2 posisi (SOP)
-    assert client.ranks == [1, 2]  # Top 3 tidak ditanyakan: slot sudah penuh
+    assert opened == ["C1USDT", "C2USDT", "C3USDT"]  # jumlah posisi tidak dibatasi
+    assert client.ranks == [1, 2, 3]
 
 
 def test_follower_skips_a_top_the_leader_does_not_play_without_waiting(tmp_path: Path) -> None:
@@ -486,8 +485,8 @@ def test_each_follower_plays_only_its_own_tops_of_the_leaders_selection(tmp_path
 
     assert journal_of([2], "a") == ([2], ["C2USDT"])  # satu Top
     assert journal_of([4, 5], "b") == ([4, 5], ["C4USDT", "C5USDT"])  # dua Top
-    assert journal_of([2, 4, 5], "c")[0] == [2, 4]  # tiga Top: slot penuh setelah 2 posisi
-    assert journal_of(None, "d")[0] == [2, 4]  # "semua Top pemimpin"
+    assert journal_of([2, 4, 5], "c")[0] == [2, 4, 5]  # tiga Top
+    assert journal_of(None, "d")[0] == [2, 4, 5]  # "semua Top pemimpin"
     assert journal_of([1, 3], "e") == ([], [])  # Top yang tidak dimainkan pemimpin
 
 

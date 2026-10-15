@@ -27,7 +27,7 @@ def test_breakeven_matches_the_v2_chart(stop: float, expected: float) -> None:
 
 def test_v2_defaults_follow_the_pdf() -> None:
     p = SopParams()
-    assert (p.leverage, p.margin_pct, p.max_open_positions) == (2, 50.0, 2)
+    assert (p.leverage, p.margin_pct) == (2, 50.0)
     assert (p.target_pct, p.stop_pct, p.fee_pct, p.min_crosses) == (2.0, 2.0, 0.1, 2)
     assert (p.max_hold_h, p.review_after_h, p.min_gain_pct) == (4.0, 1.0, 0.0)
 

@@ -21,7 +21,7 @@ def test_single_defaults_follow_sop_v2() -> None:
     args = build_parser().parse_args(["single"])
     params = params_from(args)
     assert args.ranks == [1, 2, 3, 4, 5]  # pantau top 5
-    assert (params.leverage, params.margin_pct, params.max_open_positions) == (2, 50.0, 2)
+    assert (params.leverage, params.margin_pct) == (2, 50.0)
     assert (params.target_pct, params.stop_pct, params.fee_pct) == (2.0, 2.0, 0.1)
     assert (params.min_crosses, params.min_gain_pct, params.max_hold_h) == (2, 0.0, 4.0)
 

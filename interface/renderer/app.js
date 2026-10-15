@@ -7,7 +7,6 @@
 const $ = (id) => document.getElementById(id);
 const FORM_KEY = 'marketforge.form.v2';
 const RANKS = [1, 2, 3, 4, 5];
-const MAX_OPEN = 2; // SOP V2: maksimal 2 posisi bersamaan
 const MAX_FEED = 120;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const NUM = new Intl.NumberFormat('id-ID', { maximumSignificantDigits: 6 });
@@ -90,7 +89,6 @@ function plain(text) {
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
-    [/sudah (\d+) posisi terbuka/, (m) => `Sudah ${m[1]} posisi berjalan, batas tercapai`],
     [/sedang rugi/, 'Posisi pertama sedang rugi, koin berikutnya ditunda'],
     [/sudah ada posisi uji/, 'Koin ini sudah punya posisi yang berjalan'],
     [/funding (-?[\d.]+)%/i, (m) => `Biaya funding terlalu mahal (${m[1].replace('.', ',')}%): short membayar`],
@@ -317,7 +315,7 @@ function setCounts() {
   $('seen-note').textContent = `dari ${watched} top gainers`;
   setBar('seen-bar', counts.seen / watched);
   setBar('ok-bar', counts.seen ? counts.ok / counts.seen : 0);
-  setBar('open-bar', counts.open / MAX_OPEN);
+  setBar('open-bar', counts.ok ? counts.open / counts.ok : 0);
 }
 
 function emptyCoins(text) {

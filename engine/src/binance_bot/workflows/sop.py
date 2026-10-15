@@ -1,9 +1,10 @@
 """Inti SOP V2 "Short Top Gainers (Futures 2x)" untuk satu koin yang halaman trade-nya terbuka.
 
 Dipakai bersama oleh mode single (AI sendiri) dan follower (AI dari hub leader). Urutan:
-cek slot (maks 2 posisi; koin kedua hanya bila koin pertama tidak rugi), saringan gratis
-(funding, spread, kenaikan minimal bila diisi), pola garis kuning MA7 (AI atau data), ukuran
-posisi (margin 50% x 2x), isi kolom Jumlah, lalu pintu order yang DIMATIKAN. Semua dicatat.
+cek slot (koin berikutnya hanya bila posisi terbuka tidak rugi; jumlah posisi tidak dibatasi),
+saringan gratis (funding, spread, kenaikan minimal bila diisi), pola garis kuning MA7 (AI atau
+data), ukuran posisi (margin 50% x 2x), leverage 2x di bursa, isi kolom Jumlah, lalu pintu
+order yang DIMATIKAN. Semua dicatat.
 """
 
 from __future__ import annotations
@@ -162,10 +163,10 @@ class SopTrader:
         return False
 
     def slot_blocker(self) -> str | None:
-        """Langkah 4 SOP: posisi terbuka < maks; koin kedua hanya bila yang pertama tidak rugi."""
+        """Langkah 4 SOP: koin berikutnya hanya bila posisi yang terbuka tidak sedang rugi.
+
+        Jumlah posisi tidak dibatasi (keputusan 15 Okt)."""
         opened = [e for e in self._journal.load() if e.status == "open"]
-        if len(opened) >= self.params.max_open_positions:
-            return f"sudah {len(opened)} posisi terbuka (maksimal {self.params.max_open_positions})"
         for entry in opened:
             assert entry.entry_price is not None
             # Short rugi bila harga naik di atas harga masuk. Dibandingkan dengan sisi harga yang

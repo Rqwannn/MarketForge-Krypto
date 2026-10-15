@@ -37,7 +37,7 @@ Perintah `make` tidak dipakai di Windows. Panggil CLI langsung (dari `engine\`):
 ```
 
 Parameter SOP sama dengan tabel di Makefile (`--sl`, `--target`, `--min-naik`, `--min-tanda`,
-`--batas-jam`, `--maks-posisi`, `--sinyal`, `--no-fill`). Token hub: `openssl rand -hex 16`
+`--batas-jam`, `--sinyal`, `--no-fill`). Token hub: `openssl rand -hex 16`
 diganti `python -c "import secrets; print(secrets.token_hex(16))"`.
 
 ## Syarat

@@ -121,12 +121,6 @@ def _sop_options() -> argparse.ArgumentParser:
         "--min-funding", type=float, default=d.min_funding_pct, help="Funding minimal (%%)"
     )
     g.add_argument(
-        "--maks-posisi",
-        type=int,
-        default=d.max_open_positions,
-        help="Posisi terbuka maksimal bersamaan",
-    )
-    g.add_argument(
         "--sinyal",
         choices=SIGNAL_SOURCES,
         default=d.signal_source,
@@ -150,7 +144,6 @@ def params_from(args: argparse.Namespace) -> SopParams:
         fee_pct=args.biaya,
         max_spread_pct=args.maks_spread,
         min_funding_pct=args.min_funding,
-        max_open_positions=args.maks_posisi,
         signal_source=args.sinyal,
     )
 

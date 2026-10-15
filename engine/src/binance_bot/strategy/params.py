@@ -1,8 +1,9 @@
 """Parameter SOP V2 "Short Top Gainers (Futures 2x)" (PDF 12 Okt 2026).
 
-Default = angka di PDF. Short, leverage 2x, margin 50% per posisi, maksimal 2 posisi, chart
+Default = angka di PDF. Short, leverage 2x, margin 50% per posisi, chart
 15 menit, pantau top 5, filter garis kuning (MA7), dan target 1-4% berasal dari beliau. Angka
-pola "minimal 2 kali di bawah", stop-loss 2%, dan batas waktu ditandai usulan di PDF.
+pola "minimal 2 kali di bawah", stop-loss 2%, dan batas waktu ditandai usulan di PDF. Batas
+jumlah posisi (dulu 2) dihapus atas keputusan 15 Okt.
 """
 
 from __future__ import annotations
@@ -34,7 +35,6 @@ class SopParams:
     # sampai Pak Saputra menentukan batasnya: koin ETF (UVXY, SQQQ) spread-nya 0,1-0,25%.
     max_spread_pct: float = 0.3
     min_funding_pct: float = -0.1
-    max_open_positions: int = 2  # beliau: maksimal 2 koin pada saat yang sama
     max_stop_streak: int = 3  # SOP: berhenti hari itu setelah 3 stop-loss berturut-turut
     signal_source: str = "ai"  # siapa yang membaca pola garis kuning: "ai" atau "data"
 
@@ -56,8 +56,8 @@ class SopParams:
             errors.append("MIN_TURUN minimal 1")
         if not 0 < self.max_hold_h <= MAX_HOLD_LIMIT_H:
             errors.append(f"BATAS_JAM harus di antara 0 dan {MAX_HOLD_LIMIT_H}")
-        if self.fee_pct < 0 or self.max_open_positions < 1 or self.max_stop_streak < 1:
-            errors.append("BIAYA tidak boleh negatif; MAKS_POSISI dan batas stop minimal 1")
+        if self.fee_pct < 0 or self.max_stop_streak < 1:
+            errors.append("BIAYA tidak boleh negatif; batas stop minimal 1")
         if self.signal_source not in SIGNAL_SOURCES:
             errors.append(f"SINYAL harus salah satu dari {SIGNAL_SOURCES}")
         if errors:

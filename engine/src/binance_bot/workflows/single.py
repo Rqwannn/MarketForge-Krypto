@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class SingleWorkflow:
     """Mode single: satu laptop menjalankan SOP V2 penuh dan memanggil AI sendiri.
 
-    Langkah 1 SOP: pantau top 5, masuk hanya koin yang pola garis kuningnya OK, sampai slot
-    (maksimal 2 posisi) penuh. Bila kelimanya belum OK, tidak masuk. Dengan `interval_s`,
+    Langkah 1 SOP: pantau top 5, masuk hanya koin yang pola garis kuningnya OK (jumlah posisi
+    tidak dibatasi). Bila kelimanya belum OK, tidak masuk. Dengan `interval_s`,
     pemantauan diulang terus sampai dihentikan (Ctrl+C).
     """
 
