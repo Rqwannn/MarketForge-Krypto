@@ -172,7 +172,7 @@ def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
 
 
 def with_auto_margin(trader: SopTrader) -> None:
-    trader._settings = replace(trader._settings, auto_margin=True)
+    trader._settings = replace(trader._settings, auto_margin="1")
 
 
 def test_margin_is_left_alone_unless_auto_margin_is_on(tmp_path: Path) -> None:

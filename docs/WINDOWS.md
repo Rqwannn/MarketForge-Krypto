@@ -143,8 +143,8 @@ lengkap dengan AI. Belum diuji: mode pemimpin/pengikut lewat Tebbit, layar skala
 ## Leverage dan mode margin otomatis (opsional, Binance)
 
 Secara bawaan bot hanya **memperingatkan** bila leverage di Binance bukan 2x atau mode margin
-bukan Isolated. Dengan `BOT_ATUR_MARGIN=1` di `.env`, bot mengaturnya sendiri untuk koin yang
-dibuka, lewat dialog "Sesuaikan Leverage" dan "Mode Margin".
+bukan Isolated. Dengan `BOT_ATUR_MARGIN` di `.env` (`tebbit`, `binance`, `binance,tebbit`, atau `1` untuk semua), bot
+mengaturnya sendiri untuk koin yang dibuka di platform itu, lewat dialog "Sesuaikan Leverage" dan "Mode Margin".
 
 **Ini mengubah pengaturan akun Binance** (per kontrak) dan berlaku juga untuk posisi dan order
 terbuka koin itu, jadi sengaja dimatikan secara bawaan. Pengamannya: dialog harus terbukti terbuka

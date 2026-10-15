@@ -46,7 +46,8 @@ class Settings:
     decimal_separator: str = ","
     # Bot mengubah leverage dan mode margin koin yang dibuka agar sesuai SOP (mengubah pengaturan
     # akun Binance). Mati secara bawaan; nyalakan dengan ATUR_MARGIN=1.
-    auto_margin: bool = False
+    # Per platform: ATUR_MARGIN=tebbit, =binance, =binance,tebbit, atau =1 (semua). Kosong = mati.
+    auto_margin: str = ""
     # Analisis AI
     analyzer_model: str = "anthropic/haiku-5.5"
     analyzer_timeout_s: float = 60.0
@@ -62,6 +63,13 @@ class Settings:
     hub_port: int = 8765
     hub_token: str = field(default="", repr=False)
     follower_wait_s: float = 300.0  # leader menilai Top 1..5 berurutan, sekitar 30 detik per koin
+
+    def auto_margin_for(self, platform: str) -> bool:
+        """Apakah bot boleh mengatur leverage dan mode margin di `platform` ("binance"/"tebbit")."""
+        tokens = {
+            t.strip() for t in self.auto_margin.lower().replace(";", ",").split(",") if t.strip()
+        }
+        return bool(tokens & {"1", "true", "ya", "yes", "semua", "all", platform})
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -82,8 +90,7 @@ class Settings:
             screenshot_dir=Path(get("SCREENSHOT_DIR", defaults.screenshot_dir)),
             journal_path=Path(get("JOURNAL_PATH", defaults.journal_path)),
             decimal_separator=get("DECIMAL_SEPARATOR", defaults.decimal_separator),
-            auto_margin=str(get("ATUR_MARGIN", defaults.auto_margin)).strip().lower()
-            in ("1", "true", "ya", "yes"),
+            auto_margin=str(get("ATUR_MARGIN", defaults.auto_margin)).strip().lower(),
             analyzer_model=get("ANALYZER_MODEL", defaults.analyzer_model),
             analyzer_timeout_s=float(get("ANALYZER_TIMEOUT_S", defaults.analyzer_timeout_s)),
             analyzer_thinking=get("ANALYZER_THINKING", "true").lower()

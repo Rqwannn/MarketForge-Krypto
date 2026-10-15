@@ -355,7 +355,9 @@ class SopTrader:
             raise _Skip(sizing)
 
         margin = self._nav.read_margin_settings()
-        if margin.problems(params.leverage) and self._settings.auto_margin:
+        if margin.problems(params.leverage) and self._settings.auto_margin_for(
+            self.profile.platform
+        ):
             margin = self._fix_margin(symbol, params.leverage, margin)
         entry.margin = margin.describe()
         for issue in margin.problems(params.leverage):
