@@ -117,7 +117,9 @@ class TebbitNavigator(BinanceNavigator):
                 self._raise_if_logged_out()  # layar login menutupi menu: jangan salah sebut
                 raise ScreenReadError("Halaman Tebbit belum termuat (menu 'Futures' tidak terbaca)")
             if not reloaded and self._clock() >= deadline - _PAGE_TIMEOUT_S / 2:
-                # Kadang menu atas Tebbit tidak tampil sama sekali (sementara): muat ulang sekali.
+                # Menu atas Tebbit tidak tampil bila jendela Chrome tidak aktif saat halaman dimuat:
+                # aktifkan jendela (klik margin kosong, tidak menekan apa pun) lalu muat ulang.
+                self._click(lay.BLANK_MARGIN)
                 self._load(HOME_URL)
                 reloaded = True
             self._sleep(1.0)

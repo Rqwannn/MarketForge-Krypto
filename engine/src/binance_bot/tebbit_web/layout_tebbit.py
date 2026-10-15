@@ -16,6 +16,9 @@ NAV_FUTURES_AREA = (0.0, 0.10, 0.6, 0.17)
 NAV_FUTURES_X = 0.221
 NAV_FUTURES_TOLERANCE = 0.03
 
+# Margin kosong di kiri halaman (bukan tautan, bukan zona terlarang): klik mengaktifkan jendela.
+BLANK_MARGIN = (0.04, 0.55)
+
 # Halaman depan: daftar Gainers (tab "Gainers", sub-tab "Futures") di bawah halaman.
 LIST_SEARCH_AREA = (0.0, 0.17, 0.75, 0.99)
 LIST_ROWS_AREA = (0.05, 0.17, 0.90, 0.99)
