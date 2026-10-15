@@ -117,7 +117,7 @@ def test_pattern_not_ok_means_no_entry(tmp_path: Path, pattern: Any, word: str) 
 
 @pytest.mark.parametrize(
     ("quote", "reason"),
-    [(Quote(1.0, 1.0005, -0.001, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
+    [(Quote(1.0, 1.0005, -0.002, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
 )
 def test_cost_filters_reject_after_the_pattern_is_judged(
     tmp_path: Path, quote: Quote, reason: str
@@ -131,6 +131,14 @@ def test_cost_filters_reject_after_the_pattern_is_judged(
     assert entry.status == "skipped" and reason in entry.reason
     assert len(analyzer.calls) == 1 and entry.verdict == "ok" and entry.screenshots
     assert nav.filled == [] and gate.plans == []
+
+
+def test_default_cost_limits_are_loose_until_the_sop_gives_numbers(tmp_path: Path) -> None:
+    # SOP V2 tidak menyebut angka. Koin ETF dengan spread 0,23% dan funding -0,08% tetap boleh.
+    etf = FakeMarket(quote=Quote(17.16, 17.20, -0.0008, 8.7))
+    trader, _, _, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}), etf)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+    assert (SopParams().max_spread_pct, SopParams().min_funding_pct) == (0.3, -0.1)
 
 
 def test_pattern_reason_wins_over_cost_reason_when_pattern_is_not_ok(tmp_path: Path) -> None:

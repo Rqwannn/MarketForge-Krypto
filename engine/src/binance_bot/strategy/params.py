@@ -30,8 +30,10 @@ class SopParams:
     max_hold_h: float = 4.0  # usulan: tinjau di 1 jam, tutup di 4 jam
     review_after_h: float = 1.0  # usulan: posisi lebih lama dari ini ditandai untuk ditinjau
     fee_pct: float = 0.1  # riwayat: fee masuk + keluar per putaran
-    max_spread_pct: float = 0.1  # usulan engine: lewati bila spread lebih lebar
-    min_funding_pct: float = -0.05  # usulan engine: lewati bila funding lebih negatif
+    # SOP V2 hanya menyebut "spread lebar" dan "funding sangat negatif", tanpa angka. Longgar dulu
+    # sampai Pak Saputra menentukan batasnya: koin ETF (UVXY, SQQQ) spread-nya 0,1-0,25%.
+    max_spread_pct: float = 0.3
+    min_funding_pct: float = -0.1
     max_open_positions: int = 2  # beliau: maksimal 2 koin pada saat yang sama
     max_stop_streak: int = 3  # SOP: berhenti hari itu setelah 3 stop-loss berturut-turut
     signal_source: str = "ai"  # siapa yang membaca pola garis kuning: "ai" atau "data"
