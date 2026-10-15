@@ -24,6 +24,8 @@ const VERDICT = {
 const STATUS = {
   open: ['Berjalan', 'open'],
   target: ['Target tercapai', 'target'],
+  likuidasi: ['Likuidasi', 'stop'],
+  // Catatan lama (SOP V2). V3 tanpa stop-loss dan tanpa batas waktu.
   stop: ['Kena batas rugi', 'stop'],
   timeout: ['Waktu habis', 'timeout'],
   manual: ['Ditutup (Sell)', 'manual'],
@@ -108,7 +110,7 @@ function plain(text) {
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
     [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
-    [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti untuk hari ini'],
+    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan (SOP V3)'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
@@ -144,6 +146,10 @@ function activity(entry) {
     return { text: `${e.symbol} dilewati: ${plain(e.reason).toLowerCase()}` };
   }
   if (e?.type === 'hub') return { text: 'Mulai membagikan hasil ke laptop pengikut', css: 'good' };
+  if (e?.type === 'sell') {
+    const why = e.status === 'target' ? 'target tercapai' : e.status;
+    return { text: `Jual otomatis ${e.symbol}: ${why} (${percent(e.pnl_pct)}), tombol tidak ditekan`, css: e.pnl_pct >= 0 ? 'good' : 'bad' };
+  }
   if (e?.type === 'view') return { text: entry.message };  // "AI membaca grafik X", "Kembali ke Binance"
 
   const m = entry.message || '';
@@ -434,7 +440,7 @@ function chartThumb(file, caption) {
 /** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
 function actionOf(e) {
   if (e.status === 'open') {
-    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · target ${price(e.target_price)} · batas rugi ${price(e.stop_price)}` };
+    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
   }
   if (e.status === 'analyzed') {
     return e.verdict === 'ok'
@@ -643,12 +649,12 @@ function pnlChart(trades) {
   return svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': 'Hasil per trade' }, ...parts);
 }
 
-/** Donat akhir posisi: target, batas rugi, waktu habis, masih berjalan. */
+/** Donat akhir posisi: target, likuidasi, Sell, masih berjalan (dan catatan lama V2). */
 function donut(s) {
   const parts = [
     ['Target tercapai', s.targets, 'var(--green)'],
-    ['Kena batas rugi', s.stops, 'var(--red)'],
-    ['Waktu habis', s.timeouts, 'var(--amber)'],
+    ['Likuidasi', s.liquidations ?? 0, 'var(--red)'],
+    ['Stop/waktu habis (V2)', (s.stops ?? 0) + (s.timeouts ?? 0), 'var(--amber)'],
     ['Ditutup (Sell)', s.manual ?? 0, 'var(--accent)'],
     ['Masih berjalan', s.open, 'var(--accent-2)'],
   ];
@@ -701,8 +707,8 @@ async function loadJournal() {
         { bar: s.win_rate ?? 0, barClass: s.win_rate !== null && s.win_rate >= s.breakeven ? 'green' : 'red', mark: s.breakeven,
           css: s.win_rate === null ? '' : s.win_rate >= s.breakeven ? 'pos' : 'neg' }),
       kpi('Hasil bersih', percent(s.net_capital_pct), 'dari modal', { css: signClass(s.net_capital_pct) }),
-      kpi('Batas rugi beruntun', String(s.stop_streak), 'bot berhenti bila 3 dalam sehari',
-        { bar: s.stop_streak / 3, barClass: 'red', css: s.stop_streak >= 2 ? 'neg' : '' }),
+      kpi('Perlu ditinjau', String(s.needs_review), 'posisi ditahan lebih dari 1 hari',
+        { css: s.needs_review > 0 ? 'neg' : '' }),
     );
 
     $('pnl-chart').replaceChildren(pnlChart(report.trades));
@@ -834,7 +840,7 @@ async function loadOwnPositions(canSell) {
     el('td', { class: 'num', textContent: price(p.entry_price) }),
     el('td', { class: 'num', textContent: price(p.price) }),
     el('td', { class: `num ${signClass(p.pnl_capital_pct)}`, textContent: p.pnl_capital_pct === null ? '–' : `${percent(p.pnl_capital_pct)} modal` }),
-    el('td', { class: 'num', textContent: `${price(p.target_price)} / ${price(p.stop_price)}` }),
+    el('td', { class: 'num', textContent: price(p.target_price) }),
     el('td', { class: 'num' }, canSell
       ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol) })
       : el('span', { class: 'locked', textContent: 'Ditutup pemimpin' }))));

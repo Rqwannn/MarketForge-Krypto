@@ -108,7 +108,6 @@ class PositionsWorkflow:
             "created_at": entry.created_at,
             "entry_price": entry.entry_price,
             "target_price": entry.target_price,
-            "stop_price": entry.stop_price,
             "notional": entry.notional,
             "price": None,
             "pnl_pct": None,

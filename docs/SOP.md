@@ -1,7 +1,9 @@
-# SOP V2 di dalam engine
+# SOP V3 di dalam engine
 
-Engine ini menjalankan **SOP V2 "Short Top Gainers (Futures 2x)"** dari PDF Pak Saputra
-(12 Oktober 2026). Ketiga mode (single, leader, follower) memakai algoritma yang sama; bedanya
+Engine ini menjalankan **SOP V3 "Short Top Gainers (Futures 2x)"** dari PDF Pak Saputra
+(15 Oktober 2026, revisi Sell). Perubahan utama dari V2: jual otomatis di 3-5% profit (engine:
+harga turun 3%), **tanpa stop-loss dan tanpa batas waktu**, dan aturan pola dipisah per platform
+(Binance: garis MA7 dan MA25 yang berdekatan = jangan masuk; Tebbit: berdekatan boleh). Ketiga mode (single, leader, follower) memakai algoritma yang sama; bedanya
 hanya siapa yang memanggil AI. Kode intinya ada di `engine/src/binance_bot/workflows/sop.py` dan
 `engine/src/binance_bot/strategy/`.
 
@@ -14,11 +16,11 @@ hanya siapa yang memanggil AI. Kode intinya ada di `engine/src/binance_bot/workf
 | Langkah PDF | Di engine | Sumber data |
 |---|---|---|
 | 1. Pantau top 5 Futures | Pasar → Futures → urutkan "Perubahan 24jam" (diverifikasi OCR) → buka rank 1..5 → baca pair di halaman trade | Layar Binance + OCR macOS |
-| 2. Baca garis kuning (MA7) | Tab "Grafik" dan tombol "15 mnt" dicari dengan OCR, tunggu grafik termuat, screenshot, **Haiku menghitung berapa kali MA7 di bawah MA25** | AI visual (default) atau data candle (`SINYAL=data`) |
+| 2. Baca garis kuning (MA7) | Tab "Grafik" dan tombol "15 mnt" dicari dengan OCR, tunggu grafik termuat, screenshot, **Haiku menghitung berapa kali MA7 di bawah MA25 dan menilai apakah kedua garis berdekatan** (Binance); jarak garis (%) dihitung dari candle | AI visual (default) atau data candle (`SINYAL=data`) |
 | 3. Cek biaya | Lewati bila funding terlalu negatif atau spread lebar | API publik Binance |
 | 4. Cek slot | Jumlah posisi tidak dibatasi (keputusan 15 Okt); koin berikutnya hanya bila posisi terbuka tidak sedang rugi | Jurnal + harga terkini |
 | 5. Masuk short 2x, margin 50% | Ukuran posisi, isi kolom **Jumlah**, pintu order **dry run** | Layar Binance |
-| 6. Monitor | `make jurnal`: target / stop-loss / batas waktu dari candle 1 menit; tandai posisi > 1 jam untuk ditinjau | API publik Binance |
+| 6. Monitor dan jual otomatis | Posisi ditutup (uji kertas) begitu harga turun 3% dari harga masuk; tanpa stop-loss, tanpa batas waktu, batas rugi terakhir = likuidasi (+50% pada 2x). Binance: candle 1 menit, dicek tiap menit selama bot menunggu putaran. Tebbit: harga dibaca dari layar (OCR, tanpa AI) tiap 5 menit. Tombol tutup posisi di bursa **tidak ditekan**. Posisi > 1 hari ditandai untuk ditinjau | API publik Binance / layar Tebbit |
 | 7. Catat | `engine/journal/sop.jsonl`: semua isi "Yang dicatat tiap trade" di PDF | File lokal |
 
 Saringan yang gratis (biaya, slot) dijalankan **sebelum** AI. Bila slot sudah penuh, engine
@@ -50,17 +52,16 @@ seberapa sering AI dan data sepakat. Angka itu dasar untuk memilih penentu (`SIN
 | Arah | (tetap) | Short | Beliau |
 | Leverage | `LEVERAGE` | 2x | Beliau |
 | Margin per posisi | `MARGIN` | 50% modal (nilai posisi = 100% modal) | Beliau |
-| Posisi bersamaan | `MAKS_POSISI` | 2 | Beliau |
+| Posisi bersamaan | (tetap) | tidak dibatasi (V3 menulis 2; keputusan 15 Okt) | Pengguna |
 | Rank yang dipantau | `RANKS` | 1,2,3,4,5 | Beliau |
 | Timeframe | (tetap) | 15 menit | Beliau |
-| Target | `TARGET` | 2% (rentang beliau 1-4%) | Beliau / titik impas PDF |
+| Target jual otomatis | `TARGET` | harga turun 3% (V3: 3-5%; dasar harga, mulai 3%) | Beliau / usulan V3 |
 | Ambang pola OK | `MIN_TURUN` | 2 kali | Usulan |
-| Stop-loss | `SL` | 2% di atas harga masuk | Riwayat dan usulan |
-| Batas waktu | `BATAS_JAM` | tinjau 1 jam, tutup 4 jam | Usulan |
+| Stop-loss | (tidak ada) | tidak dipakai, batas rugi terakhir likuidasi | Beliau (V3) |
+| Batas waktu | (tidak ada) | tidak dipakai; posisi > 1 hari ditandai untuk ditinjau | Beliau (V3) |
 | Biaya | `--biaya` | 0,1% per putaran | Riwayat |
 | Kenaikan minimal 24 jam | `MIN_NAIK` | 0 (tidak disaring; V2 tidak mensyaratkan) | Opsional |
 | Spread maksimal / funding minimal | `--maks-spread`, `--min-funding` | 0,3% / -0,1% | Usulan engine, sengaja longgar: SOP V2 hanya menyebut "spread lebar" dan "funding sangat negatif" tanpa angka (menunggu Pak Saputra) |
-| Berhenti setelah stop-loss beruntun | (tetap) | 3 dalam sehari | SOP |
 | Modal | `MODAL` | wajib (USDT) | Pengguna |
 | Ukuran order manual | `JUMLAH` | kosong (pakai margin × leverage), dalam USDT | Pengguna |
 
@@ -68,21 +69,27 @@ Kolom **Jumlah** di Binance diisi dalam **USDT, mode Ukuran Order** (nilai posis
 koin. Bot membaca satuan kolom sebelum mengetik; bila masih satuan koin atau Margin Awal, bot
 berhenti tanpa mengetik.
 
-Contoh PDF: modal 10.000.000 × margin 50% × 2x = nilai posisi 10.000.000; stop-loss 2% = rugi
-sekitar 200.000 (2% modal). Dengan `MODAL=100` (USDT): margin 50 USDT, nilai posisi 100 USDT.
+Contoh PDF: modal 10.000.000 × margin 50% × 2x = nilai posisi 10.000.000; untung bila target 3%
+tercapai sekitar 300.000 sebelum fee; rugi tidak dibatasi stop-loss (harga naik 10% = rugi 10%
+modal, likuidasi Isolated sekitar +50% = 50% modal). Dengan `MODAL=100` (USDT): margin 50 USDT, nilai posisi 100 USDT.
 Tahap modal kecil di PDF memakai margin 25%: `MARGIN=25`.
 
 ## Menilai uji kertas
 
 - Harga masuk = harga **bid** saat itu (short menjual ke bid).
-- Mulai menit berikutnya, candle 1 menit diperiksa: menyentuh stop-loss → `stop`; menyentuh
-  target → `target`. Bila keduanya di menit yang sama, dihitung `stop` (asumsi terburuk).
-  Tidak tersentuh sampai batas waktu → `timeout` di harga penutupan terakhir.
-- **Harga tertinggi setelah masuk** dicatat sampai posisi selesai (seberapa jauh harga melawan).
+- Mulai menit berikutnya, candle 1 menit diperiksa: menyentuh target (harga turun 3%) →
+  `target`, dijual seluruhnya di harga target. Tanpa stop-loss dan tanpa batas waktu; posisi baru
+  berakhir rugi bila harga mencapai likuidasi (+50% pada 2x) → `likuidasi`. Bila keduanya di menit
+  yang sama, dihitung `likuidasi` (asumsi terburuk). Posisi yang ditahan berhari-hari dinilai
+  per 1000 menit dari titik terakhir, jadi tidak ada menit yang terlewat.
+- Tebbit tidak punya candle: harga ask dibaca dari layar tiap 5 menit (OCR, tanpa AI); begitu
+  ask di target atau lebih rendah, posisi dijual di ask itu.
+- **Harga tertinggi dan terendah setelah masuk** dicatat sampai posisi selesai.
 - Hasil bersih = selisih harga − fee 0,1% + funding (short menerima funding positif dan
   membayar funding negatif), dilaporkan juga dalam **% modal**, bukan ROI aplikasi.
-- **Titik impas** = (SL + biaya) ÷ ((target − biaya) + (SL + biaya)). Target 2%, SL 2%, biaya
-  0,1% → **52,5%** (PDF: sekitar 53%).
+- **Titik impas** = (rugi + biaya) ÷ ((target − biaya) + (rugi + biaya)), dengan rugi = rata-rata
+  kenaikan harga yang ditanggung posisi rugi. Sebelum ada rugi, dipakai contoh V3 (STRK +21,8%):
+  target 3% → **88%** (grafik Titik impas V3).
 - **Gerbang lulus** (setelah 50 trade selesai): total hasil bersih positif **dan** win rate ≥
   titik impas + 5 poin persen (tafsiran "selisih yang jelas").
 - Posisi kedua dibandingkan dengan sisi harga yang sama saat masuk (bid), supaya spread sesaat
@@ -91,7 +98,8 @@ Tahap modal kecil di PDF memakai margin 25%: `MARGIN=25`.
 ## Pengaman
 
 - Satu-satunya "pintu order" adalah `DryRunOrderGate`, yang hanya mencatat rencana (short,
-  jumlah, nilai, margin, leverage, target, stop-loss). Tidak ada kode yang menekan tombol order.
+  jumlah, nilai, margin, leverage, target jual). Tidak ada kode yang menekan tombol order. Jual
+  otomatis juga hanya mencatat: tombol tutup posisi di bursa tidak ditekan.
 - Navigator menolak klik ke **zona tombol order** (Beli/Long, Jual/Short, widget order di atas
   grafik). Modul keyboard hanya bisa mengetik angka, **tanpa Enter**; angka di kolom dibaca
   ulang dengan OCR.
