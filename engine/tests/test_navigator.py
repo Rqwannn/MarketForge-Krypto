@@ -650,8 +650,8 @@ def test_apply_margin_types_the_leverage_and_confirms_only_after_checking_the_fi
         monkeypatch,
         tmp_path,
         bar=[CROSS_20, CROSS_20, CROSS_2],  # sebelum, mencari tombol, sesudah
-        # judul; kolom nilai (judul+baris) sebelum; kolom nilai sesudah mengetik; Konfirmasi; tutup
-        dialog=[before, before, before, after, after, after, after, []],
+        # dialog terbuka; kolom nilai sebelum; kolom nilai sesudah mengetik; Konfirmasi; tertutup
+        dialog=[before, before, after, after, []],
     )
     assert nav.apply_margin(2, isolated=False) is True
     done = clicks(screen)
@@ -706,7 +706,7 @@ def test_apply_margin_cancels_instead_of_confirming_if_the_dialog_vanishes(
         monkeypatch,
         tmp_path,
         bar=[CROSS_20],
-        dialog=[before, before, before, after, after, []],  # hilang sebelum Konfirmasi
+        dialog=[before, before, after, []],  # hilang sebelum Konfirmasi
     )
     with pytest.raises(SafetyError, match="tidak terbukti terbuka"):
         nav.apply_margin(2, isolated=False)

@@ -34,6 +34,14 @@ OCR_LEGEND_VARIANTS: tuple[tuple[str, int], ...] | None = None
 # Kotak leverage ("2X" dengan panah) di panel margin, sebagai pecahan lebar MARGIN_AREA. OCR Windows
 # menjatuhkan token dua karakter yang berdiri sendiri; potongan ini dibaca bersama kata pendamping.
 LEVERAGE_BOX_X: tuple[float, float] | None = None
+# Dialog ubah leverage dan Trading Mode (Cross/Isolated). None = tidak diotomatiskan.
+MARGIN_DIALOG_AREA: tuple[float, float, float, float] | None = None
+OCR_DIALOG_VARIANTS: tuple[tuple[str, int], ...] | None = None
+MARGIN_FIELD_BAND = (0.02, 0.09)
+LEVERAGE_CLICK = (0.944, 0.128)
+MODE_CLICK = (0.868, 0.128)
+LEVERAGE_CLOSE_X = 0.578
+MODE_CLOSE_X = 0.627
 
 # Halaman depan: daftar Gainers (tab "Gainers", sub-tab "Futures") di bawah halaman.
 LIST_SEARCH_AREA = (0.0, 0.17, 0.75, 0.99)

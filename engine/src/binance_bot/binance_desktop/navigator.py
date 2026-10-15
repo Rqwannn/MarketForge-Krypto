@@ -12,8 +12,10 @@ import tempfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from binance_bot.binance_desktop import layout
+from binance_bot.binance_desktop.margin_dialogs import MarginDialogs
 from binance_bot.binance_desktop.screen_text import (
     GainerRow,
     MarginSettings,
@@ -61,13 +63,17 @@ _UNIT_MENU_TITLE = re.compile(r"Preferensi\s*Unit|^\s*Unit\s*$")
 _UNIT_MENU_USDT = re.compile(r"dalam\s+USDT", re.IGNORECASE)
 # OCR membaca lingkaran radio sebagai huruf ("C. Ukuran Order"); huruf besar membedakannya dari
 # keterangan "...ukuran order dalam USDT".
+_BINANCE_MARGIN_PATTERNS = (
+    re.compile(r"Sesuaikan\s*Lever", re.IGNORECASE),
+    re.compile(r"Mode\s*Margin", re.IGNORECASE),
+    re.compile(r"Konfirmasi", re.IGNORECASE),
+    re.compile(r"^\s*(Isolated|Terisolasi)\s*$", re.IGNORECASE),
+    re.compile(r"Cross|Isolated|Silang|Terisolasi", re.IGNORECASE),
+)
+_FIELD_VALUE = re.compile(r"(?<![A-Za-z0-9])(\d{1,3})\s*[xX](?![A-Za-z])")
 _LEVERAGE_BUTTON = re.compile(r"^\s*\d{1,3}\s*[xX]\s*$")
-_MODE_BUTTON = re.compile(r"Cross|Isolated|Silang|Terisolasi", re.IGNORECASE)
-_LEVERAGE_TITLE = re.compile(r"Sesuaikan\s*Leverage", re.IGNORECASE)
-_MARGIN_TITLE = re.compile(r"Mode\s*Margin", re.IGNORECASE)
-_CONFIRM = re.compile(r"Konfirmasi", re.IGNORECASE)
-_ISOLATED_OPTION = re.compile(r"^\s*(Isolated|Terisolasi)\s*$", re.IGNORECASE)
 _DIALOG_WAIT_S = 6.0
+_CONFIRM_ATTEMPTS = 3
 _UNIT_RADIO = re.compile(r"Ukuran\s*Order")
 _ACTION_HEADER = re.compile(r"Tindakan", re.IGNORECASE)
 _EXTRA_SCROLL_SHIFT = 0.05  # banner setinggi ini atau lebih: gulir satu langkah lagi
@@ -450,126 +456,179 @@ class BinanceNavigator:
             self._unit_menu_click = False
 
     # ------------------------------------------------------------------ leverage dan mode margin
+    def _margin_dialogs(self) -> MarginDialogs | None:
+        """Profil dialog margin platform ini; None = pengaturan margin tidak diotomatiskan."""
+        if layout.MARGIN_DIALOG_AREA is None:
+            return None
+        leverage, mode, confirm, isolated, button = _BINANCE_MARGIN_PATTERNS
+        return MarginDialogs(
+            bar_area=layout.MARGIN_AREA,
+            dialog_area=layout.MARGIN_DIALOG_AREA,
+            field_band=layout.MARGIN_FIELD_BAND,
+            leverage_close_x=layout.MARGIN_DIALOG_CLOSE_X,
+            mode_close_x=layout.MARGIN_DIALOG_CLOSE_X,
+            leverage_title=leverage,
+            leverage_name="Sesuaikan Leverage",
+            mode_title=mode,
+            mode_name="Mode Margin",
+            confirm=confirm,
+            isolated_option=isolated,
+            mode_button=button,
+        )
+
     def apply_margin(self, leverage: int, isolated: bool = True) -> bool:
         """Ubah leverage dan mode margin koin yang terbuka agar sesuai SOP. True bila sudah sesuai.
 
-        Ini mengubah pengaturan akun Binance (per kontrak), jadi tiap langkah diverifikasi dengan
-        OCR: dialog yang benar harus terbukti terbuka sebelum mengetik atau menekan Konfirmasi.
-        Tidak menyentuh tombol beli/jual: dialognya modal di tengah jendela, jauh dari tombol itu.
+        Ini mengubah pengaturan akun (per kontrak), jadi tiap langkah diverifikasi dengan OCR:
+        dialog yang benar harus terbukti terbuka sebelum mengetik atau menekan Konfirmasi, dan
+        nilainya dibaca ulang sebelum Konfirmasi. Tombol beli/jual tidak disentuh: dialognya modal
+        di tengah halaman, jauh dari tombol itu.
         """
-        if layout.MARGIN_DIALOG_AREA is None:
+        dialogs = self._margin_dialogs()
+        if dialogs is None:
             return False
         current = self.read_margin_settings()
         if current.leverage != leverage:
-            self._set_leverage(leverage)
+            self._set_leverage(dialogs, leverage)
         if isolated and current.isolated is not True:
-            self._set_isolated()
+            self._set_isolated(dialogs)
         final = self.read_margin_settings()
         return final.leverage == leverage and (final.isolated is True or not isolated)
 
-    def _leverage_field(self) -> tuple[tuple[float, float], int] | None:
-        """(titik, nilai) kolom nilai di dialog Leverage, atau None bila tidak terbaca pasti.
+    def _dialog_lines(self, area: tuple[float, float, float, float]) -> list[TextLine]:
+        """Baca isi dialog margin. Platform dengan teks sulit dibaca menimpanya (varian OCR)."""
+        return self._read_lines(self.rect.sub(*area))
+
+    def _find_in_dialog(
+        self, area: tuple[float, float, float, float], pattern: re.Pattern[str]
+    ) -> tuple[float, float] | None:
+        return self._locate(area, pattern, self._dialog_lines(area))
+
+    def _leverage_field(self, dialogs: MarginDialogs) -> tuple[tuple[float, float], int] | None:
+        """(titik, nilai) kolom nilai di dialog leverage, atau None bila tidak terbaca pasti.
 
         Hanya baris "NNx" di pita tepat di bawah judul yang dianggap kolom nilai. Label slider
         ("1x 10x 20x ...") ada lebih jauh ke bawah dan tidak boleh dikira kolom nilai: mengkliknya
         menggeser slider.
         """
-        area = self._margin_dialog_area()
-        title = self._find_text(area, _LEVERAGE_TITLE)
+        area = dialogs.dialog_area
+        lines = self._dialog_lines(area)
+        title = self._locate(area, dialogs.leverage_title, lines)
         if title is None:
             return None
         x0, y0, x1, y1 = area
-        near, far = layout.MARGIN_FIELD_BAND
+        near, far = dialogs.field_band
         found = []
-        for line in self._read_lines(self.rect.sub(*area)):
+        for line in lines:
             y = y0 + line.y * (y1 - y0)
-            if _LEVERAGE_BUTTON.match(line.text) and title[1] + near <= y <= title[1] + far:
-                found.append(((x0 + line.x * (x1 - x0), y), int(line.text.strip().lower()[:-1])))
-        return found[0] if len(found) == 1 else None
+            match = _FIELD_VALUE.search(line.text)
+            if match and title[1] + near <= y <= title[1] + far:
+                found.append(((x0 + line.x * (x1 - x0), y), int(match.group(1))))
+        # Beberapa varian OCR bisa membaca kolom yang sama dua kali: nilai sama diterima, nilai
+        # berbeda berarti tidak pasti (tolak).
+        return found[0] if found and len({value for _, value in found}) == 1 else None
 
-    def _set_leverage(self, leverage: int) -> None:
-        button = self._find_text(layout.MARGIN_AREA, _LEVERAGE_BUTTON)
+    def _bar_button(self, dialogs: MarginDialogs, pattern: re.Pattern[str], fixed: Any) -> Any:
+        if fixed is not None:
+            return fixed
+        return self._find_text(dialogs.bar_area, pattern)
+
+    def _set_leverage(self, dialogs: MarginDialogs, leverage: int) -> None:
+        button = self._bar_button(dialogs, _LEVERAGE_BUTTON, dialogs.leverage_click)
         if button is None:
             raise ScreenReadError("Tombol leverage di atas form order tidak terbaca")
         self._click(button)
-        self._wait_margin_dialog(_LEVERAGE_TITLE, "Sesuaikan Leverage")
+        self._wait_margin_dialog(dialogs, dialogs.leverage_title, dialogs.leverage_name)
         try:
-            field = self._leverage_field()
+            field = self._leverage_field(dialogs)
             if field is None:
                 shot = self._save_debug_shot("dialog-margin")
                 raise ScreenReadError(f"Kolom nilai leverage tidak terbaca pasti. Foto: {shot}")
             point, shown = field
             if shown == leverage:
-                self._close_margin_dialog(_LEVERAGE_TITLE)  # sudah sesuai: batalkan, tanpa mengubah
-                return
+                self._close_margin_dialog(dialogs, dialogs.leverage_title, dialogs.leverage_close_x)
+                return  # sudah sesuai: dibatalkan, tanpa mengubah
             self._click(point)
             self._ensure_front()
             self._window.clear_field()
             self._window.type_number(str(leverage))
             self._sleep(self._settings.settle_delay_s / 2)
             # Konfirmasi HANYA bila kolom nilai terbukti kini bernilai leverage yang dituju.
-            after = self._leverage_field()
+            after = self._leverage_field(dialogs)
             if after is None or after[1] != leverage:
                 shown_now = "tidak terbaca" if after is None else f"{after[1]}x"
                 raise SafetyError(
                     f"Konfirmasi dibatalkan: kolom leverage {shown_now}, bukan {leverage}x"
                 )
-            self._confirm_margin_dialog(_LEVERAGE_TITLE, "Sesuaikan Leverage")
+            self._confirm_margin_dialog(dialogs, dialogs.leverage_title, dialogs.leverage_name)
         except BotError:
-            self._close_margin_dialog(_LEVERAGE_TITLE)
+            self._close_margin_dialog(dialogs, dialogs.leverage_title, dialogs.leverage_close_x)
             raise
 
-    def _set_isolated(self) -> None:
-        button = self._find_text(layout.MARGIN_AREA, _MODE_BUTTON)
+    def _set_isolated(self, dialogs: MarginDialogs) -> None:
+        button = self._bar_button(dialogs, dialogs.mode_button, dialogs.mode_click)
         if button is None:
             raise ScreenReadError("Tombol mode margin di atas form order tidak terbaca")
         self._click(button)
-        self._wait_margin_dialog(_MARGIN_TITLE, "Mode Margin")
+        self._wait_margin_dialog(dialogs, dialogs.mode_title, dialogs.mode_name)
         try:
-            option = self._find_text(self._margin_dialog_area(), _ISOLATED_OPTION)
+            option = self._find_in_dialog(dialogs.dialog_area, dialogs.isolated_option)
             if option is None:
-                raise ScreenReadError("Pilihan Isolated di dialog Mode Margin tidak terbaca")
+                raise ScreenReadError(
+                    f"Pilihan Isolated di dialog {dialogs.mode_name} tidak terbaca"
+                )
             self._click(option)
-            self._confirm_margin_dialog(_MARGIN_TITLE, "Mode Margin")
+            self._confirm_margin_dialog(dialogs, dialogs.mode_title, dialogs.mode_name)
         except BotError:
-            self._close_margin_dialog(_MARGIN_TITLE)
+            self._close_margin_dialog(dialogs, dialogs.mode_title, dialogs.mode_close_x)
             raise
 
-    def _margin_dialog_area(self) -> tuple[float, float, float, float]:
-        area = layout.MARGIN_DIALOG_AREA
-        assert area is not None
-        return area
+    def _margin_dialog_open(self, dialogs: MarginDialogs, title: re.Pattern[str]) -> bool:
+        return self._find_in_dialog(dialogs.dialog_area, title) is not None
 
-    def _margin_dialog_open(self, title: re.Pattern[str]) -> bool:
-        return self._find_text(self._margin_dialog_area(), title) is not None
-
-    def _wait_margin_dialog(self, title: re.Pattern[str], name: str) -> None:
+    def _wait_margin_dialog(
+        self, dialogs: MarginDialogs, title: re.Pattern[str], name: str
+    ) -> None:
         """Dialog bisa muncul terlambat setelah klik: tunggu, jangan lanjut tanpa melihatnya."""
         deadline = self._clock() + _DIALOG_WAIT_S
-        while not self._margin_dialog_open(title):
+        while not self._margin_dialog_open(dialogs, title):
             if self._clock() >= deadline:
                 shot = self._save_debug_shot("dialog-margin")
                 raise ScreenReadError(f"Dialog '{name}' tidak terbuka. Foto layar: {shot}")
             self._sleep(0.5)
 
-    def _confirm_margin_dialog(self, title: re.Pattern[str], name: str) -> None:
+    def _confirm_margin_dialog(
+        self, dialogs: MarginDialogs, title: re.Pattern[str], name: str
+    ) -> None:
         """Konfirmasi hanya bila dialog yang dimaksud terbukti terbuka; tunggu sampai tertutup."""
-        confirm = self._find_text(self._margin_dialog_area(), _CONFIRM)
-        if confirm is None or not self._margin_dialog_open(title):
+        area = dialogs.dialog_area
+        confirm = None
+        for attempt in range(_CONFIRM_ATTEMPTS):
+            # Judul dialog dan tombol harus terbaca dari gambar yang SAMA: bukti dialog terbuka.
+            lines = self._dialog_lines(area)
+            confirm = self._locate(area, dialogs.confirm, lines)
+            if confirm is not None and self._locate(area, title, lines) is not None:
+                break
+            confirm = None
+            if attempt + 1 < _CONFIRM_ATTEMPTS:
+                self._sleep(0.5)
+        if confirm is None:
             raise SafetyError(f"Konfirmasi dibatalkan: dialog '{name}' tidak terbukti terbuka")
         self._click(confirm)
         deadline = self._clock() + _DIALOG_WAIT_S
-        while self._margin_dialog_open(title):
+        while self._margin_dialog_open(dialogs, title):
             if self._clock() >= deadline:
                 shot = self._save_debug_shot("dialog-margin")
-                raise ScreenReadError(f"Dialog '{name}' tidak menutup setelah Konfirmasi. {shot}")
+                raise ScreenReadError(f"Dialog {name!r} tidak menutup setelah Konfirmasi. {shot}")
             self._sleep(0.5)
 
-    def _close_margin_dialog(self, title: re.Pattern[str]) -> None:
+    def _close_margin_dialog(
+        self, dialogs: MarginDialogs, title: re.Pattern[str], close_x: float
+    ) -> None:
         """Batalkan dialog lewat tombol X (tidak mengubah apa pun)."""
-        found = self._find_text(self._margin_dialog_area(), title)
+        found = self._find_in_dialog(dialogs.dialog_area, title)
         if found is not None:
-            self._click((layout.MARGIN_DIALOG_CLOSE_X, found[1]))
+            self._click((close_x, found[1]))
 
     def _check_order_unit(self) -> None:
         """Kolom Jumlah harus bersatuan USDT (Ukuran Order), bukan koin atau Margin Awal.
@@ -595,8 +654,16 @@ class BinanceNavigator:
         self, area: tuple[float, float, float, float], pattern: re.Pattern[str]
     ) -> tuple[float, float] | None:
         """Posisi (relatif jendela) teks yang cocok di dalam `area`, atau None."""
+        return self._locate(area, pattern, self._read_lines(self.rect.sub(*area)))
+
+    def _locate(
+        self,
+        area: tuple[float, float, float, float],
+        pattern: re.Pattern[str],
+        lines: Sequence[TextLine],
+    ) -> tuple[float, float] | None:
         x0, y0, x1, y1 = area
-        for line in self._read_lines(self.rect.sub(*area)):
+        for line in lines:
             match = pattern.search(line.text)
             if not match:
                 continue

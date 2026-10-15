@@ -151,4 +151,4 @@ terbuka koin itu, jadi sengaja dimatikan secara bawaan. Pengamannya: dialog haru
 lewat OCR, kolom nilai dibaca ulang setelah diketik, dan Konfirmasi baru ditekan bila nilainya
 benar-benar leverage yang dituju (label slider "10x 20x" tidak pernah dikira kolom nilai).
 Gagal di langkah mana pun berarti dialog dibatalkan lewat X dan peringatan lama tetap muncul.
-Tebbit belum didukung. Tombol beli/jual tidak pernah disentuh.
+Berlaku untuk Binance dan Tebbit (dialog "Modify leverage" dan "Trading Mode"; di Tebbit pengaturannya per koin). Status: pembacaan dan pembatalan kedua dialog sudah diuji langsung tanpa mengubah apa pun; **perubahan nilai sungguhan belum diuji** di akun asli. Tombol beli/jual tidak pernah disentuh.

@@ -19,6 +19,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from binance_bot.binance_desktop.margin_dialogs import MarginDialogs
 from binance_bot.binance_desktop.navigator import BinanceNavigator
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings, same_number
 from binance_bot.config import Settings
@@ -203,9 +204,29 @@ class TebbitNavigator(BinanceNavigator):
                 gray.resize(size, Image.Resampling.LANCZOS).save(big)
             return self._reader.read_lines(big)
 
-    def apply_margin(self, leverage: int, isolated: bool = True) -> bool:
-        """Pengaturan margin Tebbit belum diotomatiskan: hanya diperingatkan."""
-        return False
+    def _dialog_lines(self, area: tuple[float, float, float, float]) -> list[TextLine]:
+        return self._read_lines_merged(self.rect.sub(*area), lay.OCR_DIALOG_VARIANTS)
+
+    def _margin_dialogs(self) -> MarginDialogs | None:
+        """Dialog "Modify leverage" dan "Trading Mode" Tebbit (profil Windows; macOS: tidak ada)."""
+        if lay.MARGIN_DIALOG_AREA is None:
+            return None
+        return MarginDialogs(
+            bar_area=lay.MARGIN_AREA,
+            dialog_area=lay.MARGIN_DIALOG_AREA,
+            field_band=lay.MARGIN_FIELD_BAND,
+            leverage_close_x=lay.LEVERAGE_CLOSE_X,
+            mode_close_x=lay.MODE_CLOSE_X,
+            leverage_title=re.compile(r"Mod\S{1,3}\s*leverage", re.IGNORECASE),
+            leverage_name="Modify leverage",
+            mode_title=re.compile(r"Trading\s*Mode", re.IGNORECASE),
+            mode_name="Trading Mode",
+            confirm=re.compile(r"^\s*Confirm\s*$", re.IGNORECASE),
+            isolated_option=re.compile(r"^\s*Isolated\s*$", re.IGNORECASE),
+            mode_button=re.compile(r"Cross|Isolated", re.IGNORECASE),
+            leverage_click=lay.LEVERAGE_CLICK,
+            mode_click=lay.MODE_CLICK,
+        )
 
     # ------------------------------------------------------------------ keamanan
     def _forbidden(self, target: tuple[float, float]) -> bool:
