@@ -131,6 +131,15 @@ function buildArgs(mode, params = {}) {
     throw new InputError('Bursa ini belum didukung. Pilih Binance atau Tebbit.');
   }
   const bursa = p.exchange ? ['--bursa', p.exchange] : [];
+  // Real Fund Trading: tombol order dan tutup posisi di bursa ditekan (bukan uji kertas).
+  const real = p.real === true;
+  if (real && (p.exchange || 'binance') !== 'binance') {
+    throw new InputError('Real Fund Trading baru tersedia untuk Binance. Tebbit menyusul.');
+  }
+  if (real && mode === 'single' && !(Number(p.interval) > 0)) {
+    throw new InputError('Real Fund Trading butuh "Ulangi pemantauan" (15/30/60 mnt) supaya posisi diawasi terus.');
+  }
+  if (real) bursa.push('--uang-sungguhan');
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
     const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];

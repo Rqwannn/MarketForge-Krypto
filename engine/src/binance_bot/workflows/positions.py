@@ -143,8 +143,8 @@ class PositionsWorkflow:
                     raise BotError(
                         f"{entry.symbol} posisi sungguhan: tutup lewat Real Fund Trading"
                     )
-                if live and self._closer is not None:
-                    # Real Fund Trading: tutup dulu di bursa; gagal = posisi tetap tercatat terbuka.
+                if live and entry.real and self._closer is not None:
+                    # Posisi sungguhan: tutup dulu di bursa; gagal = posisi tetap tercatat terbuka.
                     self._closer.close_position(entry.symbol)
                 ask = self._market.quote(entry.symbol).ask
                 try:
@@ -158,7 +158,7 @@ class PositionsWorkflow:
                 logger.warning(
                     (
                         "Posisi ditutup di bursa (Market). "
-                        if live
+                        if live and entry.real
                         else "[DRY RUN] Tombol tutup posisi TIDAK ditekan. "
                     )
                     + "%s ditutup di %g: %+.2f%% posisi (%+.2f%% modal)",
@@ -181,6 +181,7 @@ class PositionsWorkflow:
             "created_at": entry.created_at,
             "entry_price": entry.entry_price,
             "target_price": entry.target_price,
+            "real": entry.real,
             "notional": entry.notional,
             "price": None,
             "pnl_pct": None,

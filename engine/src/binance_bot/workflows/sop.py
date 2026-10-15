@@ -153,7 +153,7 @@ def record_changes(
     after = list(after)
     live = live_orders_enabled() and closer is not None
     for i, (old, new) in enumerate(zip(before, after, strict=True)):
-        if live and closer is not None and old.status == "open" and new.is_closed:
+        if live and closer is not None and old.status == "open" and new.is_closed and new.real:
             try:
                 closer.close_position(new.symbol)
             except BotError as exc:
@@ -167,7 +167,7 @@ def record_changes(
             logger.warning(
                 (
                     "Posisi ditutup di bursa. "
-                    if live
+                    if live and entry.real
                     else "[DRY RUN] Tombol tutup posisi TIDAK ditekan. "
                 )
                 + "Jual otomatis %s (%s) di %g: %+.2f%% posisi (%+.2f USDT = %+.2f%% modal)",
@@ -181,7 +181,7 @@ def record_changes(
                     "sell",
                     symbol=entry.symbol,
                     status=entry.status,
-                    real=live,
+                    real=live and entry.real,
                     exit_price=entry.exit_price,
                     pnl_pct=entry.pnl_pct,
                     pnl_usdt=entry.pnl_usdt,

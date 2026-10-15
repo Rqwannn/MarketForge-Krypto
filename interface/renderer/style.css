@@ -522,3 +522,16 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .tag.reading { color: var(--accent-2); background: var(--accent-soft); animation: reading-pulse 1.4s ease-in-out infinite; }
 @keyframes reading-pulse { 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .tag.reading { animation: none; } }
+
+/* Real Fund Trading: semua penanda uang sungguhan berwarna merah. */
+.tag.danger { border-color: rgba(240, 128, 128, 0.5); background: rgba(240, 128, 128, 0.12); color: var(--red); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
+.tag.danger::before { display: none; }
+.primary.danger { background: var(--red); color: #fff; }
+.primary.danger:disabled { opacity: 0.45; }
+.real-btn.on { border-color: var(--red); color: var(--red); font-weight: 600; }
+.real-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.text-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card-2); color: inherit; font: inherit; }
+.paper.real { border-color: var(--red); }
+.paper.real p { color: var(--red); }
+.badge-real { margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(240, 128, 128, 0.15); color: var(--red); font-size: 11px; }

@@ -1035,6 +1035,7 @@ def test_real_fund_auto_sell_closes_on_the_exchange_or_keeps_the_position_open(
     trader, _, journal, _ = make_trader(tmp_path, nav, market)
     held = open_trade("SKDDUSDT", entry_price=1.0)
     held.created_at = NOW.timestamp() - 600
+    held.real = True  # posisi sungguhan (tombol Short ditekan)
     journal.append(held)
     market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, funding_rate=0.0, change_pct=20.0)
 

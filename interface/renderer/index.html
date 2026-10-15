@@ -56,9 +56,9 @@
 
     <div class="side-foot">
       <div class="engine" id="engine-state"><i></i><div><strong>Bot berhenti</strong><span>Siap dijalankan</span></div></div>
-      <div class="paper">
-        <span class="tag outline">Uji kertas</span>
-        <p>Bot tidak pernah menekan tombol beli atau jual. Setiap posisi hanya dicatat.</p>
+      <div class="paper" id="paper">
+        <span class="tag outline" id="paper-tag">Uji kertas</span>
+        <p id="paper-text">Bot tidak pernah menekan tombol beli atau jual. Setiap posisi hanya dicatat.</p>
       </div>
     </div>
   </aside>
@@ -114,6 +114,11 @@
               <button type="button" class="text-btn" id="ranks-all" data-modes="single leader">Pilih semua</button></span>
             <div class="chips" id="ranks" role="group" aria-label="Top gainers"></div>
             <small id="ranks-note"></small>
+          </div>
+          <div class="field" data-modes="single leader">
+            <span class="label">Real Fund Trading</span>
+            <button type="button" class="secondary real-btn" id="real-toggle" aria-pressed="false">Mati (uji kertas)</button>
+            <small id="real-note">Tombol beli/jual di bursa tidak ditekan; posisi hanya dicatat.</small>
           </div>
           <div class="go-wrap">
             <p class="error" id="run-error" role="alert"></p>
@@ -292,6 +297,27 @@
     <div class="dialog-actions">
       <button class="secondary" id="invite-decline">Tolak</button>
       <button class="primary" id="invite-accept">Terima</button>
+    </div>
+  </div>
+</div>
+<div class="backdrop" id="real-dialog" hidden>
+  <div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="real-title">
+    <span class="tag danger">Uang sungguhan</span>
+    <h2 id="real-title">Nyalakan Real Fund Trading?</h2>
+    <p id="real-intro"></p>
+    <ul class="real-list">
+      <li>Bot menekan tombol <b>Jual/Short</b> untuk masuk dan tombol <b>Market</b> di tab Posisi untuk menjual, dengan uangmu di Binance.</li>
+      <li><b>Tanpa stop-loss</b> (SOP V3): bila harga terus naik, rugi bertambah sampai likuidasi.</li>
+      <li>Mode margin mengikuti Binance (biasanya <b>Cross</b>): seluruh saldo futures ikut menjadi jaminan.</li>
+      <li id="real-size"></li>
+      <li>Biarkan laptop menyala dan jangan pakai mouse selama bot bekerja.</li>
+    </ul>
+    <label class="check"><input type="checkbox" id="real-ack"> Saya paham risikonya dan memakai uang saya sendiri.</label>
+    <label class="label" for="real-word">Ketik SETUJU untuk melanjutkan</label>
+    <input class="text-input" id="real-word" autocomplete="off" placeholder="SETUJU">
+    <div class="dialog-actions">
+      <button class="secondary" id="real-cancel">Batal</button>
+      <button class="primary danger" id="real-confirm" disabled>Nyalakan uang sungguhan</button>
     </div>
   </div>
 </div>

@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld('bot', {
   positions: {
     list: () => call('positions:list'),
     check: () => call('positions:check'),
-    close: (symbol) => call('positions:close', symbol),
+    close: (symbol, real = false) => call('positions:close', symbol, real),
     onChanged: (callback) => listen('positions:changed', callback),
   },
   onPeersChanged: (callback) => listen('peers:changed', callback),
@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld('bot', {
     onStarted: (callback) => listen('team:started', callback),
     onChanged: (callback) => listen('team:changed', callback),
     onError: (callback) => listen('team:error', callback),
+    onRealRequest: (callback) => listen('team:realRequest', callback),
+    realAnswer: (ok) => call('team:realAnswer', ok),
   },
   onLog: (callback) => listen('engine:log', callback),
   onExit: (callback) => listen('engine:exit', callback),
