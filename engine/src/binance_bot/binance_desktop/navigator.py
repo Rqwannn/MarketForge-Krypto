@@ -69,6 +69,20 @@ _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
+# Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
+# Angka leverage (label di atas form dan kolom dialog); OCR bisa menggabungkannya dengan
+# tombol - dan + ("— 10x +").
+_LEVERAGE_VALUE = re.compile(r"(?<![\d.,])(\d{1,3})\s*[xX](?![A-Za-z])")
+_LEVERAGE_TITLE = re.compile(r"(Sesuaikan|Modify|Adjust)\s+Leverage", re.IGNORECASE)
+_CONFIRM = re.compile(r"^\s*(Konfirmasi|Confirm)\s*$", re.IGNORECASE)
+_CLOSE = re.compile(r"^\s*[xX\u00d7]\s*$")  # ikon tutup (x atau tanda kali)
+
+
+def _leverage_of(text: str) -> int | None:
+    match = _LEVERAGE_VALUE.search(text)
+    return int(match.group(1)) if match else None
+
+
 _CHART_LOAD_TIMEOUT_S = 25.0  # aplikasi bisa lambat memuat grafik
 
 
@@ -389,7 +403,87 @@ class BinanceNavigator:
         return self.rect.sub(x0, y0 + shift, x1, min(1.0, y1 + shift))
 
     def read_margin_settings(self) -> MarginSettings:
-        return parse_margin(self._read_texts(self.rect.sub(*layout.MARGIN_AREA)))
+        return parse_margin(self._read_texts(self.rect.sub(*self._margin_area())))
+
+    def _margin_area(self) -> tuple[float, float, float, float]:
+        return layout.MARGIN_AREA
+
+    def _leverage_dialog_area(self) -> tuple[float, float, float, float]:
+        return layout.LEVERAGE_DIALOG_AREA
+
+    def ensure_leverage(self, leverage: int) -> MarginSettings:
+        """Ubah leverage koin yang terbuka ke `leverage` bila belum (bursa menyimpannya per koin).
+
+        Klik label leverage di atas form, ketik angka di dialog, cek angkanya dengan OCR, lalu
+        Konfirmasi. Hasilnya dibaca ulang dari label; bila bursa menolak, dialog ditutup.
+        """
+        margin = self.read_margin_settings()
+        if margin.leverage == leverage:
+            return margin
+        if not self._on_coin_page():
+            raise SafetyError("Leverage hanya diubah di halaman koin")
+        label = self._find_text(self._margin_area(), _LEVERAGE_VALUE)
+        if label is None:
+            raise ScreenReadError("Tombol leverage di atas form order tidak ditemukan")
+        self._click(label)
+        dialog = self._leverage_dialog_area()
+        if self._find_text(dialog, _LEVERAGE_TITLE) is None:
+            raise ScreenReadError("Dialog leverage tidak terbuka")
+        try:
+            self._type_leverage(dialog, leverage)
+            confirm = self._find_text(dialog, _CONFIRM)
+            if confirm is None:
+                raise ScreenReadError("Tombol Konfirmasi di dialog leverage tidak ditemukan")
+            self._click(confirm)
+            margin = self.read_margin_settings()
+            if margin.leverage != leverage:
+                raise ScreenReadError(
+                    f"Bursa tidak mengubah leverage (masih {margin.leverage}x, bukan {leverage}x)"
+                )
+        finally:
+            self._close_leverage_dialog(dialog)
+        logger.info("Leverage diubah ke %dx", leverage)
+        return margin
+
+    def _type_leverage(self, dialog: tuple[float, float, float, float], leverage: int) -> None:
+        # Kolom angka ada di antara tombol - dan +, di atas label slider (1x, 2x, ...) yang
+        # tulisannya sama bentuknya: ambil yang paling atas.
+        x0, y0, x1, y1 = dialog
+        values = [
+            line
+            for line in self._read_lines(self.rect.sub(*dialog))
+            if _LEVERAGE_VALUE.search(line.text)
+        ]
+        if not values:
+            raise ScreenReadError("Kolom angka di dialog leverage tidak ditemukan")
+        field = min(values, key=lambda line: line.y)
+        target = (x0 + field.x * (x1 - x0), y0 + field.y * (y1 - y0))
+        self._click(target)
+        self._ensure_front()
+        # Bukan clear_field: kolom kosong langsung terisi minimum 1, lalu "2" menjadi "12".
+        self._window.select_field()
+        self._window.type_number(str(leverage))
+        self._sleep(self._settings.settle_delay_s / 2)
+        shown = ""
+        for attempt in range(_VERIFY_ATTEMPTS):
+            lines = self._read_lines(self.rect.sub(*dialog))
+            near = [line for line in lines if abs(line.y - field.y) < 0.04]
+            shown = " ".join(line.text for line in near)
+            if any(_leverage_of(line.text) == leverage for line in near):
+                return
+            if attempt + 1 < _VERIFY_ATTEMPTS:
+                self._sleep(_VERIFY_RETRY_DELAY_S)
+        raise ScreenReadError(f"Kolom leverage menampilkan {shown!r}, bukan {leverage}x")
+
+    def _close_leverage_dialog(self, dialog: tuple[float, float, float, float]) -> None:
+        """Tutup dialog leverage bila masih terbuka (mis. bursa menolak perubahan)."""
+        if self._find_text(dialog, _LEVERAGE_TITLE) is None:
+            return
+        x0, y0, x1, y1 = dialog
+        close = self._find_text((x0 + (x1 - x0) / 2, y0, x1, y0 + (y1 - y0) / 2), _CLOSE)
+        if close is None:
+            raise SafetyError("Dialog leverage tidak bisa ditutup: putaran dihentikan")
+        self._click(close)
 
     def fill_quantity(self, text: str) -> None:
         """Isi kolom "Jumlah" (ukuran order USDT) pada form market order, lalu cek dengan OCR.

@@ -263,6 +263,13 @@ def scroll_up_at(x: int, y: int, notches: int) -> None:
     scroll_at(x, y, abs(notches))
 
 
+def select_all() -> None:
+    """Ctrl+A: pilih seluruh isi kolom yang sedang fokus (ketikan berikutnya menggantinya)."""
+    _send([_key(_VK_CONTROL), _key(_VK_A), _key(_VK_A, flags=_KEYEVENTF_KEYUP)])
+    _send([_key(_VK_CONTROL, flags=_KEYEVENTF_KEYUP)])
+    time.sleep(_KEY_DELAY_S)
+
+
 def select_all_and_delete() -> None:
     """Ctrl+A lalu Backspace untuk mengosongkan kolom yang sedang fokus."""
     _send([_key(_VK_CONTROL), _key(_VK_A), _key(_VK_A, flags=_KEYEVENTF_KEYUP)])

@@ -103,6 +103,9 @@ class FakeScreen:
     def clear_field(self) -> None:
         self.events.append(("clear", None))
 
+    def select_field(self) -> None:
+        self.events.append(("select", None))
+
     def type_number(self, text: str) -> None:
         self.events.append(("type", text))
 
@@ -239,6 +242,12 @@ class FakeNavigator:
         return self._capture(path)
 
     def read_margin_settings(self) -> MarginSettings:
+        return self.margin
+
+    def ensure_leverage(self, leverage: int) -> MarginSettings:
+        if self.margin.leverage != leverage:
+            self.calls.append(f"leverage:{leverage}")
+            self.margin = MarginSettings(self.margin.isolated, leverage)
         return self.margin
 
     def fill_quantity(self, text: str) -> None:

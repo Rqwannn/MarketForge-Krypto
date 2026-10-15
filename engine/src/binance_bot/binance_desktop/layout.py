@@ -121,6 +121,8 @@ CHART_TOOLBAR_AREA = (0.05, 0.15, 0.62, 0.40)
 CHART_AREA = (0.0485, 0.2725, 0.6015, 0.7815)
 # Label mode margin dan leverage di atas form (mis. "Cross", "20x").
 MARGIN_AREA = (0.81, 0.11, 0.95, 0.15)
+# Dialog "Sesuaikan Leverage" yang terbuka dari label leverage (di tengah jendela).
+LEVERAGE_DIALOG_AREA = (0.30, 0.15, 0.75, 0.90)
 # Tab "Pasar" (market order) di form, lalu kolom "Jumlah" pada tab itu.
 ORDER_TAB_MARKET = (0.8575, 0.1782)
 ORDER_QTY_FIELD = (0.85, 0.2939)

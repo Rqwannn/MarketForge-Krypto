@@ -377,12 +377,18 @@ class TebbitNavigator(BinanceNavigator):
     def _quantity_area(self) -> tuple[float, float, float, float]:
         return lay.ORDER_FORM_AREA
 
+    def _margin_area(self) -> tuple[float, float, float, float]:
+        return lay.MARGIN_AREA
+
+    def _leverage_dialog_area(self) -> tuple[float, float, float, float]:
+        return lay.LEVERAGE_DIALOG_AREA
+
     def _chart_area(self) -> Rect:
         return self.rect.sub(*lay.CHART_AREA)
 
     # ------------------------------------------------------------------ form dan data
     def read_margin_settings(self) -> MarginSettings:
-        return parse_margin(self._read_texts(self.rect.sub(*lay.MARGIN_AREA)))
+        return parse_margin(self._read_texts(self.rect.sub(*self._margin_area())))
 
     def read_quote(self) -> tuple[float, float, float, float]:
         """(bid, ask, harga terakhir, perubahan 24 jam %) dari halaman koin yang terbuka."""

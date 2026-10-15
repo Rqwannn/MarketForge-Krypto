@@ -56,6 +56,7 @@ ORDER_TAB_AREA = (0.84, 0.22, 1.0, 0.27)  # "Limit  Market  Plan"
 ORDER_FORM_AREA = (0.84, 0.22, 1.0, 0.45)  # kolom Quantity
 QTY_CLICK_X = 0.87  # bagian kiri kolom (satuan USDT ada di kanan)
 MA_DIALOG_AREA = (0.2, 0.35, 0.75, 0.8)  # dialog pengaturan "MA" (Length / Ok / Cancel)
+LEVERAGE_DIALOG_AREA = (0.25, 0.22, 0.75, 0.85)  # dialog "Modify leverage" (- 2X +, Confirm)
 
 # Zona terlarang: browser dan menu situs (selalu); tombol order, slider, Transfer, dan tab bawah
 # (hanya di halaman koin). Bot tidak pernah perlu mengklik apa pun di sana.

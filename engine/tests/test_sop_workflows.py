@@ -176,11 +176,26 @@ def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
     assert entry.verdict == "tunggu" and entry.pattern_ai is None
 
 
-def test_margin_differences_are_warned_but_paper_trade_continues(tmp_path: Path) -> None:
+def test_the_bot_sets_leverage_to_2x_before_filling(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
     trader, _, _, _ = make_trader(tmp_path, nav)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert (entry.status, entry.margin) == ("open", "Cross 2x")
+    assert nav.calls.index("leverage:2") < nav.calls.index("fill:100")
+
+
+def test_a_refused_leverage_change_is_warned_but_paper_trade_continues(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    class Refusing(FakeNavigator):
+        def ensure_leverage(self, leverage: int) -> MarginSettings:
+            raise ScreenReadError("Bursa tidak mengubah leverage (masih 20x, bukan 2x)")
+
+    nav = Refusing({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert (entry.status, entry.margin) == ("open", "Cross 20x")
+    assert "Leverage tidak bisa diubah ke 2x" in caplog.text
 
 
 # --------------------------------------------------------------------------- slot (langkah 4)
