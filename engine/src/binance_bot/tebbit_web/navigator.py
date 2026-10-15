@@ -42,7 +42,7 @@ from binance_bot.tebbit_web.screen_text import (
     parse_order_book,
     symbol_from_url,
 )
-from binance_bot.tebbit_web.visible import tab_window_is_visible
+from binance_bot.tebbit_web.visible import OnScreenWindow, tab_window_is_visible
 
 if TYPE_CHECKING:
     from binance_bot.tebbit_web.chrome_windows import WinChromeWindowController
@@ -83,11 +83,19 @@ class TebbitNavigator(BinanceNavigator):
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         screens: Callable[[], Sequence[Rect]],
+        windows: Callable[[], Sequence[OnScreenWindow]] | None = None,
     ) -> None:
         app_id = CHROME_EXE if sys.platform == "win32" else CHROME_BUNDLE_ID
         chrome_settings = replace(settings, app_name=CHROME_NAME, app_bundle_id=app_id)
         super().__init__(
-            chrome_settings, apps, window, reader, sleep=sleep, clock=clock, screens=screens
+            chrome_settings,
+            apps,
+            window,
+            reader,
+            sleep=sleep,
+            clock=clock,
+            screens=screens,
+            windows=windows,
         )
         self._chrome = chrome
         self._chrome_window = window

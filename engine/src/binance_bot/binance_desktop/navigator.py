@@ -43,6 +43,7 @@ from binance_bot.macos import (
 )
 from binance_bot.macos.screens import visible_areas
 from binance_bot.strategy.execution import LIVE_ORDERS_ENABLED, OrderPlan
+from binance_bot.tebbit_web.visible import OnScreenWindow, front_owner_at
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,11 @@ class BinanceNavigator:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         screens: Callable[[], Sequence[Rect]] = visible_areas,
+        windows: Callable[[], Sequence[OnScreenWindow]] | None = None,
     ) -> None:
         self._settings = settings
+        # Daftar jendela yang tampil (depan ke belakang). None = tidak diperiksa (tes).
+        self._windows = windows
         self._apps = apps
         self._window = window
         self._reader = reader
@@ -521,7 +525,8 @@ class BinanceNavigator:
         """Pastikan Binance jendela aktif. Klik, ketikan, dan tangkapan layar hanya berarti bila
         Binance di depan; aplikasi lain bisa merebut fokus di tengah jalan."""
         bundle = self._settings.app_bundle_id
-        if (self._apps.frontmost_bundle_id() or "").casefold() == bundle.casefold():
+        front = (self._apps.frontmost_bundle_id() or "").casefold() == bundle.casefold()
+        if front and not self._covered():
             self._away = False
             return
         if self._away:  # kembali dari aplikasi MarketForge (show_app): memang direncanakan
@@ -551,6 +556,25 @@ class BinanceNavigator:
                 if attempt + 1 == _FRONT_ATTEMPTS:
                     raise
         self._sleep(0.5)
+
+    def _covered(self) -> bool:
+        """Jendela lain menutupi jendela bursa walau aplikasinya terhitung aktif.
+
+        Terjadi saat MarketForge memajukan jendelanya (show_app): sistem bisa tetap menganggap
+        bursa aplikasi aktif, padahal klik dan tangkapan layar akan mengenai MarketForge.
+        """
+        if self._windows is None or self._rect is None:
+            return False
+        r = self._rect
+        try:
+            top = front_owner_at((r.x + r.width // 2, r.y + r.height // 2), self._windows)
+        except Exception:  # daftar jendela tidak terbaca: andalkan pemeriksaan aplikasi aktif
+            logger.debug("Daftar jendela tidak terbaca", exc_info=True)
+            return False
+        if top is None:
+            return False
+        owner = top.owner.casefold().removesuffix(".exe")  # Windows: "Binance.exe"
+        return owner != self._settings.app_name.casefold()
 
     def show_app(self, text: str, **fields: object) -> None:
         """Serahkan layar ke aplikasi MarketForge selama bot menunggu (AI membaca grafik).

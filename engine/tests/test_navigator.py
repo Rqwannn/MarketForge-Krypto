@@ -683,3 +683,21 @@ def test_short_button_is_searched_only_in_the_order_form_not_the_chart_widget() 
     assert zones and all(
         x0 >= 0.5 for x0, _, _, _ in zones
     )  # widget melayang di grafik dikecualikan
+
+
+def test_exchange_window_covered_by_marketforge_is_detected_on_mac_and_windows() -> None:
+    from binance_bot.tebbit_web.visible import OnScreenWindow
+
+    nav = make_nav()
+    nav._rect = WINDOW
+    full = Rect(WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height)
+    for owner, covered in [
+        ("Electron", True),  # MarketForge memajukan jendelanya (show_app)
+        ("MarketForge.exe", True),
+        ("Binance", False),  # macOS
+        ("Binance.exe", False),  # Windows
+    ]:
+        nav._windows = lambda owner=owner: [OnScreenWindow(owner, full)]
+        assert nav._covered() is covered, owner
+    nav._windows = None  # tanpa daftar jendela (tes lain): tidak diperiksa
+    assert nav._covered() is False

@@ -35,6 +35,7 @@ from binance_bot.tebbit_web.chrome import Browser, ChromeController, ChromeWindo
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import TebbitNavigator
 from binance_bot.tebbit_web.pattern_rules import TEBBIT
+from binance_bot.tebbit_web.visible import on_screen_windows
 from binance_bot.workflows import (
     ExampleWorkflow,
     FillTestWorkflow,
@@ -286,7 +287,13 @@ def build_tebbit(
         chrome = mac_chrome = ChromeController()
         window = ChromeWindowController(mac_chrome)
     navigator = TebbitNavigator(
-        settings, system.apps, window, system.reader, chrome, screens=system.screens
+        settings,
+        system.apps,
+        window,
+        system.reader,
+        chrome,
+        screens=system.screens,
+        windows=on_screen_windows,
     )
     return navigator, ScreenMarket(navigator, browse=browse)
 
@@ -347,7 +354,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         return PositionsWorkflow(params_from(args), journal, market, close=target)
 
     if not tebbit:
-        navigator = BinanceNavigator(settings, apps, window, system.reader, screens=system.screens)
+        navigator = BinanceNavigator(
+            settings, apps, window, system.reader, screens=system.screens, windows=on_screen_windows
+        )
     if args.command == "uji-isi":
         return FillTestWorkflow(navigator, rank=args.rank, quantity_text=args.jumlah)
     if args.command == "leader":
