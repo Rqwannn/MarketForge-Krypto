@@ -81,10 +81,14 @@ def parse_header(texts: Sequence[str]) -> tuple[float, float]:
     # spasi setelah tanda: "+ 11.35%").
     # Harga header tidak dipakai SOP (bid/ask dari order book); titik desimalnya kadang hilang.
     found = re.search(r"(\d[\d,]*(?:\.\d+)?)\s*([+-])\s*(\d+(?:\.\d+)?)\s*(?:%|0/0)", joined)
-    if not found:
-        raise ScreenReadError(f"Harga atau perubahan 24 jam tidak terbaca di header: {texts}")
-    price, sign, change = found.groups()
-    return float(price.replace(",", "")), float(sign + change)
+    if found:
+        price, sign, change = found.groups()
+        return float(price.replace(",", "")), float(sign + change)
+    # Angka harga kadang tidak terbaca sama sekali; yang dibutuhkan SOP hanya persen perubahannya.
+    only = re.search(r"([+-])\s*(\d+(?:\.\d+)?)\s*(?:%|0/0)", joined)
+    if not only:
+        raise ScreenReadError(f"Perubahan 24 jam tidak terbaca di header: {texts}")
+    return float("nan"), float(only.group(1) + only.group(2))
 
 
 def parse_order_book(

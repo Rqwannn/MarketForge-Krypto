@@ -105,3 +105,15 @@ def test_header_harga_dan_perubahan_walau_ocr_menyisipkan_spasi() -> None:
     assert parse_header(texts) == (0.15384, 11.35)
     assert parse_header(["BTWUSDT Perpetual", "2.5528 +44.60%", "2.6047"]) == (2.5528, 44.6)
     assert parse_header(["1,234.5 -2.5%"]) == (1234.5, -2.5)
+
+
+def test_header_without_a_readable_price_still_gives_the_change() -> None:
+    import math
+
+    from binance_bot.tebbit_web.screen_text import parse_header
+
+    texts = ["24H Low", "16.98", "24H Volume(USDT)", "24H High", "+7.46%", "UVXYUSDT Perpetual"]
+    price, change = parse_header(texts)
+    assert change == 7.46 and math.isnan(price)  # harga header tidak dipakai SOP
+    with pytest.raises(Exception, match="tidak terbaca"):
+        parse_header(["24H Low", "16.98"])
