@@ -72,8 +72,11 @@ _BINANCE_MARGIN_PATTERNS = (
 )
 # Kolom nilai leverage: seluruh barisnya hanya angka, "25X" saat tidak diedit dan "2" (kadang "2|"
 # dengan kursor) saat diedit. Angka sumbu grafik ("44.00") tidak cocok karena ada titik desimal.
-_COMPANION_VALUE = re.compile(r"Leverage\W*(\d{1,3})\s*[xX]?\s*\|?\s*$", re.IGNORECASE)
-_FIELD_VALUE = re.compile(r"^\s*(\d{1,3})\s*[xX]?\s*\|?\s*$")
+_NUM = r"[0-9SsOoIlZz]{1,3}"  # angka, atau huruf yang mirip angka ("50X" terbaca "sox")
+_COMPANION_BARE = re.compile(rf"^\s*({_NUM})\s*[xX]?\s*$")
+_DIGIT_LOOKALIKES = str.maketrans("SsOoIlZz", "55001122")
+_COMPANION_VALUE = re.compile(rf"Leverage\W*({_NUM})\s*[xX]?\s*\|?\s*$", re.IGNORECASE)
+_FIELD_VALUE = re.compile(rf"^\s*({_NUM})\s*[xX]?\s*\|?\s*$")
 _LEVERAGE_BUTTON = re.compile(r"^\s*\d{1,3}\s*[xX]\s*$")
 _DIALOG_WAIT_S = 6.0
 _CONFIRM_ATTEMPTS = 3
@@ -545,9 +548,11 @@ class BinanceNavigator:
         top, bottom = title_y + near, title_y + far
         values = set()
         for text in self._read_with_companion((left, top, right, bottom)):
-            match = _COMPANION_VALUE.search(text)
-            if match and 0 < int(match.group(1)) <= 500:
-                values.add(int(match.group(1)))
+            # "Leverage 2" dalam satu baris, atau OCR memecahnya: kata dan angkanya baris sendiri.
+            match = _COMPANION_VALUE.search(text) or _COMPANION_BARE.match(text)
+            value = _leverage_number(match.group(1)) if match else None
+            if value is not None:
+                values.add(value)
         if len(values) != 1:
             return None
         return ((left + right) / 2, (top + bottom) / 2), values.pop()
@@ -584,8 +589,9 @@ class BinanceNavigator:
                 dialogs.field_x_range[0] <= x <= dialogs.field_x_range[1]
             ):
                 continue  # di luar tengah dialog: bukan kolom nilai (mis. sumbu grafik di baliknya)
-            if match and title[1] + near <= y <= title[1] + far:
-                found.append(((x0 + line.x * (x1 - x0), y), int(match.group(1))))
+            value = _leverage_number(match.group(1)) if match else None
+            if value is not None and title[1] + near <= y <= title[1] + far:
+                found.append(((x0 + line.x * (x1 - x0), y), value))
         # Beberapa varian OCR bisa membaca kolom yang sama dua kali: nilai sama diterima, nilai
         # berbeda berarti tidak pasti (tolak).
         if found and len({value for _, value in found}) == 1:
@@ -624,6 +630,13 @@ class BinanceNavigator:
                 self._window.clear_field()
             self._window.type_number(str(leverage))
             self._sleep(self._settings.settle_delay_s / 2)
+            if dialogs.blur_after_typing:
+                heading = self._find_in_dialog(dialogs.dialog_area, dialogs.leverage_title)
+                if heading is not None:
+                    self._click(
+                        heading
+                    )  # judul dialog: tidak melakukan apa pun selain melepas fokus
+                    self._sleep(self._settings.settle_delay_s / 2)
             # Konfirmasi HANYA bila kolom nilai terbukti kini bernilai leverage yang dituju.
             after = self._leverage_field(dialogs)
             if after is None or after[1] != leverage:
@@ -807,3 +820,9 @@ class BinanceNavigator:
 
     def _read_texts(self, area: Rect) -> list[str]:
         return [line.text for line in self._read_lines(area)]
+
+
+def _leverage_number(raw: str) -> int | None:
+    """Angka leverage dari teks kolom; huruf yang mirip angka ditafsirkan sebagai angka."""
+    digits = raw.translate(_DIGIT_LOOKALIKES)
+    return int(digits) if digits.isdigit() and 0 < int(digits) <= 500 else None

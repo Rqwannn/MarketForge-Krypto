@@ -53,7 +53,9 @@ LEVERAGE_CLICK = (0.944, 0.128)
 MODE_CLICK = (0.868, 0.128)
 LEVERAGE_CLOSE_X = 0.578
 MODE_CLOSE_X = 0.627
-VALUE_BOX_X = (0.46, 0.54)  # angka leverage di antara tombol - dan +
+# Angka leverage saja, tanpa ikon - dan + di kiri kanannya: potongan yang lebih lebar membuat OCR
+# menjatuhkan "2X" (diuji: 55 px terbaca, 105 px dan lebih tidak).
+VALUE_BOX_X = (0.485, 0.515)
 FIELD_X_RANGE = (
     0.44,
     0.56,

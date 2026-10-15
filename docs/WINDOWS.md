@@ -152,3 +152,5 @@ lewat OCR, kolom nilai dibaca ulang setelah diketik, dan Konfirmasi baru ditekan
 benar-benar leverage yang dituju (label slider "10x 20x" tidak pernah dikira kolom nilai).
 Gagal di langkah mana pun berarti dialog dibatalkan lewat X dan peringatan lama tetap muncul.
 Berlaku untuk Binance dan Tebbit (dialog "Modify leverage" dan "Trading Mode"; di Tebbit pengaturannya per koin). Status: di **Tebbit** sudah terbukti mengubah SOXSUSDT dari Cross 25x menjadi Isolated 2x (15 Okt 2026). Kolom leverage Tebbit kembali ke nilai minimum (1) bila dikosongkan, jadi isinya diganti dengan Ctrl+A lalu mengetik, bukan Backspace. Di **Binance** perubahan nilai sungguhan belum diuji. Tombol beli/jual tidak pernah disentuh.
+
+Di Tebbit leverage diatur **begitu halaman koin terbuka**, untuk tiap koin yang dibuka bot (bukan hanya yang akhirnya dimasuki). Terbukti 15 Okt 2026: SKDD (50x), SQQQ (25x), PYTH (150x), dan UVXY (25x) menjadi 2x dalam satu putaran. Mode margin diatur terpisah (`BOT_ATUR_MODE_MARGIN`).

@@ -806,3 +806,57 @@ def test_chart_axis_numbers_outside_the_dialog_centre_are_not_the_leverage_field
     centred = replace(open_profile, field_x_range=(0.40, 0.60))  # type: ignore[type-var]
     field = nav._leverage_field(centred)
     assert field is not None and field[1] == 25
+
+
+def test_companion_reading_accepts_the_word_and_the_digit_on_separate_lines(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import replace
+
+    nav, _screen = margin_nav(
+        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(value=None)]
+    )
+    dialogs = replace(nav._margin_dialogs(), value_box_x=(0.46, 0.54))  # type: ignore[type-var]
+    for raw, expected in ((["Leverage", "2", "2", "Leverage"], 2), (["Leverage", "50X"], 50)):
+        nav._read_with_companion = lambda box, word="Leverage", r=raw: r  # type: ignore[method-assign]
+        field = nav._leverage_field(dialogs)
+        assert field is not None and field[1] == expected
+    nav._read_with_companion = lambda box, word="Leverage": ["Leverage", "2", "21"]  # type: ignore[method-assign]
+    assert nav._leverage_field(dialogs) is None  # 2 dan 21 bertentangan: tolak
+
+
+def test_the_dialog_heading_is_clicked_after_typing_so_the_cursor_goes_away(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import replace
+
+    before, after = leverage_dialog("20x"), leverage_dialog("2")
+    nav, screen = margin_nav(
+        monkeypatch,
+        tmp_path,
+        bar=[CROSS_20, CROSS_20, CROSS_2],
+        dialog=[before, before, after, after, after, []],
+    )
+    original = nav._margin_dialogs
+    nav._margin_dialogs = lambda: replace(original(), blur_after_typing=True)  # type: ignore[method-assign,arg-type]
+    assert nav.apply_margin(2, isolated=False) is True
+    done = clicks(screen)
+    heading = dialog_point(0.3, 0.1)
+    assert heading in done and FIELD in done and CONFIRM in done
+    assert done.index(FIELD) < done.index(heading) < done.index(CONFIRM)
+
+
+def test_the_leverage_field_tolerates_letters_that_look_like_digits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Kasus nyata: kolom "50X" terbaca "sox" oleh OCR."""
+    nav, _screen = margin_nav(
+        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog("sox")]
+    )
+    field = nav._leverage_field(nav._margin_dialogs())  # type: ignore[arg-type]
+    assert field is not None and field[1] == 50
+    for chart_noise in ("37.50", "Modify", "Selecting"):  # bukan kolom nilai
+        nav2, _ = margin_nav(
+            monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(chart_noise)]
+        )
+        assert nav2._leverage_field(nav2._margin_dialogs()) is None  # type: ignore[arg-type]

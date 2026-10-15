@@ -237,6 +237,20 @@ class SopTrader:
         )
         logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry))
 
+    def _prepare_margin(self, symbol: str) -> None:
+        """Atur leverage (dan mode, bila diminta) koin yang halamannya baru terbuka."""
+        platform = self.profile.platform
+        if not self._settings.auto_margin_for(platform):
+            return
+        wants_mode = self._settings.auto_mode_for(platform)
+        try:
+            margin = self._nav.read_margin_settings()
+        except BotError as exc:
+            logger.warning("Margin %s tidak terbaca, tidak diatur otomatis: %s", symbol, exc)
+            return
+        if margin.leverage != self.params.leverage or (wants_mode and margin.isolated is not True):
+            self._fix_margin(symbol, self.params.leverage, margin, wants_mode)
+
     def _fix_margin(
         self, symbol: str, leverage: int, before: MarginSettings, isolated: bool
     ) -> MarginSettings:
@@ -273,6 +287,10 @@ class SopTrader:
         params, symbol = self.params, entry.symbol
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
+
+        # Leverage diatur begitu halaman koin terbuka, untuk TIAP koin yang dibuka (bukan hanya yang
+        # akhirnya dimasuki): koin yang dilewati karena pola, biaya, atau slot juga ikut diatur.
+        self._prepare_margin(symbol)
 
         # Harga, funding, dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini.
         # Funding dan spread baru menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot),
@@ -358,12 +376,6 @@ class SopTrader:
             raise _Skip(sizing)
 
         margin = self._nav.read_margin_settings()
-        platform = self.profile.platform
-        wants_mode = self._settings.auto_mode_for(platform)
-        if self._settings.auto_margin_for(platform) and (
-            margin.leverage != params.leverage or (wants_mode and margin.isolated is not True)
-        ):
-            margin = self._fix_margin(symbol, params.leverage, margin, wants_mode)
         entry.margin = margin.describe()
         for issue in margin.problems(params.leverage):
             logger.warning("Margin di aplikasi: %s. Wajib diubah sebelum order sungguhan.", issue)

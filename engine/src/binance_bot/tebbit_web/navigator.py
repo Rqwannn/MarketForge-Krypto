@@ -229,6 +229,7 @@ class TebbitNavigator(BinanceNavigator):
             replace_by_select_all=True,
             value_box_x=lay.VALUE_BOX_X,
             field_x_range=lay.FIELD_X_RANGE,
+            blur_after_typing=True,
         )
 
     # ------------------------------------------------------------------ keamanan

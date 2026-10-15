@@ -925,3 +925,32 @@ def test_auto_margin_leaves_a_coin_alone_when_its_leverage_is_already_right(
     with_auto_margin(trader)
     trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
     assert nav.margin_applied == []  # mode Cross dibiarkan karena mode tidak diminta
+
+
+def test_leverage_is_set_for_every_coin_that_is_opened_even_if_it_is_then_skipped(
+    tmp_path: Path,
+) -> None:
+    """Koin yang dilewati (di sini: kenaikan kurang dari batas) juga diatur ke 2x."""
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 50))
+    trader, *_ = make_trader(tmp_path, nav, min_gain_pct=1000.0)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert entry.status == "skipped"
+    assert nav.margin_applied == [(2, False)]
+
+
+def test_an_unreadable_margin_panel_does_not_stop_the_coin_from_being_evaluated(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 50))
+
+    def unreadable() -> MarginSettings:
+        raise ScreenReadError("Leverage tidak terbaca di panel margin")
+
+    nav.read_margin_settings = unreadable  # type: ignore[method-assign]
+    trader, *_ = make_trader(tmp_path, nav, min_gain_pct=1000.0)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert entry.status == "skipped" and nav.margin_applied == []
+    assert any("tidak terbaca, tidak diatur otomatis" in r.getMessage() for r in caplog.records)

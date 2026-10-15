@@ -40,3 +40,6 @@ class MarginDialogs:
     # Kolom nilai hanya dicari di rentang x ini (tengah dialog, di antara tombol - dan +). Angka
     # sumbu grafik di balik dialog (mis. "46") ada di luar rentang ini. None = seluruh dialog.
     field_x_range: tuple[float, float] | None = None
+    # Setelah mengetik, klik judul dialog (area non-interaktif) agar kolom kehilangan fokus: kursor
+    # berkedip hilang ("2|" terbaca "21") dan nilai diformat oleh aplikasi sebelum dibaca ulang.
+    blur_after_typing: bool = False
