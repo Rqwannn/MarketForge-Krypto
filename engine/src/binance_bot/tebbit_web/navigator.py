@@ -58,6 +58,7 @@ _MARKET = re.compile(r"\bMarket\b")
 _QUANTITY = re.compile(r"Quantity", re.IGNORECASE)
 _LOGIN = re.compile(r"\b(Log\s*in|Sign\s*up|Register)\b", re.IGNORECASE)
 _GUEST_PAGE = re.compile(r"Welcome to log in", re.IGNORECASE)  # popup login (beranda tamu)
+_ACCOUNT = re.compile(r"@|\*{3}")  # email akun di menu atas (mis. "mra***1@gmail.com")
 _MA_LABEL = re.compile(r"MA\s*\d+")
 # Label legenda sering rusak di OCR: "MA 10 close" terbaca "BAIOc10seo", "mA10 closeo",
 # "MAIO closeo",
@@ -103,12 +104,15 @@ class TebbitNavigator(BinanceNavigator):
         self._window_id: int | None = None
         self._rows: list[tuple[GainerRow, tuple[float, float]]] = []
         self._on_contract = False
+        self._at_home = False  # halaman depan baru dimuat dan belum digulir
 
     # ------------------------------------------------------------------ jendela
     def prepare(self) -> None:
         """Buka (atau pakai ulang) jendela Chrome Tebbit, atur ukuran dan zoom, lalu periksa."""
+        opened = False
         if self._window_id is None or not self._chrome.window_exists(self._window_id):
             self._window_id = self._chrome.open_window(HOME_URL)
+            opened = True
             logger.info("Jendela Chrome untuk Tebbit dibuka")
         self._chrome_window.window_id = self._window_id
         area = self._fit_area()
@@ -120,7 +124,9 @@ class TebbitNavigator(BinanceNavigator):
         self._chrome.set_zoom(lay.ZOOM_STEPS_DOWN, self._window_id)
         self._sleep(1.0)
         self._on_contract = False
-        self._load(HOME_URL)
+        if not opened:  # jendela baru sudah memuat halaman depan: jangan dimuat ulang
+            self._load(HOME_URL)
+        self._at_home = True
         self._check_page()
 
     def _fit_area(self) -> Rect:
@@ -159,9 +165,12 @@ class TebbitNavigator(BinanceNavigator):
 
     def _raise_if_logged_out(self) -> None:
         top = self._read_texts(self.rect.sub(*lay.LOGIN_AREA))
+        if any(_ACCOUNT.search(text) for text in top):
+            return  # email akun tampil di menu atas: sudah login
+        # Sesi kedaluwarsa: tombol Login di menu atas, atau popup login. Isi halaman tidak
+        # dipakai: banner halaman depan bisa memuat "Sign up" walau akun sudah login.
         page = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.95))
-        # Sesi kedaluwarsa: tombol Login atau popup login.
-        if any(_LOGIN.search(text) or _GUEST_PAGE.search(text) for text in top + page):
+        if any(_LOGIN.search(text) for text in top) or any(_GUEST_PAGE.search(t) for t in page):
             raise ScreenReadError(
                 "Sesi Tebbit sudah keluar (belum login). Login lagi di Chrome, lalu ulangi."
             )
@@ -241,13 +250,16 @@ class TebbitNavigator(BinanceNavigator):
     def _load(self, url: str) -> None:
         assert self._window_id is not None
         self._chrome.open_url(self._window_id, url)
+        self._at_home = url == HOME_URL
         self._sleep(self._settings.settle_delay_s + 1.0)
 
     # ------------------------------------------------------------------ daftar gainers
     def open_top_gainers(self) -> list[GainerRow]:
         """Halaman depan > gulir > tab Gainers > Futures; baca 5 baris teratas."""
         self._on_contract = False
-        self._load(HOME_URL)
+        if not self._at_home:  # baru dimuat oleh prepare(): tidak perlu dimuat ulang
+            self._load(HOME_URL)
+        self._at_home = False  # setelah ini halaman digulir dan tabnya berubah
         gainers = self._scroll_until(_GAINERS, lay.LIST_SEARCH_AREA)
         self._click(gainers)
         futures = self._find_below(_FUTURES, gainers[1])
