@@ -48,7 +48,7 @@ _FIFTEEN = re.compile(r"(?<![\d.])15\s*m", re.IGNORECASE)
 _MARKET = re.compile(r"\bMarket\b")
 _QUANTITY = re.compile(r"Quantity", re.IGNORECASE)
 _LOGIN = re.compile(r"\b(Log\s*in|Sign\s*up|Register)\b", re.IGNORECASE)
-_GUEST_PAGE = re.compile(r"Start a New Trading|Welcome to log in", re.IGNORECASE)
+_GUEST_PAGE = re.compile(r"Welcome to log in", re.IGNORECASE)  # popup login (beranda tamu)
 _MA_LABEL = re.compile(r"MA\s*\d+")
 _CONTRACT_PATH = "/futures/contract/u_based/"
 _PAGE_TIMEOUT_S = 25.0
@@ -111,17 +111,15 @@ class TebbitNavigator(BinanceNavigator):
     def _check_page(self) -> None:
         """Halaman Tebbit termuat, zoom 80%, dan akun sudah login (jangkar teks di menu atas)."""
         deadline = self._clock() + _PAGE_TIMEOUT_S
-        scrolled_up = False
+        reloaded = False
         while (found := self._find_text(lay.NAV_FUTURES_AREA, _FUTURES)) is None:
             if self._clock() >= deadline:
                 self._raise_if_logged_out()  # layar login menutupi menu: jangan salah sebut
                 raise ScreenReadError("Halaman Tebbit belum termuat (menu 'Futures' tidak terbaca)")
-            if not scrolled_up and self._clock() >= deadline - _PAGE_TIMEOUT_S / 2:
-                # Chrome bisa memulihkan posisi gulir halaman sebelumnya: menu atas tidak terlihat.
-                self._ensure_front()
-                for _ in range(3):
-                    self._window.scroll_up(*self.rect.point_at(*lay.SCROLL_POINT))
-                scrolled_up = True
+            if not reloaded and self._clock() >= deadline - _PAGE_TIMEOUT_S / 2:
+                # Kadang menu atas Tebbit tidak tampil sama sekali (sementara): muat ulang sekali.
+                self._load(HOME_URL)
+                reloaded = True
             self._sleep(1.0)
         x = found[0]
         if abs(x - lay.NAV_FUTURES_X) > lay.NAV_FUTURES_TOLERANCE:
@@ -134,7 +132,7 @@ class TebbitNavigator(BinanceNavigator):
     def _raise_if_logged_out(self) -> None:
         top = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.17))
         page = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.95))
-        # Sesi kedaluwarsa: tombol Login, popup login, atau halaman tamu tanpa menu sama sekali.
+        # Sesi kedaluwarsa: tombol Login atau popup login.
         if any(_LOGIN.search(text) or _GUEST_PAGE.search(text) for text in top + page):
             raise ScreenReadError(
                 "Sesi Tebbit sudah keluar (belum login). Login lagi di Chrome, lalu ulangi."
