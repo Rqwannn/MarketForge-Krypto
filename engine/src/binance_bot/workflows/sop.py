@@ -238,8 +238,6 @@ class SopTrader:
 
     def _run(self, entry: JournalEntry, reading_source: ReadingSource | None) -> None:
         params, symbol = self.params, entry.symbol
-        if any(e.symbol == symbol and e.status == "open" for e in self._journal.load()):
-            raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
 
@@ -305,7 +303,9 @@ class SopTrader:
                 )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
 
-        # Langkah 4 SOP (setelah pola dan biaya): slot posisi.
+        # Langkah 4 SOP (setelah pola dan biaya): pair yang sama dan slot posisi.
+        if any(e.symbol == symbol and e.status == "open" for e in self._journal.load()):
+            raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         blocker = self.slot_blocker()
         if blocker:
             raise _Skip(blocker)
