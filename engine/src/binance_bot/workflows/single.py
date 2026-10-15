@@ -58,12 +58,6 @@ class SingleWorkflow:
         """Satu putaran pemantauan. Mengembalikan jumlah posisi uji baru."""
         if self._trader.halted(self._trader.refresh_journal()):
             return 0
-        blocker = self._trader.slot_blocker()
-        if blocker:
-            # Tidak ada slot: tidak perlu memindai atau memanggil AI.
-            logger.info("Tidak masuk putaran ini: %s", blocker)
-            return 0
-
         self._nav.prepare()
         rows = {row.rank: row for row in self._nav.open_top_gainers()}
         log_top_gainers(list(rows.values()))

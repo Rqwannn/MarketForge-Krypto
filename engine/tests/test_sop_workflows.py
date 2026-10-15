@@ -221,14 +221,19 @@ def test_single_does_not_enter_when_none_of_the_five_is_ok(tmp_path: Path) -> No
     assert {e.status for e in journal.load()} == {"skipped"}
 
 
-def test_single_skips_scanning_entirely_when_slots_are_full(tmp_path: Path) -> None:
+def test_single_still_judges_and_records_coins_when_slots_are_full(tmp_path: Path) -> None:
+    # Slot penuh hanya menahan posisi baru: koin tetap dibuka, dinilai AI, dan tampil di riwayat.
     nav = FakeNavigator({1: "STRKUSDT"})
     trader, _, journal, _ = make_trader(tmp_path, nav)
     journal.append(open_trade("CFXUSDT"))
     journal.append(open_trade("MBLUSDT"))
     analyzer = FakePatternAnalyzer(OK)
     SingleWorkflow(nav, trader, analyzer, ranks=[1]).run()  # type: ignore[arg-type]
-    assert nav.calls == [] and analyzer.calls == []
+    assert len(analyzer.calls) == 1
+    new = next(e for e in journal.load() if e.symbol == "STRKUSDT")
+    assert (new.status, new.verdict) == ("skipped", "ok")  # dinilai Layak, tapi tidak dibuka
+    assert "2 posisi terbuka" in new.reason
+    assert len([e for e in journal.load() if e.status == "open"]) == 2
 
 
 def test_single_evaluates_a_pair_once_when_ranks_shift_onto_it(tmp_path: Path) -> None:

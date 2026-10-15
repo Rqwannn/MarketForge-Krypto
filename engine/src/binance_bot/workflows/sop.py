@@ -19,7 +19,7 @@ from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError, MarketDataError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
 from binance_bot.strategy import (
@@ -143,7 +143,9 @@ class SopTrader:
             return refresh_journal(
                 self._journal, self._market, self.params.fee_pct, self._wall_clock()
             )
-        except MarketDataError as exc:  # bursa tanpa sumber candle (Tebbit): posisi tetap terbuka
+        except NoHistoryError:  # bursa tanpa riwayat harga (Tebbit): memang tidak dinilai otomatis
+            return self._journal.load()
+        except MarketDataError as exc:
             logger.warning("Posisi uji belum bisa dinilai: %s", exc)
             return self._journal.load()
 
