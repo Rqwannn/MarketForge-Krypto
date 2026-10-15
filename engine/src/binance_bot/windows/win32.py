@@ -272,6 +272,13 @@ def select_all_and_delete() -> None:
     time.sleep(_KEY_DELAY_S)
 
 
+def select_all() -> None:
+    """Ctrl+A: pilih seluruh isi kolom yang sedang fokus (tanpa menghapus)."""
+    _send([_key(_VK_CONTROL), _key(_VK_A), _key(_VK_A, flags=_KEYEVENTF_KEYUP)])
+    _send([_key(_VK_CONTROL, flags=_KEYEVENTF_KEYUP)])
+    time.sleep(_KEY_DELAY_S)
+
+
 def type_char(char: str) -> None:
     code = ord(char)
     _send([_key(scan=code, flags=_KEYEVENTF_UNICODE)])

@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from binance_bot.binance_desktop.margin_dialogs import MarginDialogs
 from binance_bot.binance_desktop.navigator import BinanceNavigator
@@ -226,6 +226,9 @@ class TebbitNavigator(BinanceNavigator):
             mode_button=re.compile(r"Cross|Isolated", re.IGNORECASE),
             leverage_click=lay.LEVERAGE_CLICK,
             mode_click=lay.MODE_CLICK,
+            replace_by_select_all=True,
+            value_box_x=lay.VALUE_BOX_X,
+            field_x_range=lay.FIELD_X_RANGE,
         )
 
     # ------------------------------------------------------------------ keamanan
@@ -395,35 +398,11 @@ class TebbitNavigator(BinanceNavigator):
         return parse_margin(texts + self._leverage_with_companion())
 
     def _leverage_with_companion(self) -> list[str]:
-        """Teks kotak leverage, dibaca sebagai baris "Leverage 2X" (kata pendamping digambar)."""
-        from PIL import Image, ImageChops, ImageDraw, ImageFont
-
+        """Teks kotak leverage di atas form, dibaca sebagai baris "Leverage 2X"."""
         assert lay.LEVERAGE_BOX_X is not None
+        x0, y0, x1, y1 = lay.MARGIN_AREA
         left, right = lay.LEVERAGE_BOX_X
-        found: list[str] = []
-        with tempfile.TemporaryDirectory() as tmp:
-            raw, composed = Path(tmp) / "m.png", Path(tmp) / "m_c.png"
-            self._ensure_front()
-            self._window.capture(self.rect.sub(*lay.MARGIN_AREA), raw)
-            with Image.open(raw) as image:
-                rgb = image.convert("RGB")
-                r, g, b = rgb.split()
-                box = ImageChops.lighter(ImageChops.lighter(r, g), b)
-                box = box.crop((int(box.width * left), 0, int(box.width * right), box.height))
-            for scale in (4, 3):
-                big = box.resize((box.width * scale, box.height * scale), Image.Resampling.LANCZOS)
-                font: Any
-                try:
-                    font = ImageFont.truetype("arial.ttf", int(big.height * 0.42))
-                except OSError:
-                    font = ImageFont.load_default()
-                canvas = Image.new("L", (big.width + 900, big.height + 40), 0)
-                draw = ImageDraw.Draw(canvas)
-                draw.text((20, 20 + int(big.height * 0.18)), "Leverage", fill=235, font=font)
-                canvas.paste(big, (20 + int(draw.textlength("Leverage  ", font=font)), 20))
-                canvas.save(composed)
-                found += [line.text for line in self._reader.read_lines(composed)]
-        return found
+        return self._read_with_companion((x0 + (x1 - x0) * left, y0, x0 + (x1 - x0) * right, y1))
 
     def read_quote(self) -> tuple[float, float, float, float]:
         """(bid, ask, harga terakhir, perubahan 24 jam %) dari halaman koin yang terbuka."""

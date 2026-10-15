@@ -31,3 +31,12 @@ class MarginDialogs:
     # Posisi tetap tombol di atas form, bila membacanya dengan OCR tidak andal (None = pakai OCR).
     leverage_click: Point | None = None
     mode_click: Point | None = None
+    # Kolom leverage yang langsung kembali ke nilai minimum (1) saat dikosongkan: mengetik "2"
+    # sesudah Backspace menghasilkan "12". Isi kolom diganti dengan memilih semua lalu mengetik.
+    replace_by_select_all: bool = False
+    # Lebar kolom tempat angka leverage berada (pecahan lebar halaman). OCR menjatuhkan angka
+    # tunggal ("2") yang berdiri sendiri; bila diisi, potongan ini dibaca bersama kata pendamping.
+    value_box_x: tuple[float, float] | None = None
+    # Kolom nilai hanya dicari di rentang x ini (tengah dialog, di antara tombol - dan +). Angka
+    # sumbu grafik di balik dialog (mis. "46") ada di luar rentang ini. None = seluruh dialog.
+    field_x_range: tuple[float, float] | None = None

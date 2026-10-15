@@ -731,3 +731,78 @@ def test_apply_margin_cancels_with_x_when_the_leverage_is_already_right(
 
 def test_margin_is_not_automated_without_a_dialog_profile() -> None:
     assert make_nav().apply_margin(2) is False
+
+
+def test_leverage_field_is_read_while_being_edited_but_chart_axis_numbers_are_not(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from binance_bot.binance_desktop.margin_dialogs import MarginDialogs
+
+    editing = leverage_dialog("2")  # saat diedit kolomnya tampil "2" tanpa "x"
+    axis = [TextLine("44.00", 0.9, 0.25), TextLine("47", 0.9, 0.9)]  # sumbu grafik di balik dialog
+    nav, _screen = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[editing + axis])
+    dialogs = nav._margin_dialogs()
+    assert isinstance(dialogs, MarginDialogs)
+    field = nav._leverage_field(dialogs)
+    assert field is not None and field[1] == 2
+    cursor = leverage_dialog("2|")
+    nav2, _ = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[cursor])
+    assert (nav2._leverage_field(dialogs) or (None, None))[1] == 2
+
+
+def test_a_field_that_snaps_back_to_one_when_emptied_is_replaced_not_cleared(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Tebbit: Backspace membuat kolom kembali ke 1, lalu mengetik 2 menghasilkan 12."""
+    from dataclasses import replace
+
+    before, after = leverage_dialog("25x"), leverage_dialog("2")
+    nav, screen = margin_nav(
+        monkeypatch,
+        tmp_path,
+        bar=[CROSS_20, CROSS_20, CROSS_2],
+        dialog=[before, before, after, after, []],
+    )
+    original = nav._margin_dialogs
+    nav._margin_dialogs = lambda: replace(original(), replace_by_select_all=True)  # type: ignore[method-assign,arg-type]
+    assert nav.apply_margin(2, isolated=False) is True
+    kinds = [kind for kind, _ in screen.events]
+    assert "clear" not in kinds  # tidak ada Backspace yang membuat kolom menjadi 1
+    assert kinds.index("select_all") < kinds.index("type") and ("type", "2") in screen.events
+
+
+def test_a_lone_digit_in_the_leverage_field_is_read_with_a_companion_word(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import replace
+
+    nav, _screen = margin_nav(
+        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(value=None)]
+    )  # OCR tidak melihat kolom nilai sama sekali (angka tunggal dijatuhkan)
+    dialogs = replace(nav._margin_dialogs(), value_box_x=(0.46, 0.54))  # type: ignore[type-var]
+    nav._read_with_companion = lambda box, word="Leverage": ["Leverage 2"]  # type: ignore[method-assign]
+    field = nav._leverage_field(dialogs)
+    assert field is not None and field[1] == 2
+    nav._read_with_companion = lambda box, word="Leverage": ["Leverage 2", "Leverage 12"]  # type: ignore[method-assign]
+    assert nav._leverage_field(dialogs) is None  # bacaan bertentangan: tidak pasti, tolak
+    nav._read_with_companion = lambda box, word="Leverage": []  # type: ignore[method-assign]
+    assert nav._leverage_field(dialogs) is None
+
+
+def test_chart_axis_numbers_outside_the_dialog_centre_are_not_the_leverage_field(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import replace
+
+    x0, _, x1, _ = DIALOG_AREA
+    axis_x = (0.64 - x0) / (x1 - x0)  # sumbu harga di balik dialog (x 0,64 relatif jendela)
+    lines = [
+        *leverage_dialog("25x"),
+        TextLine("46", axis_x, 0.25),
+    ]  # sama tinggi dengan kolom nilai
+    nav, _screen = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[lines])
+    open_profile = nav._margin_dialogs()
+    assert nav._leverage_field(open_profile) is None  # tanpa rentang x: 25 dan 46 bertentangan
+    centred = replace(open_profile, field_x_range=(0.40, 0.60))  # type: ignore[type-var]
+    field = nav._leverage_field(centred)
+    assert field is not None and field[1] == 25

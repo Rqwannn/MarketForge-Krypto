@@ -103,6 +103,9 @@ class FakeScreen:
     def clear_field(self) -> None:
         self.events.append(("clear", None))
 
+    def select_all(self) -> None:
+        self.events.append(("select_all", None))
+
     def type_number(self, text: str) -> None:
         self.events.append(("type", text))
 

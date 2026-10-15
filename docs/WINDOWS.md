@@ -151,4 +151,4 @@ terbuka koin itu, jadi sengaja dimatikan secara bawaan. Pengamannya: dialog haru
 lewat OCR, kolom nilai dibaca ulang setelah diketik, dan Konfirmasi baru ditekan bila nilainya
 benar-benar leverage yang dituju (label slider "10x 20x" tidak pernah dikira kolom nilai).
 Gagal di langkah mana pun berarti dialog dibatalkan lewat X dan peringatan lama tetap muncul.
-Berlaku untuk Binance dan Tebbit (dialog "Modify leverage" dan "Trading Mode"; di Tebbit pengaturannya per koin). Status: pembacaan dan pembatalan kedua dialog sudah diuji langsung tanpa mengubah apa pun; **perubahan nilai sungguhan belum diuji** di akun asli. Tombol beli/jual tidak pernah disentuh.
+Berlaku untuk Binance dan Tebbit (dialog "Modify leverage" dan "Trading Mode"; di Tebbit pengaturannya per koin). Status: di **Tebbit** sudah terbukti mengubah SOXSUSDT dari Cross 25x menjadi Isolated 2x (15 Okt 2026). Kolom leverage Tebbit kembali ke nilai minimum (1) bila dikosongkan, jadi isinya diganti dengan Ctrl+A lalu mengetik, bukan Backspace. Di **Binance** perubahan nilai sungguhan belum diuji. Tombol beli/jual tidak pernah disentuh.

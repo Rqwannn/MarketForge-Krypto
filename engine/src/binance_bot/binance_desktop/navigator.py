@@ -70,7 +70,10 @@ _BINANCE_MARGIN_PATTERNS = (
     re.compile(r"^\s*(Isolated|Terisolasi)\s*$", re.IGNORECASE),
     re.compile(r"Cross|Isolated|Silang|Terisolasi", re.IGNORECASE),
 )
-_FIELD_VALUE = re.compile(r"(?<![A-Za-z0-9])(\d{1,3})\s*[xX](?![A-Za-z])")
+# Kolom nilai leverage: seluruh barisnya hanya angka, "25X" saat tidak diedit dan "2" (kadang "2|"
+# dengan kursor) saat diedit. Angka sumbu grafik ("44.00") tidak cocok karena ada titik desimal.
+_COMPANION_VALUE = re.compile(r"Leverage\W*(\d{1,3})\s*[xX]?\s*\|?\s*$", re.IGNORECASE)
+_FIELD_VALUE = re.compile(r"^\s*(\d{1,3})\s*[xX]?\s*\|?\s*$")
 _LEVERAGE_BUTTON = re.compile(r"^\s*\d{1,3}\s*[xX]\s*$")
 _DIALOG_WAIT_S = 6.0
 _CONFIRM_ATTEMPTS = 3
@@ -495,6 +498,60 @@ class BinanceNavigator:
         final = self.read_margin_settings()
         return final.leverage == leverage and (final.isolated is True or not isolated)
 
+    def _read_with_companion(
+        self, box: tuple[float, float, float, float], word: str = "Leverage"
+    ) -> list[str]:
+        """Baca potongan `box` (relatif jendela) sebagai satu baris bersama kata pendamping.
+
+        OCR Windows menjatuhkan teks sependek "2" atau "2X" yang berdiri sendiri, tetapi
+        membacanya bila ada kata di sampingnya. Kata itu digambar di gambar tambahan; hasilnya
+        mis. "Leverage 2". Mengembalikan teks tiap baris dari beberapa skala.
+        """
+        from PIL import Image, ImageChops, ImageDraw, ImageFont
+
+        found: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            raw, composed = Path(tmp) / "c.png", Path(tmp) / "c_c.png"
+            self._ensure_front()
+            self._window.capture(self.rect.sub(*box), raw)
+            with Image.open(raw) as image:
+                r, g, b = image.convert("RGB").split()
+                crop = ImageChops.lighter(ImageChops.lighter(r, g), b)
+            for scale in (4, 3):
+                big = crop.resize(
+                    (crop.width * scale, crop.height * scale), Image.Resampling.LANCZOS
+                )
+                font: Any
+                try:
+                    font = ImageFont.truetype("arial.ttf", int(big.height * 0.42))
+                except OSError:
+                    font = ImageFont.load_default()
+                canvas = Image.new("L", (big.width + 900, big.height + 40), 0)
+                draw = ImageDraw.Draw(canvas)
+                draw.text((20, 20 + int(big.height * 0.18)), word, fill=235, font=font)
+                canvas.paste(big, (20 + int(draw.textlength(f"{word}  ", font=font)), 20))
+                canvas.save(composed)
+                found += [line.text for line in self._reader.read_lines(composed)]
+        return found
+
+    def _field_by_companion(
+        self, dialogs: MarginDialogs, title_y: float
+    ) -> tuple[tuple[float, float], int] | None:
+        """Nilai kolom leverage dibaca bersama kata pendamping; None bila tidak pasti."""
+        if dialogs.value_box_x is None:
+            return None
+        near, far = dialogs.field_band
+        left, right = dialogs.value_box_x
+        top, bottom = title_y + near, title_y + far
+        values = set()
+        for text in self._read_with_companion((left, top, right, bottom)):
+            match = _COMPANION_VALUE.search(text)
+            if match and 0 < int(match.group(1)) <= 500:
+                values.add(int(match.group(1)))
+        if len(values) != 1:
+            return None
+        return ((left + right) / 2, (top + bottom) / 2), values.pop()
+
     def _dialog_lines(self, area: tuple[float, float, float, float]) -> list[TextLine]:
         """Baca isi dialog margin. Platform dengan teks sulit dibaca menimpanya (varian OCR)."""
         return self._read_lines(self.rect.sub(*area))
@@ -521,12 +578,23 @@ class BinanceNavigator:
         found = []
         for line in lines:
             y = y0 + line.y * (y1 - y0)
-            match = _FIELD_VALUE.search(line.text)
+            match = _FIELD_VALUE.match(line.text)
+            x = x0 + line.x * (x1 - x0)
+            if dialogs.field_x_range is not None and not (
+                dialogs.field_x_range[0] <= x <= dialogs.field_x_range[1]
+            ):
+                continue  # di luar tengah dialog: bukan kolom nilai (mis. sumbu grafik di baliknya)
             if match and title[1] + near <= y <= title[1] + far:
                 found.append(((x0 + line.x * (x1 - x0), y), int(match.group(1))))
         # Beberapa varian OCR bisa membaca kolom yang sama dua kali: nilai sama diterima, nilai
         # berbeda berarti tidak pasti (tolak).
-        return found[0] if found and len({value for _, value in found}) == 1 else None
+        if found and len({value for _, value in found}) == 1:
+            return found[0]
+        if not found:
+            return self._field_by_companion(
+                dialogs, title[1]
+            )  # angka tunggal: baca dengan pendamping
+        return None
 
     def _bar_button(self, dialogs: MarginDialogs, pattern: re.Pattern[str], fixed: Any) -> Any:
         if fixed is not None:
@@ -550,7 +618,10 @@ class BinanceNavigator:
                 return  # sudah sesuai: dibatalkan, tanpa mengubah
             self._click(point)
             self._ensure_front()
-            self._window.clear_field()
+            if dialogs.replace_by_select_all:
+                self._window.select_all()
+            else:
+                self._window.clear_field()
             self._window.type_number(str(leverage))
             self._sleep(self._settings.settle_delay_s / 2)
             # Konfirmasi HANYA bila kolom nilai terbukti kini bernilai leverage yang dituju.

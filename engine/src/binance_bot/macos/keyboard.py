@@ -28,6 +28,11 @@ def clear_field(run: Runner = run_command) -> None:
     _system_events(['\tkeystroke "a" using command down', f"\tkey code {_DELETE}"], run)
 
 
+def select_all(run: Runner = run_command) -> None:
+    """Pilih seluruh isi kolom yang sedang fokus (Cmd+A), tanpa menghapus."""
+    _system_events(['\tkeystroke "a" using command down'], run)
+
+
 def type_number(text: str, run: Runner = run_command) -> None:
     """Ketik angka seperti "184,6". Menolak apa pun selain angka dan satu tanda desimal."""
     if not NUMBER_PATTERN.fullmatch(text):

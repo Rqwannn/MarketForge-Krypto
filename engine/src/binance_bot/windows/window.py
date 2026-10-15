@@ -74,6 +74,9 @@ class WinWindowController:
     def clear_field(self) -> None:
         win32.select_all_and_delete()
 
+    def select_all(self) -> None:
+        win32.select_all()
+
     def type_number(self, text: str) -> None:
         if not NUMBER_PATTERN.fullmatch(text):
             raise ValueError(f"Hanya angka yang boleh diketik, bukan {text!r}")

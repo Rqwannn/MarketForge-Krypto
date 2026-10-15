@@ -53,6 +53,11 @@ LEVERAGE_CLICK = (0.944, 0.128)
 MODE_CLICK = (0.868, 0.128)
 LEVERAGE_CLOSE_X = 0.578
 MODE_CLOSE_X = 0.627
+VALUE_BOX_X = (0.46, 0.54)  # angka leverage di antara tombol - dan +
+FIELD_X_RANGE = (
+    0.44,
+    0.56,
+)  # kolom nilai hanya dicari di tengah dialog; sumbu grafik ada di x>0,62
 OCR_LEGEND_VARIANTS = (("max", 2), ("max", 3), ("max", 4), ("gray", 2))
 
 # Menu atas situs: "Futures" di x 0,21 y 0,04 (jangkar zoom); bila login, email tampil di kanan.

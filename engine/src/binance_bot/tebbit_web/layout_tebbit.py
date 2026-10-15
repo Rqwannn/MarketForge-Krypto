@@ -42,6 +42,8 @@ LEVERAGE_CLICK = (0.944, 0.128)
 MODE_CLICK = (0.868, 0.128)
 LEVERAGE_CLOSE_X = 0.578
 MODE_CLOSE_X = 0.627
+VALUE_BOX_X: tuple[float, float] | None = None
+FIELD_X_RANGE: tuple[float, float] | None = None
 
 # Halaman depan: daftar Gainers (tab "Gainers", sub-tab "Futures") di bawah halaman.
 LIST_SEARCH_AREA = (0.0, 0.17, 0.75, 0.99)
