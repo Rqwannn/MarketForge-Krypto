@@ -115,12 +115,14 @@
             <div class="chips" id="ranks" role="group" aria-label="Top gainers"></div>
             <small id="ranks-note"></small>
           </div>
-          <div class="field" data-modes="single leader">
-            <span class="label">Real Fund Trading</span>
-            <button type="button" class="secondary real-btn" id="real-toggle" aria-pressed="false">Mati (uji kertas)</button>
-            <small id="real-note">Tombol beli/jual di bursa tidak ditekan; posisi hanya dicatat.</small>
-          </div>
           <div class="go-wrap">
+            <div class="real-card" id="real-card" data-modes="single leader">
+              <div class="real-copy">
+                <strong>Real Fund Trading <span class="real-state" id="real-state">Mati</span></strong>
+                <small id="real-note">Sekarang uji kertas: posisi hanya dicatat, tanpa uang sungguhan.</small>
+              </div>
+              <button type="button" class="switch" id="real-toggle" role="switch" aria-checked="false" aria-label="Real Fund Trading"><i></i></button>
+            </div>
             <p class="error" id="run-error" role="alert"></p>
             <button type="button" class="primary big" id="toggle"></button>
             <small>Selama bot bekerja, jangan pakai mouse dan keyboard.</small>
@@ -301,23 +303,31 @@
   </div>
 </div>
 <div class="backdrop" id="real-dialog" hidden>
-  <div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="real-title">
-    <span class="tag danger">Uang sungguhan</span>
-    <h2 id="real-title">Nyalakan Real Fund Trading?</h2>
+  <div class="card dialog real-dialog" role="dialog" aria-modal="true" aria-labelledby="real-title">
+    <div class="real-head">
+      <span class="real-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></svg></span>
+      <div>
+        <span class="eyebrow-danger">Uang sungguhan</span>
+        <h2 id="real-title">Nyalakan Real Fund Trading?</h2>
+      </div>
+    </div>
     <p id="real-intro"></p>
-    <ul class="real-list">
-      <li>Bot menekan tombol <b>Jual/Short</b> untuk masuk dan tombol <b>Market</b> di tab Posisi untuk menjual, dengan uangmu di Binance.</li>
-      <li><b>Tanpa stop-loss</b> (SOP V3): bila harga terus naik, rugi bertambah sampai likuidasi.</li>
-      <li>Mode margin mengikuti Binance (biasanya <b>Cross</b>): seluruh saldo futures ikut menjadi jaminan.</li>
-      <li id="real-size"></li>
-      <li>Biarkan laptop menyala dan jangan pakai mouse selama bot bekerja.</li>
-    </ul>
-    <label class="check"><input type="checkbox" id="real-ack"> Saya paham risikonya dan memakai uang saya sendiri.</label>
-    <label class="label" for="real-word">Ketik SETUJU untuk melanjutkan</label>
-    <input class="text-input" id="real-word" autocomplete="off" placeholder="SETUJU">
-    <div class="dialog-actions">
+    <div class="real-amount">
+      <div><span>Nilai posisi</span><strong id="real-notional">100 USDT</strong></div>
+      <div><span>Margin</span><strong id="real-margin">50 USDT</strong></div>
+      <div><span>Leverage</span><strong>2x</strong></div>
+    </div>
+    <div class="risk-grid">
+      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/><path d="M13 5l7 7-7 7"/></svg><div><b>Order sungguhan</b><span>Bot menekan Jual/Short untuk masuk dan Market untuk menjual.</span></div></div>
+      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M5 10l7-7 7 7"/></svg><div><b>Tanpa stop-loss</b><span>Bila harga terus naik, rugi bertambah sampai likuidasi.</span></div></div>
+      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16"/></svg><div><b>Margin Cross</b><span>Mode Binance (biasanya Cross): seluruh saldo futures jadi jaminan.</span></div></div>
+      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg><div><b>Laptop dipakai bot</b><span>Biarkan menyala, jangan pakai mouse selama bot bekerja.</span></div></div>
+    </div>
+    <label class="check"><input type="checkbox" id="real-ack"><span>Saya paham risikonya dan memakai uang saya sendiri.</span></label>
+    <div class="confirm-row">
+      <input class="text-input" id="real-word" autocomplete="off" placeholder="Ketik SETUJU" aria-label="Ketik SETUJU untuk melanjutkan">
       <button class="secondary" id="real-cancel">Batal</button>
-      <button class="primary danger" id="real-confirm" disabled>Nyalakan uang sungguhan</button>
+      <button class="primary danger" id="real-confirm" disabled>Nyalakan</button>
     </div>
   </div>
 </div>

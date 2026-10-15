@@ -524,14 +524,47 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 @media (prefers-reduced-motion: reduce) { .tag.reading { animation: none; } }
 
 /* Real Fund Trading: semua penanda uang sungguhan berwarna merah. */
-.tag.danger { border-color: rgba(240, 128, 128, 0.5); background: rgba(240, 128, 128, 0.12); color: var(--red); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
+.tag.danger { border-color: rgba(255, 125, 130, 0.5); background: var(--red-soft); color: var(--red); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
 .tag.danger::before { display: none; }
-.primary.danger { background: var(--red); color: #fff; }
-.primary.danger:disabled { opacity: 0.45; }
-.real-btn.on { border-color: var(--red); color: var(--red); font-weight: 600; }
-.real-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
-.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
-.text-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card-2); color: inherit; font: inherit; }
+.primary.danger { background: var(--red); color: #1a0b0c; box-shadow: none; }
+.primary.danger:disabled { opacity: 0.4; }
+
+.real-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); transition: border-color 0.15s, background 0.15s; }
+.real-card.on { border-color: rgba(255, 125, 130, 0.55); background: var(--red-soft); }
+.real-copy { display: grid; gap: 2px; min-width: 0; text-align: left; }
+.real-copy strong { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.real-copy small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.real-state { padding: 1px 7px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.real-card.on .real-state { background: var(--red); color: #1a0b0c; }
+.switch { position: relative; flex: none; width: 44px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: var(--line-2); cursor: pointer; transition: background 0.15s; }
+.switch i { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
+.switch[aria-checked="true"] { background: var(--red); }
+.switch[aria-checked="true"] i { transform: translateX(20px); background: #fff; }
+.switch:disabled { opacity: 0.45; cursor: not-allowed; }
+.switch:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+.real-dialog { width: min(520px, 100%); gap: 14px; border-color: rgba(255, 125, 130, 0.35); }
+.real-head { display: flex; align-items: center; gap: 14px; }
+.real-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--red-soft); color: var(--red); }
+.real-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.eyebrow-danger { color: var(--red); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.real-head h2 { margin: 2px 0 0; }
+.real-amount { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--line); }
+.real-amount div { display: grid; gap: 2px; padding: 10px 12px; background: var(--card-2); }
+.real-amount span { color: var(--muted); font-size: 11.5px; }
+.real-amount strong { font-family: var(--mono); font-size: 16px; }
+.risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.risk { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.risk svg { flex: none; width: 18px; height: 18px; margin-top: 1px; fill: none; stroke: var(--red); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.risk b { display: block; font-size: 12.5px; }
+.risk span { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+.check input { margin-top: 2px; accent-color: var(--red); }
+.confirm-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.text-input { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card-2); color: inherit; font: inherit; letter-spacing: 0.04em; }
+.text-input:focus { outline: none; border-color: var(--red); }
+@media (max-width: 560px) { .risk-grid, .real-amount { grid-template-columns: 1fr; } .confirm-row { grid-template-columns: 1fr 1fr; } .confirm-row .text-input { grid-column: 1 / -1; } }
+
 .paper.real { border-color: var(--red); }
 .paper.real p { color: var(--red); }
-.badge-real { margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(240, 128, 128, 0.15); color: var(--red); font-size: 11px; }
+.badge-real { margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: var(--red-soft); color: var(--red); font-size: 11px; }

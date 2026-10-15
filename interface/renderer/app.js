@@ -331,14 +331,14 @@ function renderReal() {
   const binance = (platform?.id || 'binance') === 'binance';
   if (!binance) realOn = false;
   button.disabled = state !== 'stopped' || !binance;
-  button.classList.toggle('on', realOn);
-  button.setAttribute('aria-pressed', String(realOn));
-  button.textContent = realOn ? 'Menyala: uang sungguhan' : 'Mati (uji kertas)';
+  button.setAttribute('aria-checked', String(realOn));
+  $('real-card').classList.toggle('on', realOn);
+  $('real-state').textContent = realOn ? 'Aktif' : 'Mati';
   $('real-note').textContent = !binance
-    ? 'Real Fund Trading untuk Tebbit menyusul.'
+    ? 'Belum tersedia untuk Tebbit.'
     : realOn
-      ? 'Bot menekan tombol Jual/Short dan Market (tutup posisi) di Binance. Wajib pilih Ulangi.'
-      : 'Tombol beli/jual di bursa tidak ditekan; posisi hanya dicatat.';
+      ? 'Uang sungguhan: bot membeli dan menjual sendiri di Binance.'
+      : 'Sekarang uji kertas: posisi hanya dicatat, tanpa uang sungguhan.';
   const real = state !== 'stopped' ? runningReal : realOn;
   $('paper').classList.toggle('real', real);
   $('paper-tag').className = real ? 'tag danger' : 'tag outline';
@@ -356,12 +356,12 @@ function askReal({ follower = false, leaderName = '', modal = '' } = {}) {
   const confirm = $('real-confirm');
   $('real-title').textContent = follower ? `${leaderName} memakai uang sungguhan` : 'Nyalakan Real Fund Trading?';
   $('real-intro').textContent = follower
-    ? 'Pemimpin memulai putaran Real Fund Trading. Laptop ini ikut memakai uang sungguhan hanya bila kamu setuju; bila ditolak, laptop ini mengikuti sebagai uji kertas.'
-    : 'Mulai putaran berikutnya, bot tidak lagi uji kertas.';
+    ? 'Laptop ini ikut memakai uang sungguhan hanya bila kamu setuju; bila ditolak, laptop ini mengikuti sebagai uji kertas. Tiap posisi:'
+    : 'Mulai putaran berikutnya, bot memakai uangmu di Binance. Tiap posisi:';
   const capital = Number(String(modal || form.modal || '').replace(',', '.'));
-  $('real-size').textContent = capital > 0
-    ? `Tiap posisi: margin ${(capital / 2).toLocaleString('id-ID')} USDT × 2x = ${capital.toLocaleString('id-ID')} USDT, tanpa batas jumlah posisi.`
-    : 'Tiap posisi: margin 50% modal × 2x, tanpa batas jumlah posisi.';
+  const usdt = (v) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })} USDT`;
+  $('real-notional').textContent = capital > 0 ? usdt(capital) : '–';
+  $('real-margin').textContent = capital > 0 ? usdt(capital / 2) : '50% modal';
   ack.checked = false;
   word.value = '';
   confirm.disabled = true;
