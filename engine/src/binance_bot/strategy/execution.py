@@ -30,12 +30,12 @@ class OrderPlan:
     stop_price: float
     leverage: int
     side: str = "SHORT"
-    margin_mode: str = "ISOLATED"  # usulan SOP V2; bila tetap Cross, stop-loss wajib
+    margin_mode: str = "?"  # mode margin yang terbaca di bursa (bawaan bursa, Cross/Isolated)
 
 
 # Kunci utama order sungguhan. Selama False, tidak ada jalur kode yang menekan Jual/Short:
 # ScreenOrderGate dan navigator.press_short menolak sebelum mencari atau mengklik apa pun.
-# Mengubahnya butuh keputusan sadar (fase uji 50 trade lulus, leverage 2x, Isolated).
+# Mengubahnya butuh keputusan sadar (fase uji 50 trade lulus, leverage 2x).
 LIVE_ORDERS_ENABLED = False
 
 

@@ -107,7 +107,6 @@ function plain(text) {
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
     [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
-    [/Isolated/i, `Mode margin di ${site} belum Isolated (ubah sebelum memakai uang sungguhan)`],
     [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti untuk hari ini'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],

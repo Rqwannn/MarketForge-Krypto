@@ -32,18 +32,18 @@ class MarginSettings:
     leverage: int | None
 
     def problems(self, leverage: int) -> list[str]:
-        """Perbedaan dengan SOP V2: leverage wajib sesuai, isolated disarankan (usulan)."""
-        issues = []
-        if self.leverage != leverage:
-            shown = "?" if self.leverage is None else self.leverage
-            issues.append(f"leverage {shown}x, SOP {leverage}x")
-        if self.isolated is not True:
-            issues.append("bukan Isolated (usulan SOP; bila tetap Cross, stop-loss wajib)")
-        return issues
+        """Perbedaan dengan SOP: hanya leverage. Mode margin (Cross/Isolated) bawaan bursa."""
+        if self.leverage == leverage:
+            return []
+        shown = "?" if self.leverage is None else self.leverage
+        return [f"leverage {shown}x, SOP {leverage}x"]
+
+    @property
+    def mode(self) -> str:
+        return {True: "Isolated", False: "Cross", None: "?"}[self.isolated]
 
     def describe(self) -> str:
-        mode = {True: "Isolated", False: "Cross", None: "?"}[self.isolated]
-        return f"{mode} {self.leverage if self.leverage is not None else '?'}x"
+        return f"{self.mode} {self.leverage if self.leverage is not None else '?'}x"
 
 
 def parse_futures_symbol(texts: Sequence[str]) -> str:

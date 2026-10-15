@@ -342,6 +342,7 @@ class SopTrader:
             target_price=price * (1 - params.target_pct / 100),
             stop_price=price * (1 + params.stop_pct / 100),
             leverage=params.leverage,
+            margin_mode=margin.mode,
         )
         self._gate.submit(plan)
 

@@ -57,8 +57,8 @@ mengetik sungguhan.
 6. Saringan biaya: pair USDT, funding, spread (dan kenaikan minimal bila `MIN_NAIK` diisi).
 7. Klik "Grafik" dan "15 mnt" (dicari dengan OCR), tunggu grafik termuat, screenshot, lalu
    **Haiku menghitung berapa kali MA7 di bawah MA25** → JANGAN / TUNGGU / OK.
-8. Bila OK: ukuran posisi (margin × leverage), baca mode margin/leverage (peringatan bila bukan
-   2x / Isolated), isi kolom **Jumlah**, lalu **pintu order dry run** mencatat rencana short.
+8. Bila OK: ukuran posisi (margin × leverage), baca leverage (peringatan bila bukan
+   2x; mode margin memakai bawaan bursa), isi kolom **Jumlah**, lalu **pintu order dry run** mencatat rencana short.
 9. Mencatat ke jurnal; berhenti bila 2 slot sudah terisi.
 
 Contoh jawaban Haiku dari uji nyata (12 Okt 2026, tanpa API):

@@ -95,8 +95,8 @@ Tahap modal kecil di PDF memakai margin 25%: `MARGIN=25`.
 - Navigator menolak klik ke **zona tombol order** (Beli/Long, Jual/Short, widget order di atas
   grafik). Modul keyboard hanya bisa mengetik angka, **tanpa Enter**; angka di kolom dibaca
   ulang dengan OCR.
-- Mode margin dan leverage dibaca dari layar. Bila bukan **2x**, atau bukan Isolated (usulan),
-  engine memberi peringatan. Wajib disesuaikan sebelum order sungguhan.
+- Leverage dibaca dari layar. Bila bukan **2x**, engine memberi peringatan; wajib disesuaikan
+  sebelum order sungguhan. Mode margin (Cross/Isolated) memakai bawaan bursa (keputusan 15 Okt).
 
 ## Temuan dari uji nyata
 
