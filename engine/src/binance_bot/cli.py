@@ -418,7 +418,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     # Variabel lingkungan menang atas isi `.env`.
-    settings = Settings.from_env({**read_dotenv(Path(".env")), **os.environ})
+    dotenv = read_dotenv(Path(".env"))
+    _export_path_settings(dotenv)
+    settings = Settings.from_env({**dotenv, **os.environ})
     setup_logging(
         args.log_level.upper() if args.log_level else settings.log_level,
         settings.log_dir,
@@ -442,6 +444,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         _run_cleanups()
     return 0
+
+
+# Lokasi aplikasi dibaca lapisan sistem langsung dari variabel lingkungan OS (bukan dari Settings),
+# jadi nilai di `.env` perlu diteruskan ke sana; variabel OS yang sudah ada tetap menang.
+_PATH_KEYS = ("BOT_APP_PATH", "BOT_CHROME_PATH")
+
+
+def _export_path_settings(dotenv: dict[str, str]) -> None:
+    for key in _PATH_KEYS:
+        if dotenv.get(key):
+            os.environ.setdefault(key, dotenv[key])
 
 
 def _enable_crash_dump(log_dir: Path) -> None:

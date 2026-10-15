@@ -140,3 +140,17 @@ def test_margin_mode_is_selected_separately_from_the_leverage() -> None:
     assert leverage_only.auto_margin_for("tebbit") and not leverage_only.auto_mode_for("tebbit")
     assert Settings(auto_mode="tebbit").auto_mode_for("tebbit")
     assert Settings.from_env({"BOT_ATUR_MODE_MARGIN": "semua"}).auto_mode_for("binance")
+
+
+def test_app_paths_in_dotenv_reach_the_os_layer_but_the_os_environment_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("BOT_APP_PATH", raising=False)
+    monkeypatch.setenv("BOT_CHROME_PATH", r"C:\dari\os\chrome.exe")
+    cli._export_path_settings(
+        {"BOT_APP_PATH": r"D:\Binance\Binance.exe", "BOT_CHROME_PATH": r"C:\dari\env\chrome.exe"}
+    )
+    import os
+
+    assert os.environ["BOT_APP_PATH"] == r"D:\Binance\Binance.exe"
+    assert os.environ["BOT_CHROME_PATH"] == r"C:\dari\os\chrome.exe"  # variabel OS menang
