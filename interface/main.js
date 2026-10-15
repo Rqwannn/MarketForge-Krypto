@@ -355,6 +355,14 @@ handle('positions:list', async () => {
   if (Array.isArray(result.positions)) ownPositions = result.positions;
   return result;
 });
+handle('positions:check', async () => {
+  // Tebbit: bot membuka Chrome sebentar untuk membaca harga tiap posisi (OCR), lalu jual otomatis
+  // bila sudah target. Tidak bersamaan dengan bot yang sedang memakai layar.
+  if (proc.running) throw new Error('Bot sedang berjalan dan sudah mengecek posisi tiap 5 menit.');
+  const result = await engine.runJson(onExchange(['posisi', '--cek']), { timeoutMs: 300000 });
+  if (Array.isArray(result.positions)) ownPositions = result.positions;
+  return result;
+});
 handle('positions:close', async (symbol) => {
   // Hanya mode Sendiri; posisi pengikut hanya ditutup oleh pemimpinnya.
   if (team?.membership || uiRole !== 'single') {

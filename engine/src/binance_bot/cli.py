@@ -224,6 +224,11 @@ def build_parser() -> argparse.ArgumentParser:
     positions.add_argument(
         "--tutup", help="Tutup (uji kertas) posisi pair ini, atau 'semua'", metavar="PAIR"
     )
+    positions.add_argument(
+        "--cek",
+        action="store_true",
+        help="Tebbit: baca harga posisi dari layar sekarang dan jual otomatis bila sudah target",
+    )
 
     sub.add_parser(
         "cek", help="Cek kesiapan laptop (izin, Binance, jendela, API, .env) dalam JSON."
@@ -334,7 +339,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     if tebbit:
         # Membuka halaman koin lain untuk membaca harganya hanya saat bot bekerja atau Sell.
         browse = args.command in ("single", "leader", "follower") or (
-            args.command == "posisi" and args.tutup is not None
+            args.command == "posisi" and (args.tutup is not None or args.cek)
         )
         navigator, market = build_tebbit(settings, system, browse=browse)
         if args.command != "uji-isi":  # uji-isi: jendela dibiarkan agar angkanya bisa dilihat
@@ -369,7 +374,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
-        return PositionsWorkflow(params_from(args), journal, market, close=target)
+        return PositionsWorkflow(params_from(args), journal, market, close=target, check=args.cek)
 
     if not tebbit:
         navigator = BinanceNavigator(

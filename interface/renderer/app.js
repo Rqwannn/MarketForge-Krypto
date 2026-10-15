@@ -687,6 +687,7 @@ function donut(s) {
 
 async function loadJournal() {
   $('journal-refresh').disabled = true;
+  $('journal-check').hidden = platform?.id !== 'tebbit';
   const notice = $('journal-notice');
   try {
     const report = await window.bot.summary();
@@ -694,7 +695,7 @@ async function loadJournal() {
     notice.hidden = !report.warning;
     notice.className = 'notice';
     notice.textContent = platform?.id === 'tebbit'
-      ? 'Hasil posisi uji Tebbit belum bisa dinilai otomatis (tidak ada data candle); angka dari catatan terakhir.'
+      ? 'Posisi Tebbit dinilai dari harga di layar: otomatis tiap 5 menit saat bot berjalan, atau tekan Cek harga Tebbit.'
       : 'Data harga Binance belum bisa diambil di jaringan ini; angka di bawah dari catatan terakhir.';
 
     const enough = s.closed >= s.required_trades;
@@ -794,6 +795,21 @@ $('history-clear').addEventListener('click', async () => {
   await editHistory(() => window.bot.history.clear());
 });
 $('journal-refresh').addEventListener('click', loadJournal);
+$('journal-check').addEventListener('click', async () => {
+  const button = $('journal-check');
+  button.disabled = true;
+  button.textContent = 'Membaca harga…';
+  try {
+    await window.bot.positions.check();
+  } catch (err) {
+    $('journal-notice').hidden = false;
+    $('journal-notice').textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Cek harga Tebbit';
+  }
+  await loadJournal();
+});
 
 // --------------------------------------------------------------------------- posisi (Sell)
 

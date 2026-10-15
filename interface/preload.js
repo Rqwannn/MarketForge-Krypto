@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('bot', {
   reportActivity: (update) => call('presence:activity', update),
   positions: {
     list: () => call('positions:list'),
+    check: () => call('positions:check'),
     close: (symbol) => call('positions:close', symbol),
     onChanged: (callback) => listen('positions:changed', callback),
   },

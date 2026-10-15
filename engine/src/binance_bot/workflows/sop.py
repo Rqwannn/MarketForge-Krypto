@@ -102,6 +102,24 @@ def refresh_journal(
     return record_changes(journal, entries, evaluate_open_trades(entries, market, now_s, fee_pct))
 
 
+def refresh_by_price(
+    journal: Journal, market: MarketData, fee_pct: float, now_s: float
+) -> list[JournalEntry]:
+    """Jual otomatis untuk bursa tanpa candle (Tebbit): harga ask terkini dari layar (OCR)."""
+    entries = journal.load()
+    updated = []
+    for entry in entries:
+        if entry.status == "open" and entry.entry_price and entry.target_price:
+            try:
+                ask = market.quote(entry.symbol).ask
+            except BotError as exc:
+                logger.warning("Harga %s belum terbaca untuk jual otomatis: %s", entry.symbol, exc)
+            else:
+                entry = evaluate_by_price(entry, ask, now_s, fee_pct)
+        updated.append(entry)
+    return record_changes(journal, entries, updated)
+
+
 def record_changes(
     journal: Journal, before: list[JournalEntry], after: list[JournalEntry]
 ) -> list[JournalEntry]:
@@ -178,21 +196,9 @@ class SopTrader:
             return self._journal.load()
 
     def _refresh_by_price(self) -> list[JournalEntry]:
-        entries = self._journal.load()
-        now = self._wall_clock()
-        updated = []
-        for entry in entries:
-            if entry.status == "open" and entry.entry_price and entry.target_price:
-                try:
-                    ask = self._market.quote(entry.symbol).ask
-                except BotError as exc:
-                    logger.warning(
-                        "Harga %s belum terbaca untuk jual otomatis: %s", entry.symbol, exc
-                    )
-                else:
-                    entry = evaluate_by_price(entry, ask, now, self.params.fee_pct)
-            updated.append(entry)
-        return record_changes(self._journal, entries, updated)
+        return refresh_by_price(
+            self._journal, self._market, self.params.fee_pct, self._wall_clock()
+        )
 
     def slot_blocker(self) -> str | None:
         """Langkah 4 SOP: koin berikutnya hanya bila posisi yang terbuka tidak sedang rugi.

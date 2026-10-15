@@ -101,6 +101,7 @@ main {
 }
 .page { display: grid; gap: 18px; max-width: 1280px; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 4px; }
+.page-head .actions { display: flex; gap: 8px; }
 .crumb { margin: 0 0 4px; color: var(--gold); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
 h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .lede { margin: 4px 0 0; color: var(--muted); }

@@ -15,7 +15,7 @@ from typing import Any
 from binance_bot.exceptions import MarketDataError, NoHistoryError
 from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, close_short_now
-from binance_bot.workflows.sop import refresh_journal
+from binance_bot.workflows.sop import refresh_by_price, refresh_journal
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class PositionsWorkflow:
         market: MarketData,
         *,
         close: str | None = None,  # None = hanya daftar, "semua", atau nama pair
+        check: bool = False,  # Tebbit: baca harga dari layar sekarang (jual otomatis bila target)
         output: Callable[[str], None] = print,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
@@ -39,6 +40,7 @@ class PositionsWorkflow:
         self._journal = journal
         self._market = market
         self._close = close
+        self._check = check
         self._output = output
         self._wall_clock = wall_clock
 
@@ -47,8 +49,13 @@ class PositionsWorkflow:
         warning = ""
         try:
             entries = refresh_journal(self._journal, self._market, self._params.fee_pct, now)
-        except NoHistoryError:
-            entries = self._journal.load()  # tanpa riwayat harga: tutup di harga terkini saja
+        except (
+            NoHistoryError
+        ):  # tanpa riwayat harga (Tebbit): harga terkini dari layar bila diminta
+            if self._check:
+                entries = refresh_by_price(self._journal, self._market, self._params.fee_pct, now)
+            else:
+                entries = self._journal.load()
         except MarketDataError as exc:
             warning = f"Harga Binance tidak bisa diambil: {exc}"
             entries = self._journal.load()
