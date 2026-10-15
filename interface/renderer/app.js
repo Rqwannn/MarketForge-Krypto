@@ -113,6 +113,7 @@ function plain(text) {
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
     [/peringkat bergeser/, 'Peringkat bergeser saat membuka koin, tidak ada tindakan'],
+    [/sudah tidak di daftar|di luar Top 5/, 'Koin keluar dari Top 5 saat akan dibuka, tidak dinilai'],
     [/Hub belum punya|menunggu hasil/i, 'Hasil dari laptop pemimpin belum tersedia'],
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],

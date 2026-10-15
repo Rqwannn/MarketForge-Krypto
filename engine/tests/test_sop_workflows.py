@@ -879,3 +879,26 @@ def test_dry_run_gate_finds_the_short_button_without_pressing_it(
     assert "ditemukan di (0.900, 0.510); TIDAK ditekan" in text
     assert "tidak ditemukan (uji kertas tetap jalan)" in text
     assert "[DRY RUN] Tombol Jual/Short TIDAK ditekan" in text
+
+
+def test_a_rank_that_fails_to_open_still_appears_as_a_row_in_the_app(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    nav = FakeNavigator(
+        {1: ScreenReadError("Yang terbuka DUSKUSDT, bukan RATSUSDT (peringkat bergeser)")},
+        rows=[GainerRow(1, "RATSUSDT", 9.5)],
+    )
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    with caplog.at_level("INFO"):
+        SingleWorkflow(nav, trader, FakePatternAnalyzer(OK), ranks=[1]).run()  # type: ignore[arg-type]
+    rows = [r.event for r in caplog.records if getattr(r, "event", {}).get("type") == "coin"]  # type: ignore[attr-defined]
+    assert rows == [
+        {
+            "type": "coin",
+            "rank": 1,
+            "symbol": "RATSUSDT",
+            "status": "skipped",
+            "verdict": None,
+            "reason": "Yang terbuka DUSKUSDT, bukan RATSUSDT (peringkat bergeser)",
+        }
+    ]

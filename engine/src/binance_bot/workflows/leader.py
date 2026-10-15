@@ -133,7 +133,20 @@ class LeaderWorkflow:
                         continue
                     ai_calls += 1
             except BotError as exc:
-                logger.error("Rank #%d dilewati: %s", rank, exc)
+                # Tetap tampil sebagai baris di aplikasi (bukan hanya log) dengan alasannya.
+                logger.warning(
+                    "Rank #%d dilewati: %s",
+                    rank,
+                    exc,
+                    extra=event(
+                        "coin",
+                        rank=rank,
+                        symbol=row.symbol if row is not None else f"Top {rank}",
+                        status="skipped",
+                        verdict=None,
+                        reason=str(exc),
+                    ),
+                )
                 continue
             self._store.put(record)
             records.append(record)

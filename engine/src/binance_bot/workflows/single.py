@@ -103,7 +103,20 @@ class SingleWorkflow:
                     symbol = self._nav.open_gainer(rank)
                 on_list = False
             except BotError as exc:
-                logger.error("Rank #%d dilewati: %s", rank, exc)
+                # Tetap tampil sebagai baris di aplikasi (bukan hanya log) dengan alasannya.
+                logger.warning(
+                    "Rank #%d dilewati: %s",
+                    rank,
+                    exc,
+                    extra=event(
+                        "coin",
+                        rank=rank,
+                        symbol=row.symbol if row is not None else f"Top {rank}",
+                        status="skipped",
+                        verdict=None,
+                        reason=str(exc),
+                    ),
+                )
                 continue
             if symbol in seen:
                 # Peringkat bergeser sehingga pair yang sama terbuka lagi: jangan nilai dua kali.
