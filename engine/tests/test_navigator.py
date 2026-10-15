@@ -620,3 +620,13 @@ def test_typing_is_refused_if_the_unit_is_still_not_usdt_after_the_menu(
     with pytest.raises(ScreenReadError, match="masih bukan USDT"):
         nav.fill_quantity("100")
     assert not any(kind in ("type", "clear") for kind, _ in screen.events)
+
+
+def test_open_symbol_skips_a_coin_that_slid_out_of_the_top_five() -> None:
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav = make_nav()
+    rows = [GainerRow(r, f"C{r}USDT", 50 - r) for r in range(1, 6)] + [GainerRow(6, "AKEUSDT", 8)]
+    nav._list_rows, nav._on_list = rows, True
+    with pytest.raises(ScreenReadError, match="di luar Top 5"):
+        nav.open_symbol("AKEUSDT")  # klik baris 6 tidak didukung layout: dilewati, bukan crash

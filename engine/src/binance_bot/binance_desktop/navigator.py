@@ -311,6 +311,8 @@ class BinanceNavigator:
         rank = next((row.rank for row in rows if row.symbol == symbol), None)
         if rank is None:
             raise ScreenReadError(f"{symbol} sudah tidak di daftar top gainers")
+        if rank > layout.MAX_RANK:
+            raise ScreenReadError(f"{symbol} sudah bergeser ke peringkat {rank}, di luar Top 5")
         opened = self.open_gainer(rank)
         if opened != symbol:
             raise ScreenReadError(f"Yang terbuka {opened}, bukan {symbol} (peringkat bergeser)")
