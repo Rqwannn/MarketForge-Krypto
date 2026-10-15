@@ -497,6 +497,52 @@ def test_follower_gives_up_when_leader_never_judges_its_rank(tmp_path: Path) -> 
     assert nav.calls == [] and journal.load() == []
 
 
+def noted(caplog: pytest.LogCaptureFixture) -> list[tuple[int, str, str]]:
+    """(rank, symbol, alasan) tiap Top yang ditampilkan sebagai tidak diproses."""
+    return [
+        (r.event["rank"], r.event["symbol"], r.event["reason"])
+        for r in caplog.records
+        if hasattr(r, "event") and r.getMessage().find("tidak diproses") >= 0
+    ]
+
+
+def test_tops_left_unprocessed_because_slots_are_full_still_show_up_with_the_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    results = {r: AnalysisRecord(f"C{r}USDT", r, 1000.0, reading(OK)) for r in (1, 2, 3, 4)}
+    client = FakeClient(results, plan_done=True)
+    symbols = {r: f"C{r}USDT" for r in (1, 2, 3, 4)}
+    follower, _nav, journal = make_follower(tmp_path, client, symbols, ranks=None)
+    follower.run()
+    assert [(r, sym) for r, sym, _ in noted(caplog)] == [(3, "-"), (4, "-")]
+    assert all("sudah 2 posisi terbuka" in why for _, _, why in noted(caplog))
+    assert client.ranks == [1, 2]  # tetap tidak bertanya ke hub untuk Top yang slotnya penuh
+    assert len(journal.load()) == 2  # baris tambahan hanya di tampilan, bukan di jurnal
+
+
+def test_an_assigned_top_the_leader_does_not_play_is_shown_instead_of_vanishing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    client = FakeClient({1: AnalysisRecord("WUSDT", 1, 1000.0, reading(OK))}, plan_done=True)
+    follower, _nav, journal = make_follower(tmp_path, client, {1: "WUSDT"}, ranks=[2])
+    follower.run()
+    assert noted(caplog) == [(2, "-", "Leader tidak memainkan Top 2 di putaran ini")]
+    assert journal.load() == []
+
+
+def test_a_top_the_leader_never_judged_is_shown_with_the_hub_message(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    follower, _nav, journal = make_follower(tmp_path, FakeClient(None), {2: "CFXUSDT"}, wait_s=30)
+    follower.run()
+    assert [(r, sym) for r, sym, _ in noted(caplog)] == [(2, "-")]
+    assert "belum menilai Top 2" in noted(caplog)[0][2]
+    assert journal.load() == []
+
+
 # --------------------------------------------------------------------------- jurnal
 
 

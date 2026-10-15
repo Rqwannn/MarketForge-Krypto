@@ -5,7 +5,7 @@ import faulthandler
 import logging
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -265,6 +265,19 @@ TEBBIT_COMMANDS = (
 )
 
 
+_cleanups: list[
+    Callable[[], None]
+] = []  # dijalankan saat proses berakhir (mis. tutup jendela Chrome)
+
+
+def _run_cleanups() -> None:
+    while _cleanups:
+        try:
+            _cleanups.pop()()
+        except Exception:  # pembersihan tidak boleh menutupi hasil atau galat aslinya
+            logger.debug("Pembersihan gagal", exc_info=True)
+
+
 def build_tebbit(
     settings: Settings, system: System, *, browse: bool = False
 ) -> tuple[TradingNavigator, MarketData]:
@@ -273,7 +286,9 @@ def build_tebbit(
     if sys.platform == "win32":
         from binance_bot.tebbit_web import chrome_windows
 
-        chrome = win_chrome = chrome_windows.WinChromeController()
+        chrome = win_chrome = chrome_windows.WinChromeController(
+            state_file=settings.log_dir / "tebbit_window.id"
+        )
         window = chrome_windows.WinChromeWindowController(win_chrome)
     else:
         chrome = mac_chrome = ChromeController()
@@ -282,6 +297,13 @@ def build_tebbit(
         settings, system.apps, window, system.reader, chrome, screens=system.screens
     )
     return navigator, ScreenMarket(navigator, browse=browse)
+
+
+def _close_chrome_at_exit(navigator: TradingNavigator) -> None:
+    """Jendela Chrome milik bot ditutup saat proses berakhir, supaya tidak menumpuk."""
+    close = getattr(navigator, "close", None)
+    if callable(close):
+        _cleanups.append(close)
 
 
 def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
@@ -307,6 +329,8 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             args.command == "posisi" and args.tutup is not None
         )
         navigator, market = build_tebbit(settings, system, browse=browse)
+        if args.command != "uji-isi":  # uji-isi: jendela dibiarkan agar angkanya bisa dilihat
+            _close_chrome_at_exit(navigator)
     else:
         market = FuturesMarket()
     if args.command == "cek":
@@ -415,6 +439,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         # penyebabnya bisa dibaca admin, bukan hanya pesan umum di aplikasi.
         logger.exception("Galat tak terduga: %s: %s", type(exc).__name__, exc)
         return 1
+    finally:
+        _run_cleanups()
     return 0
 
 

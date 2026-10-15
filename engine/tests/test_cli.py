@@ -5,6 +5,7 @@ import pytest
 
 from binance_bot import cli
 from binance_bot.cli import build_parser, params_from, parse_ranks
+from binance_bot.exceptions import BotError
 
 
 def test_parse_ranks_keeps_order_and_drops_duplicates() -> None:
@@ -92,3 +93,28 @@ def test_unexpected_error_is_logged_with_traceback(
     record = next(r for r in caplog.records if "Galat tak terduga" in r.getMessage())
     assert "RuntimeError: OCR rusak" in record.getMessage()
     assert record.exc_info is not None  # traceback ikut tercatat
+
+
+def test_cleanups_run_when_the_workflow_ends_or_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    called: list[str] = []
+
+    class Workflow:
+        name = "x"
+
+        def __init__(self, fail: bool) -> None:
+            self.fail = fail
+
+        def run(self) -> None:
+            cli._cleanups.append(lambda: called.append("tutup"))
+            if self.fail:
+                raise BotError("gagal")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "setup_logging", lambda *a, **k: None)
+    for fail, code in ((False, 0), (True, 1)):
+        called.clear()
+        monkeypatch.setattr(cli, "build_workflow", lambda args, settings, f=fail: Workflow(f))
+        assert cli.main(["cek"]) == code
+        assert called == ["tutup"] and cli._cleanups == []

@@ -586,3 +586,13 @@ def test_typing_is_refused_if_the_unit_is_still_not_usdt_after_the_menu(
     with pytest.raises(ScreenReadError, match="masih bukan USDT"):
         nav.fill_quantity("100")
     assert not any(kind in ("type", "clear") for kind, _ in screen.events)
+
+
+def test_market_menu_is_retried_when_ocr_misses_it_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    area = (0.0, 0.05, 0.14, 0.60)
+    monkeypatch.setattr(layout, "SIDEBAR_AREA", area)
+    screen = FakeScreen(texts={area: [[], [TextLine("Pasar", 0.4, 0.3)]]})  # percobaan 1 kosong
+    nav = make_nav(screen)
+    nav.prepare()
+    found = (area[0] + 0.4 * (area[2] - area[0]), area[1] + 0.3 * (area[3] - area[1]))
+    assert nav._market_menu_position() == pytest.approx(found)

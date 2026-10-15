@@ -92,6 +92,9 @@ function plain(text) {
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
     [/sudah (\d+) posisi terbuka/, (m) => `Sudah ${m[1]} posisi berjalan, batas tercapai`],
     [/sedang rugi/, 'Posisi pertama sedang rugi, koin berikutnya ditunda'],
+    [/Leader tidak (memainkan|menilai) Top/, 'Pemimpin tidak menilai Top ini di putaran ini, tidak ada tindakan'],
+    [/belum memulai putaran/, 'Pemimpin belum memulai putaran baru, tidak ada tindakan'],
+    [/sudah diikuti di putaran ini/, 'Koin ini sudah diikuti dari Top lain di putaran ini'],
     [/sudah ada posisi uji/, 'Koin ini sudah punya posisi yang berjalan'],
     [/funding (-?[\d.]+)%/i, (m) => `Biaya funding terlalu mahal (${m[1].replace('.', ',')}%): short membayar`],
     [/funding/i, 'Biaya funding sedang terlalu mahal'],
@@ -526,12 +529,13 @@ window.bot.onLog((entry) => {
   }
 });
 
-window.bot.onExit(({ code, signal }) => {
-  const stopped = code === 130 || Boolean(signal);
-  if (code === 0) setState('stopped', 'Selesai', 'Putaran selesai. Rekap ada di Hasil uji.');
+window.bot.onExit(({ code, signal, stopped: requested }) => {
+  // Diminta pengguna (Hentikan): di Windows keluar dengan kode 1, bukan 130.
+  const stopped = Boolean(requested) || code === 130 || Boolean(signal);
+  if (code === 0 && !requested) setState('stopped', 'Selesai', 'Putaran selesai. Rekap ada di Hasil uji.');
   else if (stopped) setState('stopped', 'Dihentikan', 'Bot berhenti atas permintaan.');
   else setState('stopped', 'Berhenti karena kendala', 'Buka Cek laptop lalu coba lagi.');
-  const text = code === 0 ? 'Bot selesai' : stopped ? 'Bot dihentikan' : 'Bot berhenti karena kendala';
+  const text = code === 0 && !requested ? 'Bot selesai' : stopped ? 'Bot dihentikan' : 'Bot berhenti karena kendala';
   addFeed({ text, css: code === 0 || stopped ? '' : 'bad' }, Date.now() / 1000);
   window.bot.reportActivity({ text }).catch(() => {});
   flow.nextAt = 0;

@@ -234,6 +234,7 @@ class EngineProcess extends EventEmitter {
     this.cwd = cwd;
     this.env = env;
     this.child = null;
+    this.stopRequested = false; // True bila berhenti karena diminta (Hentikan), bukan karena galat
   }
 
   get running() {
@@ -243,6 +244,7 @@ class EngineProcess extends EventEmitter {
   start(args) {
     if (this.child) throw new InputError('Bot sudah berjalan. Hentikan dulu.');
     assertInstalled(this.bot);
+    this.stopRequested = false;
     const child = spawn(this.bot, [...this.botArgs, ...args], {
       cwd: this.cwd,
       env: this.env(),
@@ -256,7 +258,8 @@ class EngineProcess extends EventEmitter {
     child.on('exit', (code, signal) => {
       clearTimeout(this.killTimer);
       this.child = null;
-      this.emit('exit', { code, signal });
+      // Windows menghentikan dengan taskkill (kode 1), jadi 'diminta berhenti' dicatat di sini.
+      this.emit('exit', { code, signal, stopped: this.stopRequested });
     });
   }
 
@@ -267,6 +270,7 @@ class EngineProcess extends EventEmitter {
   stop() {
     const child = this.child;
     if (!child) return;
+    this.stopRequested = true;
     if (IS_WINDOWS) {
       execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
       return;

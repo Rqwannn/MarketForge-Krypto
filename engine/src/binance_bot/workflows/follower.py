@@ -62,30 +62,41 @@ class FollowerWorkflow:
         uses_ai = self._trader.params.signal_source == "ai"
         if uses_ai and self._client is None:
             raise ConfigError("SINYAL=ai butuh hub leader: isi --hub atau BOT_HUB_URL")
+        assigned = list(self._ranks) if self._ranks is not None else list(range(1, MAX_RANK + 1))
         if self._trader.halted(self._trader.refresh_journal()):
+            self._note_all(assigned, "3 stop-loss berturut-turut hari ini")
             return
         blocker = self._trader.slot_blocker()
         if blocker:
             logger.info("Tidak masuk: %s", blocker)
+            self._note_all(assigned, blocker)
             return
         try:
             ranks = self._ranks_to_follow(uses_ai)
         except HubError as exc:
             logger.warning("Tidak masuk: %s", exc)
+            self._note_all(assigned, str(exc))
             return
         if not ranks:
             logger.info("Tidak ada Top yang perlu diikuti: leader tidak memainkan Top tugas ini")
             return
 
         handled: set[str] = set()
-        for rank in ranks:
+        for index, rank in enumerate(ranks):
             blocker = self._trader.slot_blocker()
             if blocker:
                 logger.info("Berhenti mengikuti: %s", blocker)
+                self._note_all(
+                    ranks[index:], blocker
+                )  # sisanya tidak diproses: tampilkan alasannya
                 break
             outcome = self._follow(rank, uses_ai, handled)
             if outcome is not None:
                 self.result = outcome
+
+    def _note_all(self, ranks: Sequence[int], reason: str) -> None:
+        for rank in ranks:
+            self._trader.note(rank, reason)
 
     def _ranks_to_follow(self, uses_ai: bool) -> list[int]:
         if not uses_ai:
@@ -100,6 +111,8 @@ class FollowerWorkflow:
                 "Top %s tidak dimainkan leader putaran ini, dilewati",
                 ", ".join(str(r) for r in skipped),
             )
+            for rank in skipped:
+                self._trader.note(rank, f"Leader tidak memainkan Top {rank} di putaran ini")
         return [r for r in self._ranks if r in planned]
 
     def _leader_ranks(self) -> list[int]:
@@ -127,9 +140,11 @@ class FollowerWorkflow:
             shared = self._wait_for_leader(rank)
         except HubError as exc:
             logger.warning("Tidak masuk Top %d: %s", rank, exc)
+            self._trader.note(rank, str(exc))
             return None
         if shared is None:
             logger.info("Leader tidak menilai Top %d di putaran ini", rank)
+            self._trader.note(rank, f"Leader tidak menilai Top {rank} di putaran ini")
             return None
         record = shared.record
         reading = record.reading
@@ -146,6 +161,7 @@ class FollowerWorkflow:
         )
         if record.symbol in handled:
             logger.info("%s sudah diikuti di putaran ini, dilewati", record.symbol)
+            self._trader.note(rank, f"{record.symbol} sudah diikuti di putaran ini", record.symbol)
             return None
         handled.add(record.symbol)
         if verdict != "ok":

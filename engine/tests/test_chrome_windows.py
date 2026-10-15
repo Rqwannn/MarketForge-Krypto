@@ -24,6 +24,8 @@ class FakeWin:
         self.windows: list[int] = [999]
         self.sent: list[tuple[str, object]] = []
         self.steal_after: int | None = None  # setelah N pemeriksaan fokus, aplikasi lain merebut
+        self.images: dict[int, str] = {}
+        self.titles: dict[int, str] = {}
         self.typed = ""  # isi kotak alamat
         self.drop_first = 0  # berapa kali ketikan kehilangan karakter pertamanya
 
@@ -63,6 +65,12 @@ class FakeWin:
 
     def window_exists(self, hwnd: int) -> bool:
         return hwnd in self.windows
+
+    def process_image_name(self, hwnd: int) -> str | None:
+        return self.images.get(hwnd, "chrome.exe")
+
+    def window_title(self, hwnd: int) -> str:
+        return self.titles.get(hwnd, "Tebbit - Trading Platform - Google Chrome")
 
     def close_window(self, hwnd: int) -> None:
         self.windows.remove(hwnd)
@@ -193,3 +201,52 @@ def test_autocomplete_suffix_is_accepted_because_it_is_deleted_before_enter() ->
 def test_address_key_ignores_scheme_www_case_and_trailing_slash() -> None:
     assert cw.address_key("https://www.Tebbit.io/") == cw.address_key("tebbit.io") == "tebbit.io"
     assert cw.address_key("ttps://tebbit.io/") != cw.address_key("https://tebbit.io/")
+
+
+def state_chrome(win: FakeWin, state: Path, **kwargs: object) -> cw.WinChromeController:
+    return make(win, state_file=state, **kwargs)
+
+
+def test_open_window_records_the_window_and_close_forgets_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cw, "chrome_path", lambda: Path("chrome.exe"))
+    state = tmp_path / "logs" / "tebbit_window.id"
+    win = FakeWin()
+    chrome = state_chrome(win, state, launch=lambda cmd: win.windows.append(TEBBIT))
+    assert chrome.open_window() == TEBBIT
+    assert state.read_text() == str(TEBBIT)
+    chrome.close_window(TEBBIT)
+    assert not state.exists() and TEBBIT not in win.windows
+
+
+def test_a_leftover_tebbit_window_from_a_killed_run_is_closed_before_opening_a_new_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cw, "chrome_path", lambda: Path("chrome.exe"))
+    state = tmp_path / "id"
+    state.write_text("222")
+    win = FakeWin()
+    win.windows.append(222)
+    chrome = state_chrome(win, state, launch=lambda cmd: win.windows.append(TEBBIT))
+    chrome.open_window()
+    assert 222 not in win.windows  # sisa putaran lalu ditutup
+    assert 999 in win.windows  # jendela lain milik pengguna tidak disentuh
+    assert state.read_text() == str(TEBBIT)
+
+
+@pytest.mark.parametrize(
+    ("image", "title"),
+    [("notepad.exe", "Tebbit - catatan"), ("chrome.exe", "Crypto Discussion - Claude")],
+)
+def test_a_reused_window_id_that_is_not_our_tebbit_window_is_left_alone(
+    image: str, title: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cw, "chrome_path", lambda: Path("chrome.exe"))
+    state = tmp_path / "id"
+    state.write_text("222")
+    win = FakeWin()
+    win.windows.append(222)
+    win.images[222], win.titles[222] = image, title
+    state_chrome(win, state, launch=lambda cmd: win.windows.append(TEBBIT)).open_window()
+    assert 222 in win.windows

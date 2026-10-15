@@ -102,22 +102,26 @@ class WinChromeController:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         win: Any = win32,
+        state_file: Path | None = None,
     ) -> None:
         self._launch = launch
         self._read_address = read_address or _address_via_uia
         self._sleep = sleep
         self._clock = clock
         self._win = win
+        self._state_file = state_file  # id jendela milik bot, agar sisa putaran lalu bisa ditutup
 
     def open_window(self, url: str = HOME_URL) -> int:
         """Buka jendela Chrome baru di alamat Tebbit dan kembalikan id jendelanya."""
         check_url(url)
+        self._close_leftover()
         before = set(self._win.find_windows(CHROME_EXE))
         self._launch([str(chrome_path()), "--new-window", url])
         deadline = self._clock() + _OPEN_TIMEOUT_S
         while self._clock() < deadline:
             new = [h for h in self._win.find_windows(CHROME_EXE) if h not in before]
             if new:
+                self._remember(int(new[0]))
                 return int(new[0])
             self._sleep(0.5)
         raise WindowError("Jendela Chrome baru untuk Tebbit tidak muncul")
@@ -128,6 +132,49 @@ class WinChromeController:
     def close_window(self, window_id: int) -> None:
         if self.window_exists(window_id):
             self._win.close_window(window_id)
+        self._forget(window_id)
+
+    def _remember(self, window_id: int) -> None:
+        if self._state_file is not None:
+            try:
+                self._state_file.parent.mkdir(parents=True, exist_ok=True)
+                self._state_file.write_text(str(window_id), encoding="utf-8")
+            except OSError:
+                logger.debug("Id jendela Chrome tidak tersimpan", exc_info=True)
+
+    def _forget(self, window_id: int) -> None:
+        if self._state_file is not None and self._recorded() == window_id:
+            self._state_file.unlink(missing_ok=True)
+
+    def _recorded(self) -> int | None:
+        try:
+            return (
+                int(self._state_file.read_text(encoding="utf-8").strip())
+                if self._state_file
+                else None
+            )
+        except (OSError, ValueError):
+            return None
+
+    def _close_leftover(self) -> None:
+        """Tutup jendela Tebbit sisa putaran lalu (proses dimatikan paksa, tak sempat menutup).
+
+        Hanya jendela yang dicatat bot sendiri, dan hanya bila masih jendela Chrome berjudul Tebbit
+        (id jendela bisa dipakai ulang Windows untuk jendela lain). Jendela milik pengguna tidak
+        pernah disentuh.
+        """
+        old = self._recorded()
+        if old is None:
+            return
+        looks_like_ours = (
+            self._win.window_exists(old)
+            and (self._win.process_image_name(old) or "").casefold() == CHROME_EXE
+            and "tebbit" in self._win.window_title(old).casefold()
+        )
+        if looks_like_ours:
+            logger.info("Menutup jendela Tebbit sisa putaran sebelumnya")
+            self._win.close_window(old)
+        self._forget(old)
 
     def raise_window(self, window_id: int) -> None:
         """Bawa jendela ke depan; gagal (WindowError) bila Windows tetap menolaknya."""

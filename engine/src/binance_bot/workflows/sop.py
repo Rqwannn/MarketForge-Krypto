@@ -220,6 +220,23 @@ class SopTrader:
             entry.verdict = self.profile.verdict(reading.pattern, self.params.min_crosses)
         return self._finish(entry)
 
+    def note(self, rank: int, reason: str, symbol: str = "-") -> None:
+        """Tampilkan Top yang TIDAK diproses di aplikasi, beserta alasannya.
+
+        Hanya kejadian untuk tabel "Putaran ini": tidak masuk jurnal, tidak membuka aplikasi, dan
+        tidak bertanya ke hub. Tanpa ini tabel pengikut hanya berisi Top yang sempat diproses.
+        """
+        entry = JournalEntry(
+            id=f"{self._now():%Y%m%d_%H%M%S}_top{rank}",
+            created_at=self._wall_clock(),
+            symbol=symbol,
+            rank=rank,
+            status="skipped",
+            reason=reason,
+            role=self._role,
+        )
+        logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry))
+
     def _finish(self, entry: JournalEntry) -> JournalEntry:
         rank, symbol = entry.rank, entry.symbol
         self._journal.append(entry)

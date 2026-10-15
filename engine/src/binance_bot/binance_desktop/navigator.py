@@ -52,7 +52,10 @@ _VERIFY_RETRY_DELAY_S = 0.4
 _CHART_TAB = re.compile(r"\bGrafik\b")
 _FUTURES_TAB = re.compile(r"\bFutures\b")
 _CHANGE_HEADER = re.compile(r"Perubahan")
-_MARKET_MENU = re.compile(r"^\s*Pasar\s*$", re.IGNORECASE)
+_MENU_ATTEMPTS = 3
+_MARKET_MENU = re.compile(
+    r"^\s*\W{0,2}\s*Pasar\s*$", re.IGNORECASE
+)  # ikon menu kadang terbaca sebagai simbol
 _UNIT_MENU_TITLE = re.compile(r"Preferensi\s*Unit|^\s*Unit\s*$")
 _UNIT_MENU_USDT = re.compile(r"dalam\s+USDT", re.IGNORECASE)
 # OCR membaca lingkaran radio sebagai huruf ("C. Ukuran Order"); huruf besar membedakannya dari
@@ -199,11 +202,15 @@ class BinanceNavigator:
         """Posisi menu "Pasar" di sidebar: dicari dengan OCR, atau posisi tetap bila tak terbaca."""
         if layout.SIDEBAR_AREA is None:
             return layout.SIDEBAR_MARKET
-        found = self._find_text(layout.SIDEBAR_AREA, _MARKET_MENU)
-        if found is None:
-            logger.warning("Menu Pasar tidak terbaca di sidebar; memakai posisi tetap")
-            return layout.SIDEBAR_MARKET
-        return found
+        # OCR sesekali melewatkan satu label: coba beberapa kali sebelum memakai posisi tetap.
+        for attempt in range(_MENU_ATTEMPTS):
+            found = self._find_text(layout.SIDEBAR_AREA, _MARKET_MENU)
+            if found is not None:
+                return found
+            if attempt + 1 < _MENU_ATTEMPTS:
+                self._sleep(0.5)
+        logger.warning("Menu Pasar tidak terbaca di sidebar; memakai posisi tetap")
+        return layout.SIDEBAR_MARKET
 
     def _futures_tab_position(self) -> tuple[float, float]:
         """Posisi tab Futures: dicari dengan OCR (banner bisa menggesernya), atau posisi tetap."""
