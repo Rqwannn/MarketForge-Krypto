@@ -533,7 +533,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .real-card.on { border-color: rgba(255, 125, 130, 0.55); background: var(--red-soft); }
 .real-copy { display: grid; gap: 2px; min-width: 0; text-align: left; }
 .real-copy strong { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.real-copy small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.real-copy small { color: var(--muted); font-size: 12px; line-height: 1.4; text-align: left; }
 .real-state { padding: 1px 7px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .real-card.on .real-state { background: var(--red); color: #1a0b0c; }
 .switch { position: relative; flex: none; width: 44px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: var(--line-2); cursor: pointer; transition: background 0.15s; }
