@@ -366,6 +366,17 @@ def test_futures_list_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) ->
     )
 
 
+def test_screen_slightly_smaller_than_calibration_still_fits() -> None:
+    from binance_bot.binance_desktop.layout import EXPECTED_WINDOW, area_fits, window_target
+    from binance_bot.macos import Rect
+
+    width, height = EXPECTED_WINDOW
+    dock = Rect(0, 33, width, height - 1)  # Dock tampil: 1 pt lebih pendek
+    assert area_fits(dock)
+    assert window_target(Rect(0, 33, 800, 600), [dock]) == Rect(0, 33, width, height - 1)
+    assert not area_fits(Rect(0, 33, width, int(height * 0.9)))
+
+
 # --------------------------------------------------------------------------- tampilan berbeda
 
 
@@ -451,17 +462,6 @@ def test_trade_icon_follows_the_action_header_and_the_rows_read_on_screen(
     assert nav._trade_icon(3) == pytest.approx((icon_x, layout.FUTURES_FIRST_ROW_Y + 2 * step))
     assert nav.open_gainer(2) == "BUSDT"
     assert clicks(screen)[-1] == at((icon_x, layout.FUTURES_FIRST_ROW_Y + step))
-
-
-def test_screen_slightly_smaller_than_calibration_still_fits() -> None:
-    from binance_bot.binance_desktop.layout import EXPECTED_WINDOW, area_fits, window_target
-    from binance_bot.macos import Rect
-
-    width, height = EXPECTED_WINDOW
-    dock = Rect(0, 33, width, height - 1)  # Dock tampil: 1 pt lebih pendek
-    assert area_fits(dock)
-    assert window_target(Rect(0, 33, 800, 600), [dock]) == Rect(0, 33, width, height - 1)
-    assert not area_fits(Rect(0, 33, width, int(height * 0.9)))
 
 
 # --------------------------------------------------------------------------- satuan USDT otomatis

@@ -20,51 +20,6 @@ from binance_bot.strategy.pattern import MaPattern
 
 _MAX_COUNT = 50  # hitungan di atas ini tidak masuk akal untuk satu layar grafik
 
-_TASK = """Tugas: nilai KENAIKAN TERAKHIR saja, yaitu dari titik terendah tepat sebelum harga naik
-besar sampai ujung kanan grafik (bagian yang biasa dilingkari trader). Naik-turun garis SEBELUM
-kenaikan itu dimulai TIDAK dihitung, karena belum termasuk kenaikan yang mau di-short.
-Di bagian kenaikan itu, ikuti garis KUNING terhadap garis MAGENTA dari kiri ke kanan.
-Hitung berapa kali garis kuning berada DI BAWAH garis magenta sebagai periode terpisah:
-- setiap kali garis kuning turun menembus ke bawah garis magenta dihitung 1;
-- bila garis kuning selalu di atas garis magenta selama kenaikan, jawabannya 0.
-Penurunan SINGKAT tetap dihitung: walau hanya beberapa lilin dan garis kuning hanya sedikit
-menembus ke bawah garis magenta (garis berpotongan lalu kembali ke atas), itu 1 kali.
-Perhatikan khususnya bagian kanan grafik setelah harga naik: saat harga mendatar di puncak,
-garis kuning sering berpotongan dengan garis magenta berkali-kali.
-Telusuri satu per satu dengan teliti sebelum menjawab.
-
-Jawab HANYA dengan JSON valid, tanpa teks lain:
-{
- "ma7_below_ma25_count": <bilangan bulat>,
- "ma7_below_ma25_now": true jika di ujung kanan garis kuning berada di bawah garis magenta,
- "ma7_below_ma25_recent": true jika dalam 6 JAM TERAKHIR, yaitu sekitar 24 LILIN TERAKHIR di ujung
-   kanan grafik (1 lilin = 15 menit), garis kuning pernah berada di bawah garis magenta; false bila
-   di 24 lilin terakhir itu garis kuning terus di atas garis magenta. Hitung lilinnya, jangan
-   menebak dari label sumbu waktu: angka tanpa titik dua di sumbu (mis. "13", "14", "10/14")
-   adalah TANGGAL (pergantian hari), bukan jam,
- "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia
-}"""
-
-PROMPT = (
-    """Ini screenshot grafik candlestick 15 MENIT dari Binance Futures.
-Garis KUNING = MA7. Garis MAGENTA (merah muda) = MA25. Garis UNGU = MA99. Panel bawah = volume.
-Abaikan kotak tombol Beli/Long dan Jual/Short yang melayang di atas grafik, dan abaikan lilin.
-
-"""
-    + _TASK
-)
-
-TEBBIT_PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Tebbit Futures (latar terang).
-Di kiri atas ada legenda garis rata-rata, mis. "MA 7", "MA 25", "MA 99" atau "MA 5", "MA 10",
-"MA 30"; tiap label berwarna sama dengan garisnya. Cocokkan garis dengan warna di legenda.
-- GARIS CEPAT = garis berlabel MA 7; bila tidak ada MA 7, pakai garis MA 5.
-- GARIS PEMBANDING = garis berlabel MA 25; bila tidak ada MA 25, pakai garis MA 30.
-Abaikan garis lain, lilin, panel volume di bawah, dan tombol atau tulisan yang melayang.
-
-""" + _TASK.replace("KUNING", "CEPAT").replace("kuning", "cepat").replace(
-    "MAGENTA", "PEMBANDING"
-).replace("magenta", "pembanding")
-
 
 @dataclass(frozen=True, slots=True)
 class PatternReading:
@@ -96,9 +51,7 @@ def pattern_from_dict(data: Any) -> PatternReading:
 
 
 class VikeyPatternAnalyzer:
-    def __init__(
-        self, settings: Settings, *, post: PostJson = _post_json, prompt: str = PROMPT
-    ) -> None:
+    def __init__(self, settings: Settings, prompt: str, *, post: PostJson = _post_json) -> None:
         self._client = VisionClient(settings, post=post)
         self._prompt = prompt
 

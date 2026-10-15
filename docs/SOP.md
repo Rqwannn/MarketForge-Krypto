@@ -59,7 +59,7 @@ seberapa sering AI dan data sepakat. Angka itu dasar untuk memilih penentu (`SIN
 | Batas waktu | `BATAS_JAM` | tinjau 1 jam, tutup 4 jam | Usulan |
 | Biaya | `--biaya` | 0,1% per putaran | Riwayat |
 | Kenaikan minimal 24 jam | `MIN_NAIK` | 0 (tidak disaring; V2 tidak mensyaratkan) | Opsional |
-| Spread maksimal / funding minimal | `--maks-spread`, `--min-funding` | 0,1% / -0,05% | Usulan engine |
+| Spread maksimal / funding minimal | `--maks-spread`, `--min-funding` | 0,3% / -0,1% | Usulan engine, sengaja longgar: SOP V2 hanya menyebut "spread lebar" dan "funding sangat negatif" tanpa angka (menunggu Pak Saputra) |
 | Berhenti setelah stop-loss beruntun | (tetap) | 3 dalam sehari | SOP |
 | Modal | `MODAL` | wajib (USDT) | Pengguna |
 | Ukuran order manual | `JUMLAH` | kosong (pakai margin × leverage), dalam USDT | Pengguna |

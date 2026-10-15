@@ -16,9 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from binance_bot.analysis import PatternReading
+from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError, MarketDataError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
 from binance_bot.strategy import (
@@ -27,6 +28,7 @@ from binance_bot.strategy import (
     JournalEntry,
     MaPattern,
     OrderPlan,
+    PatternProfile,
     SopParams,
     candles_needed,
     data_ma_pattern,
@@ -119,6 +121,7 @@ class SopTrader:
         *,
         fill_form: bool = True,
         role: str = "single",
+        profile: PatternProfile = BINANCE,
         wall_clock: Callable[[], float] = time.time,
         now: Callable[[], datetime] = datetime.now,
     ) -> None:
@@ -131,6 +134,7 @@ class SopTrader:
         self._gate = gate
         self._fill_form = fill_form
         self._role = role
+        self.profile = profile  # aturan pola platform ini
         self._wall_clock = wall_clock
         self._now = now
 
@@ -139,7 +143,9 @@ class SopTrader:
             return refresh_journal(
                 self._journal, self._market, self.params.fee_pct, self._wall_clock()
             )
-        except MarketDataError as exc:  # bursa tanpa sumber candle (Tebbit): posisi tetap terbuka
+        except NoHistoryError:  # bursa tanpa riwayat harga (Tebbit): memang tidak dinilai otomatis
+            return self._journal.load()
+        except MarketDataError as exc:
             logger.warning("Posisi uji belum bisa dinilai: %s", exc)
             return self._journal.load()
 
@@ -211,7 +217,7 @@ class SopTrader:
         if reading is not None:
             entry.pattern_ai = reading.pattern.as_dict()
             entry.ai_summary = reading.summary
-            entry.verdict = reading.pattern.verdict(self.params.min_crosses)
+            entry.verdict = self.profile.verdict(reading.pattern, self.params.min_crosses)
         return self._finish(entry)
 
     def _finish(self, entry: JournalEntry) -> JournalEntry:
@@ -232,22 +238,23 @@ class SopTrader:
 
     def _run(self, entry: JournalEntry, reading_source: ReadingSource | None) -> None:
         params, symbol = self.params, entry.symbol
-        if any(e.symbol == symbol and e.status == "open" for e in self._journal.load()):
-            raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
 
-        # Saringan biaya (gratis, sebelum AI): funding, spread, dan kenaikan minimal bila diisi.
+        # Harga, funding, dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini.
+        # Funding dan spread baru menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot),
+        # supaya penilaian AI dan grafiknya tetap tampil untuk koin yang biayanya mahal.
         quote = self._market.quote(symbol)
         entry.change_pct = quote.change_pct
         entry.funding_rate = quote.funding_rate
         entry.spread_pct = quote.spread_pct
         if quote.change_pct < params.min_gain_pct:
             raise _Skip(f"naik {quote.change_pct:.1f}% < {params.min_gain_pct:g}% dalam 24 jam")
+        cost_issue: str | None = None
         if quote.funding_rate * 100 < params.min_funding_pct:
-            raise _Skip(f"funding {quote.funding_rate * 100:.4f}% terlalu negatif (short membayar)")
-        if quote.spread_pct > params.max_spread_pct:
-            raise _Skip(f"spread {quote.spread_pct:.3f}% > {params.max_spread_pct:g}%")
+            cost_issue = f"funding {quote.funding_rate * 100:.4f}% terlalu negatif (short membayar)"
+        elif quote.spread_pct > params.max_spread_pct:
+            cost_issue = f"spread {quote.spread_pct:.3f}% > {params.max_spread_pct:g}%"
 
         # Saringan pola: garis kuning (MA7) terhadap MA25 di chart 15 menit.
         self._nav.show_15m_chart()
@@ -258,8 +265,12 @@ class SopTrader:
         entry.screenshots.append(str(chart))
 
         try:
+            profile = self.profile
             data: MaPattern | None = data_ma_pattern(
-                self._market.klines(symbol, "15m", limit=candles_needed())
+                self._market.klines(symbol, "15m", limit=candles_needed(mid=profile.mid)),
+                fast=profile.fast,
+                mid=profile.mid,
+                recent=profile.recent_candles,
             )
         except MarketDataError as exc:  # bursa tanpa sumber candle: hanya AI yang menilai
             logger.info("Pembanding data tidak ada: %s", exc)
@@ -275,13 +286,14 @@ class SopTrader:
             decisive = reading.pattern
         if decisive is None:
             raise _Skip("bursa ini tidak punya data candle; pakai SINYAL=ai")
-        entry.verdict = decisive.verdict(params.min_crosses)
+        entry.verdict = self.profile.verdict(decisive, params.min_crosses)
         logger.info(
-            "#%d %s garis kuning %s: %d kali di bawah MA25 -> %s (data: %d kali)%s",
+            "#%d %s garis kuning %s: %d kali di bawah MA%d -> %s (data: %d kali)%s",
             entry.rank,
             symbol,
             params.signal_source.upper(),
             decisive.below_count,
+            self.profile.mid,
             _VERDICT_TEXT[entry.verdict],
             data.below_count if data else -1,
             f" | {entry.ai_summary}" if entry.ai_summary else "",
@@ -294,7 +306,13 @@ class SopTrader:
                 )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
 
-        # Langkah 4 SOP (setelah pola dan biaya): slot posisi.
+        # Langkah 3 SOP (setelah pola): funding dan spread.
+        if cost_issue:
+            raise _Skip(cost_issue)
+
+        # Langkah 4 SOP: pair yang sama dan slot posisi.
+        if any(e.symbol == symbol and e.status == "open" for e in self._journal.load()):
+            raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         blocker = self.slot_blocker()
         if blocker:
             raise _Skip(blocker)

@@ -8,12 +8,13 @@ from dataclasses import replace
 from datetime import datetime
 
 from binance_bot.analysis import AnalysisRecord, PatternAnalyzer
+from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubServer
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
-from binance_bot.strategy import SopParams
+from binance_bot.strategy import PatternProfile, SopParams
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import log_top_gainers
 
@@ -42,12 +43,14 @@ class LeaderWorkflow:
         ranks: Sequence[int],
         *,
         interval_s: float = 0.0,
+        profile: PatternProfile = BINANCE,
         sleep: Callable[[float], None] = time.sleep,
         wall_clock: Callable[[], float] = time.time,
         now: Callable[[], datetime] = datetime.now,
     ) -> None:
         self._settings = settings
         self._params = params
+        self._profile = profile
         self._nav = navigator
         self._market = market
         self._analyzer = analyzer
@@ -131,12 +134,13 @@ class LeaderWorkflow:
             self._store.put(record)
             records.append(record)
             pattern = record.reading.pattern
-            verdict = pattern.verdict(self._params.min_crosses)
+            verdict = self._profile.verdict(pattern, self._params.min_crosses)
             logger.info(
-                "#%d %s garis kuning AI: %d kali di bawah MA25 -> %s | %s",
+                "#%d %s garis kuning AI: %d kali di bawah MA%d -> %s | %s",
                 rank,
                 symbol,
                 pattern.below_count,
+                self._profile.mid,
                 verdict.upper(),
                 record.reading.summary,
                 extra=event(

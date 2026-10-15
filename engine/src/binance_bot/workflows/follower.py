@@ -133,13 +133,14 @@ class FollowerWorkflow:
             return None
         record = shared.record
         reading = record.reading
-        verdict = reading.pattern.verdict(self._trader.params.min_crosses)
+        verdict = self._trader.profile.verdict(reading.pattern, self._trader.params.min_crosses)
         logger.info(
-            "Hasil leader untuk Top %d: %s, garis kuning %d kali di bawah MA25 -> %s "
+            "Hasil leader untuk Top %d: %s, garis kuning %d kali di bawah MA%d -> %s "
             "(umur %.1f menit)",
             rank,
             record.symbol,
             reading.pattern.below_count,
+            self._trader.profile.mid,
             verdict.upper(),
             shared.age_s / 60,
         )

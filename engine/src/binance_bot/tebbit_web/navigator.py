@@ -33,6 +33,7 @@ from binance_bot.tebbit_web.chrome import (
     Browser,
     ChromeWindowController,
 )
+from binance_bot.tebbit_web.pattern_rules import TEBBIT
 from binance_bot.tebbit_web.screen_text import (
     contract_url,
     parse_gainer_rows,
@@ -55,6 +56,7 @@ _FIFTEEN = re.compile(r"(?<![\d.])15\s*m", re.IGNORECASE)
 _MARKET = re.compile(r"\bMarket\b")
 _QUANTITY = re.compile(r"Quantity", re.IGNORECASE)
 _LOGIN = re.compile(r"\b(Log\s*in|Sign\s*up|Register)\b", re.IGNORECASE)
+_GUEST_PAGE = re.compile(r"Welcome to log in", re.IGNORECASE)  # popup login (beranda tamu)
 _MA_LABEL = re.compile(r"MA\s*\d+")
 _CONTRACT_PATH = "/futures/contract/u_based/"
 _PAGE_TIMEOUT_S = 25.0
@@ -118,9 +120,15 @@ class TebbitNavigator(BinanceNavigator):
     def _check_page(self) -> None:
         """Halaman Tebbit termuat, zoom 80%, dan akun sudah login (jangkar teks di menu atas)."""
         deadline = self._clock() + _PAGE_TIMEOUT_S
+        reloaded = False
         while (found := self._find_text(lay.NAV_FUTURES_AREA, _FUTURES)) is None:
             if self._clock() >= deadline:
+                self._raise_if_logged_out()  # layar login menutupi menu: jangan salah sebut
                 raise ScreenReadError("Halaman Tebbit belum termuat (menu 'Futures' tidak terbaca)")
+            if not reloaded and self._clock() >= deadline - _PAGE_TIMEOUT_S / 2:
+                # Kadang menu atas Tebbit tidak tampil sama sekali (sementara): muat ulang sekali.
+                self._load(HOME_URL)
+                reloaded = True
             self._sleep(1.0)
         x = found[0]
         if abs(x - lay.NAV_FUTURES_X) > lay.NAV_FUTURES_TOLERANCE:
@@ -128,9 +136,16 @@ class TebbitNavigator(BinanceNavigator):
                 f"Zoom Chrome tidak 80% (menu Futures di x={x:.2f}, seharusnya "
                 f"{lay.NAV_FUTURES_X}). Atur zoom ke 80% lalu ulangi."
             )
+        self._raise_if_logged_out()
+
+    def _raise_if_logged_out(self) -> None:
         top = self._read_texts(self.rect.sub(*lay.LOGIN_AREA))
-        if any(_LOGIN.search(text) for text in top):
-            raise ScreenReadError("Belum login di Tebbit. Login sekali di Chrome, lalu ulangi.")
+        page = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.95))
+        # Sesi kedaluwarsa: tombol Login atau popup login.
+        if any(_LOGIN.search(text) or _GUEST_PAGE.search(text) for text in top + page):
+            raise ScreenReadError(
+                "Sesi Tebbit sudah keluar (belum login). Login lagi di Chrome, lalu ulangi."
+            )
 
     def close(self) -> None:
         """Tutup jendela Chrome milik bot."""
@@ -244,7 +259,9 @@ class TebbitNavigator(BinanceNavigator):
         self._load(contract_url(symbol))
         opened = self._wait_contract()
         if opened != symbol:
-            raise ScreenReadError(f"Yang terbuka {opened}, bukan {symbol}")
+            raise ScreenReadError(
+                f"{symbol} tidak tersedia sebagai kontrak di Tebbit (yang terbuka: {opened})"
+            )
         return opened
 
     def _wait_contract(self) -> str:
@@ -283,13 +300,12 @@ class TebbitNavigator(BinanceNavigator):
             if self._clock() >= deadline:
                 raise ScreenReadError("Grafik 15 menit Tebbit belum termuat (legenda MA tidak ada)")
             self._sleep(1.0)
-        # Tebbit menyimpan indikator per koin (bawaan MA 5/10/30). AI memakai MA 7 bila ada,
-        # selain itu MA 5 (garis tercepat); pembandingnya MA 25, selain itu MA 30.
+        # Baseline Tebbit (MA 5/10/30) dipakai apa adanya; indikator grafik tidak diubah bot.
         periods = {int(n) for n in re.findall(r"MA\s*(\d+)", legend)}
-        if not (periods & {7, 5} and periods & {25, 30}):
+        if not TEBBIT.legend_ready(periods):
             raise ScreenReadError(
-                f"Indikator MA di grafik Tebbit {sorted(periods)}; butuh MA 7 (atau 5) dan "
-                "MA 25 (atau 30)."
+                f"Indikator MA di grafik Tebbit {sorted(periods)}; aturan Tebbit memakai "
+                f"{TEBBIT.baseline}. Kembalikan indikator koin ini ke bawaan Tebbit."
             )
 
     def _chart_area(self) -> Rect:

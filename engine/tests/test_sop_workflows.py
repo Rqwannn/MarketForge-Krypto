@@ -117,14 +117,36 @@ def test_pattern_not_ok_means_no_entry(tmp_path: Path, pattern: Any, word: str) 
 
 @pytest.mark.parametrize(
     ("quote", "reason"),
-    [(Quote(1.0, 1.0005, -0.001, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
+    [(Quote(1.0, 1.0005, -0.002, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
 )
-def test_cost_filters_skip_before_any_ai_call(tmp_path: Path, quote: Quote, reason: str) -> None:
+def test_cost_filters_reject_after_the_pattern_is_judged(
+    tmp_path: Path, quote: Quote, reason: str
+) -> None:
+    # Urutan SOP: pola, lalu biaya. Koin yang biayanya mahal tetap dibaca AI dan tampil lengkap
+    # (grafik, penilaian), tapi tidak pernah dibuka.
     nav = FakeNavigator({1: "STRKUSDT"})
-    trader, _, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
+    trader, gate, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
     analyzer = FakePatternAnalyzer(OK)
     entry = trader.trade(1, "STRKUSDT", source(analyzer))
-    assert reason in entry.reason and analyzer.calls == []
+    assert entry.status == "skipped" and reason in entry.reason
+    assert len(analyzer.calls) == 1 and entry.verdict == "ok" and entry.screenshots
+    assert nav.filled == [] and gate.plans == []
+
+
+def test_default_cost_limits_are_loose_until_the_sop_gives_numbers(tmp_path: Path) -> None:
+    # SOP V2 tidak menyebut angka. Koin ETF dengan spread 0,23% dan funding -0,08% tetap boleh.
+    etf = FakeMarket(quote=Quote(17.16, 17.20, -0.0008, 8.7))
+    trader, _, _, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}), etf)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+    assert (SopParams().max_spread_pct, SopParams().min_funding_pct) == (0.3, -0.1)
+
+
+def test_pattern_reason_wins_over_cost_reason_when_pattern_is_not_ok(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    wide = FakeMarket(quote=Quote(1.0, 1.01, 0.0001, 50.0))
+    trader, _, _, _ = make_trader(tmp_path, nav, wide)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(NEVER)))
+    assert entry.verdict == "jangan" and "spread" not in entry.reason
 
 
 def test_min_gain_filter_is_off_by_default_and_optional(tmp_path: Path) -> None:
@@ -221,14 +243,19 @@ def test_single_does_not_enter_when_none_of_the_five_is_ok(tmp_path: Path) -> No
     assert {e.status for e in journal.load()} == {"skipped"}
 
 
-def test_single_skips_scanning_entirely_when_slots_are_full(tmp_path: Path) -> None:
+def test_single_still_judges_and_records_coins_when_slots_are_full(tmp_path: Path) -> None:
+    # Slot penuh hanya menahan posisi baru: koin tetap dibuka, dinilai AI, dan tampil di riwayat.
     nav = FakeNavigator({1: "STRKUSDT"})
     trader, _, journal, _ = make_trader(tmp_path, nav)
     journal.append(open_trade("CFXUSDT"))
     journal.append(open_trade("MBLUSDT"))
     analyzer = FakePatternAnalyzer(OK)
     SingleWorkflow(nav, trader, analyzer, ranks=[1]).run()  # type: ignore[arg-type]
-    assert nav.calls == [] and analyzer.calls == []
+    assert len(analyzer.calls) == 1
+    new = next(e for e in journal.load() if e.symbol == "STRKUSDT")
+    assert (new.status, new.verdict) == ("skipped", "ok")  # dinilai Layak, tapi tidak dibuka
+    assert "2 posisi terbuka" in new.reason
+    assert len([e for e in journal.load() if e.status == "open"]) == 2
 
 
 def test_single_evaluates_a_pair_once_when_ranks_shift_onto_it(tmp_path: Path) -> None:
