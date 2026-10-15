@@ -64,6 +64,14 @@ ORDER_TAB_MARKET = (0.8547, 0.1892)
 ORDER_QTY_FIELD = (0.9010, 0.3088)
 ORDER_QTY_AREA = (0.80, 0.26, 1.0, 0.345)
 
+# Dropdown satuan di kolom Jumlah (panah di ujung kanan, 1735, 315). Menunya "Preferensi Unit"
+# memuat kartu koin dan kartu USDT dengan pilihan "Ukuran Order"/"Margin Awal" (y 0,37..0,74), dan
+# menutupi tombol Beli/Long dan Jual/Short (y 0,514..0,558). Yang diklik: "Ukuran Order" (y 0,63),
+# di BAWAH tombol; klik di zona terlarang hanya boleh dari y 0,575 ke bawah.
+ORDER_UNIT_BUTTON = (0.9740, 0.3088)
+ORDER_UNIT_MENU_AREA = (0.60, 0.30, 1.0, 0.70)
+ORDER_UNIT_MIN_Y = 0.575
+
 # Zona tombol order (Beli/Long, Jual/Short, dan tombol "Aktifkan Akun Futures" yang menempati
 # tempat yang sama bila akun belum aktif). Klik ke sini SELALU ditolak oleh navigator.
 ORDER_BUTTON_ZONES = (

@@ -462,3 +462,127 @@ def test_screen_slightly_smaller_than_calibration_still_fits() -> None:
     assert area_fits(dock)
     assert window_target(Rect(0, 33, 800, 600), [dock]) == Rect(0, 33, width, height - 1)
     assert not area_fits(Rect(0, 33, width, int(height * 0.9)))
+
+
+# --------------------------------------------------------------------------- satuan USDT otomatis
+
+UNIT_MENU_AREA = (0.60, 0.30, 1.0, 0.70)
+UNIT_BUTTON = (0.97, 0.31)
+RADIO = (0.82, 0.63)  # "Ukuran Order": di zona tombol order, tetapi di bawah tombolnya
+
+
+def unit_menu(radio: tuple[float, float] | None = RADIO) -> list[TextLine]:
+    x0, y0, x1, y1 = UNIT_MENU_AREA
+    lines = [
+        TextLine("Preferensi Unit", 0.3, 0.1),
+        TextLine("Masukkan dan menampilkan ukuran order dalam USDT.", 0.5, 0.6),
+    ]
+    if radio:
+        lines.append(
+            TextLine("C. Ukuran Order", (radio[0] - x0) / (x1 - x0), (radio[1] - y0) / (y1 - y0))
+        )
+    return lines
+
+
+def unit_nav(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    qty: list[list[TextLine]],
+    menu: list[list[TextLine]],
+) -> tuple[BinanceNavigator, FakeScreen]:
+    monkeypatch.chdir(tmp_path)  # foto diagnosa ditulis relatif ke folder kerja
+    monkeypatch.setattr(layout, "ORDER_UNIT_BUTTON", UNIT_BUTTON)
+    monkeypatch.setattr(layout, "ORDER_UNIT_MENU_AREA", UNIT_MENU_AREA)
+    monkeypatch.setattr(layout, "ORDER_UNIT_MIN_Y", 0.62)
+    screen = FakeScreen(
+        texts={
+            layout.SYMBOL_AREA: [text_lines("STRKUSDT Perp")],
+            layout.ORDER_QTY_AREA: qty,
+            UNIT_MENU_AREA: menu,
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    nav.open_gainer(1)
+    return nav, screen
+
+
+def test_usdt_unit_is_chosen_from_the_menu_below_the_order_buttons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = unit_nav(
+        monkeypatch,
+        tmp_path,
+        qty=[text_lines("STRK"), text_lines("USDT"), text_lines("USDT"), text_lines("100", "USDT")],
+        menu=[[], unit_menu(), unit_menu(), unit_menu()],  # tertutup, lalu terbuka setelah diklik
+    )
+    assert layout.in_order_button_zone(RADIO)  # titik ini biasanya terlarang
+    nav.fill_quantity("100")
+    done = clicks(screen)
+    assert at(UNIT_BUTTON) in done and at(RADIO) in done
+    assert done.index(at(UNIT_BUTTON)) < done.index(at(RADIO))
+    assert ("type", "100") in screen.events
+    assert nav._forbidden(RADIO)  # pengecualian tidak bocor ke klik berikutnya
+
+
+def test_usdt_unit_already_selected_needs_no_menu(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = unit_nav(
+        monkeypatch, tmp_path, qty=[text_lines("USDT"), text_lines("100", "USDT")], menu=[[]]
+    )
+    nav.fill_quantity("100")
+    assert at(UNIT_BUTTON) not in clicks(screen)
+
+
+def test_nothing_is_clicked_in_the_button_zone_when_the_menu_does_not_open(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = unit_nav(monkeypatch, tmp_path, qty=[text_lines("STRK")], menu=[[]])
+    with pytest.raises(ScreenReadError, match="Menu satuan"):
+        nav.fill_quantity("100")
+    assert at(RADIO) not in clicks(screen)
+    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
+
+
+def test_the_menu_choice_next_to_the_order_buttons_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    near_buttons = (0.82, 0.55)  # di atas garis aman: bisa saja tombol Beli/Long
+    nav, screen = unit_nav(
+        monkeypatch,
+        tmp_path,
+        qty=[text_lines("STRK")],
+        menu=[[], unit_menu(near_buttons), unit_menu(near_buttons)],
+    )
+    with pytest.raises(ScreenReadError, match="tempat aman"):
+        nav.fill_quantity("100")
+    assert at(near_buttons) not in clicks(screen)
+
+
+def test_the_click_is_cancelled_if_the_menu_vanished_before_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = unit_nav(
+        monkeypatch,
+        tmp_path,
+        qty=[text_lines("STRK")],
+        menu=[[], unit_menu(), unit_menu(), []],  # menu hilang tepat sebelum klik
+    )
+    with pytest.raises(SafetyError, match="menu tidak terbukti terbuka"):
+        nav.fill_quantity("100")
+    assert at(RADIO) not in clicks(screen)
+
+
+def test_typing_is_refused_if_the_unit_is_still_not_usdt_after_the_menu(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    nav, screen = unit_nav(
+        monkeypatch,
+        tmp_path,
+        qty=[text_lines("STRK")],  # tetap koin
+        menu=[[], unit_menu(), unit_menu(), unit_menu()],
+    )
+    with pytest.raises(ScreenReadError, match="masih bukan USDT"):
+        nav.fill_quantity("100")
+    assert not any(kind in ("type", "clear") for kind, _ in screen.events)

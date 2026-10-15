@@ -100,6 +100,7 @@ function plain(text) {
     [/Grafik 15 menit|15 mnt/, 'Grafik belum termuat, koin dilewati'],
     [/Ukuran jendela/, `Ukuran jendela ${site} berubah, kembalikan seperti semula`],
     [/belum berjalan|Buka aplikasi Binance|AppNotRunning/i, 'Aplikasi Binance belum dibuka'],
+    [/Satuan kolom (Jumlah|Quantity)|Margin Awal|menu satuan|Ukuran Order/i, `Satuan kolom jumlah di ${site} bukan USDT. Pilih USDT > Ukuran Order, lalu coba lagi`],
     [/Kolom (Jumlah|Quantity)/, `Kolom jumlah di ${site} tidak terisi dengan benar`],
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
