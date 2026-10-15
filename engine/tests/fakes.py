@@ -211,6 +211,14 @@ class FakeNavigator:
             raise symbol
         return symbol
 
+    def open_symbol(self, symbol: str) -> str:
+        self.calls.append(f"open_symbol:{symbol}")
+        rank = next(row.rank for row in self.rows if row.symbol == symbol)
+        symbol_opened = self.symbols[rank]
+        if isinstance(symbol_opened, BotError):
+            raise symbol_opened
+        return symbol_opened
+
     def show_15m_chart(self) -> None:
         self.calls.append("15m")
 

@@ -110,6 +110,38 @@ Tahap modal kecil di PDF memakai margin 25%: `MARGIN=25`.
   alasan yang jelas. Bagian yang butuh API (biaya, aturan jumlah, data candle, penilaian jurnal)
   hanya berjalan di jaringan yang tidak memblokir.
 
+## Dua platform, aturan terpisah
+
+Binance (MA 7/25/99) dan Tebbit (bawaan grafiknya MA 5/10/30) punya aturan pola sendiri:
+`engine/src/binance_bot/binance_desktop/pattern_rules.py` dan `tebbit_web/pattern_rules.py`
+(instruksi AI, periode MA, aturan keputusan). Pemahamannya sama untuk saat ini: garis cepat
+(MA7 / MA5) dibanding garis pembanding (MA25 / MA10). Bot tidak mengubah indikator di grafik.
+Teori SOP V3 yang membedakan platform diubah di file masing-masing tanpa mengganggu yang lain.
+
+Cara AI menilai (kedua platform): hanya bagian **kenaikan terakhir** (area yang dilingkari
+Pak Saputra) yang dihitung; setiap grafik dibaca AI 5 kali dan diambil nilai tengahnya.
+
+## Angka yang BUKAN dari SOP V2 (tebakan engine, menunggu beliau)
+
+| Angka | Nilai sekarang | Catatan |
+|---|---|---|
+| Spread maksimal | 0,3% | SOP hanya "spread lebar". Koin ETF (UVXY, SQQQ) spread normalnya 0,1-0,25% |
+| Funding minimal | -0,1% | SOP hanya "funding sangat negatif" |
+| "Berkali-kali" turun | minimal 2 kali | Usulan di SOP sendiri |
+| "Baru-baru ini" turun | 24 lilin (6 jam) | Contoh MAGIC 12 Okt memenuhi; contoh MAGIC 10 Okt (boleh menurut beliau) **tidak** |
+| "Koin pertama tidak rugi" | harga bid lebih tinggi dari harga masuk = rugi | Selisih spread saja (0,1%) sudah dihitung rugi, sehingga koin kedua sering batal |
+
+Pertanyaan untuk Pak Saputra:
+
+1. Contoh MAGIC 10 Okt 12:45 (boleh masuk): MA7 masih di atas MA25 dan belum turun lagi. Apa yang
+   membuatnya boleh? Harga berhenti di puncak, atau tanda lain?
+2. Yang dihitung hanya di bagian kenaikan yang dilingkari (turun sebelum harga mulai naik
+   tidak ikut)?
+3. "Berkali-kali di bawah": minimal berapa kali, dan harus baru-baru ini (berapa jam)?
+4. Garis kuning dibandingkan dengan MA25 saja, atau juga MA99 dan harga?
+5. Batas spread dan funding: berapa yang dianggap "lebar" dan "sangat negatif"?
+6. "Koin pertama tidak sedang rugi": apakah ada toleransi kecil (mis. 0,2%)?
+
 ## Perlu disepakati dengan beliau
 
 1. Angka pola "OK" (`MIN_TURUN`, usulan 2), stop-loss 2%, dan batas waktu.

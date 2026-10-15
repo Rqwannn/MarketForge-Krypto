@@ -462,3 +462,37 @@ def test_trade_icon_follows_the_action_header_and_the_rows_read_on_screen(
     assert nav._trade_icon(3) == pytest.approx((icon_x, layout.FUTURES_FIRST_ROW_Y + 2 * step))
     assert nav.open_gainer(2) == "BUSDT"
     assert clicks(screen)[-1] == at((icon_x, layout.FUTURES_FIRST_ROW_Y + step))
+
+
+def test_open_symbol_follows_the_coin_when_the_list_reorders() -> None:
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav = make_nav()
+    lists = [
+        [GainerRow(1, "AAAUSDT", 50), GainerRow(2, "BBBUSDT", 40), GainerRow(3, "CCCUSDT", 30)],
+        # beberapa detik kemudian: BBB dan CCC bertukar tempat
+        [GainerRow(1, "AAAUSDT", 51), GainerRow(2, "CCCUSDT", 41), GainerRow(3, "BBBUSDT", 39)],
+        [GainerRow(1, "AAAUSDT", 52)],  # CCC sudah keluar dari daftar
+    ]
+    opened: list[int] = []
+    on_trade_page = {1: "AAAUSDT", 2: "CCCUSDT", 3: "BBBUSDT"}
+
+    def top() -> list[GainerRow]:
+        rows = lists.pop(0)
+        nav._list_rows, nav._on_list = rows, True
+        return rows
+
+    def gainer(rank: int) -> str:
+        opened.append(rank)
+        nav._on_list = False
+        return on_trade_page[rank]
+
+    nav.open_top_gainers = top  # type: ignore[method-assign]
+    nav.open_gainer = gainer  # type: ignore[method-assign]
+    top()  # putaran dimulai: daftar sudah terbuka
+    assert nav.open_symbol("AAAUSDT") == "AAAUSDT"  # memakai daftar yang sedang terbuka
+    assert nav.open_symbol("BBBUSDT") == "BBBUSDT"  # daftar dibaca ulang: BBB sekarang baris 3
+    assert opened == [1, 3]  # klik baris 2 akan membuka CCC, bukan BBB
+    nav._on_list = False
+    with pytest.raises(ScreenReadError, match="sudah tidak di daftar"):
+        nav.open_symbol("CCCUSDT")

@@ -80,11 +80,10 @@ class SingleWorkflow:
                 )
                 continue
             try:
-                # Bila bisa (Tebbit), buka pair dari daftar awal lewat namanya: peringkat sering
-                # bertukar di tengah putaran sehingga klik baris membuka pair yang sama lagi.
-                open_symbol = getattr(self._nav, "open_symbol", None)
-                if open_symbol is not None and row is not None and is_futures_symbol(row.symbol):
-                    symbol = open_symbol(row.symbol)
+                # Buka lewat namanya: peringkat sering bertukar di tengah putaran, sehingga klik
+                # baris ke-N membuka pair lain (atau pair yang sama lagi) dan koin ke-N terlewat.
+                if row is not None and is_futures_symbol(row.symbol):
+                    symbol = self._nav.open_symbol(row.symbol)
                 else:
                     if not on_list:
                         self._nav.open_top_gainers()

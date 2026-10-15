@@ -88,6 +88,8 @@ class BinanceNavigator:
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
         self._row_y: dict[int, float] = {}  # y baris top gainer yang terbaca di layar
+        self._list_rows: list[GainerRow] = []  # daftar top gainers yang terakhir dibaca
+        self._on_list = False  # bot sedang di daftar (belum membuka halaman koin)
 
     def prepare(self) -> None:
         """Bawa Binance ke depan dan pastikan ukuran jendela sesuai kalibrasi posisi klik."""
@@ -165,6 +167,8 @@ class BinanceNavigator:
             self._click(self._header_pos)
             rows = self.read_top_gainers()
             if is_sorted_by_top_gain(rows):
+                self._list_rows = rows
+                self._on_list = True
                 return rows
             if not rows:
                 # Daftar Futures belum tampil (halaman lambat dimuat, klik tab hilang): ulangi.
@@ -278,6 +282,7 @@ class BinanceNavigator:
         """
         self._click(self._trade_icon(rank))
         self._on_trade_page = True
+        self._on_list = False
         self._chart_shift = 0.0
         try:
             symbol = self.read_symbol()
@@ -286,6 +291,22 @@ class BinanceNavigator:
             raise ScreenReadError(f"{exc} Foto layar yang dilihat bot: {shot}") from exc
         logger.info("Top gainer #%d: %s", rank, symbol)
         return symbol
+
+    def open_symbol(self, symbol: str) -> str:
+        """Buka koin lewat namanya dari daftar top gainers SAAT INI.
+
+        Daftar Binance berubah urutan dalam hitungan detik: klik baris ke-N bisa membuka koin lain
+        (mis. koin yang sama dua kali, dan koin ke-N hilang tak tertangani). Daftar dibaca ulang
+        bila bot sedang tidak di daftar, lalu baris koin yang dimaksud dicari dengan namanya.
+        """
+        rows = self._list_rows if self._on_list else self.open_top_gainers()
+        rank = next((row.rank for row in rows if row.symbol == symbol), None)
+        if rank is None:
+            raise ScreenReadError(f"{symbol} sudah tidak di daftar top gainers")
+        opened = self.open_gainer(rank)
+        if opened != symbol:
+            raise ScreenReadError(f"Yang terbuka {opened}, bukan {symbol} (peringkat bergeser)")
+        return opened
 
     def _trade_icon(self, rank: int) -> tuple[float, float]:
         """Titik ikon trade baris `rank`.

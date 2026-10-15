@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-from binance_bot.analysis import VikeyPatternAnalyzer
-from binance_bot.analysis.pattern import pattern_from_dict
+from binance_bot.analysis import ConsensusAnalyzer, VikeyPatternAnalyzer
+from binance_bot.analysis.pattern import PatternReading, pattern_from_dict
 from binance_bot.analysis.vision import extract_json
 from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.config import Settings
@@ -104,3 +104,47 @@ def test_tebbit_legend_needs_its_own_baseline_not_binance_lines() -> None:
     assert TEBBIT.legend_ready({5, 10, 30})
     assert not TEBBIT.legend_ready({7, 25, 99})  # koin yang indikatornya bukan bawaan Tebbit
     assert BINANCE.legend_ready({7, 25, 99}) and not BINANCE.legend_ready({5, 10, 30})
+
+
+class _Scripted:
+    """AI tiruan: tiap bacaan mengembalikan (hitungan, sekarang, baru-baru ini) berikutnya."""
+
+    def __init__(self, answers: list[tuple[int, bool, bool] | Exception]) -> None:
+        self._answers = list(answers)
+
+    def analyze(self, image: Path) -> PatternReading:
+        answer = self._answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        count, now, recent = answer
+        return PatternReading(MaPattern(count, now, recent), f"hitungan {count}")
+
+
+def test_consensus_takes_the_median_count_and_majority_flags() -> None:
+    reads = [
+        (1, False, False),
+        (3, True, True),
+        (4, True, True),
+        (3, False, True),
+        (1, False, False),
+    ]
+    reading = ConsensusAnalyzer(_Scripted(list(reads)), reads=5).analyze(Path("x.png"))
+    assert reading.pattern == MaPattern(
+        3, below_now=False, below_recent=True
+    )  # median 3; 3 dari 5 recent
+    assert "5 bacaan AI" in reading.summary
+
+
+def test_consensus_survives_a_minority_of_failed_reads_but_not_a_majority() -> None:
+    ok = [(2, False, True), (2, False, True)]
+    failed = AnalysisError("jawaban rusak")
+    reading = ConsensusAnalyzer(_Scripted([*ok, failed]), reads=3).analyze(Path("x.png"))
+    assert reading.pattern.below_count == 2 and "2 bacaan AI" in reading.summary
+    with pytest.raises(AnalysisError, match="Mayoritas bacaan AI gagal"):
+        ConsensusAnalyzer(_Scripted([ok[0], failed, failed]), reads=3).analyze(Path("x.png"))
+
+
+def test_consensus_is_stable_when_all_reads_agree() -> None:
+    same = [(0, False, False)] * 5
+    reading = ConsensusAnalyzer(_Scripted(list(same)), reads=5).analyze(Path("x.png"))
+    assert BINANCE.verdict(reading.pattern, 2) == "jangan"
