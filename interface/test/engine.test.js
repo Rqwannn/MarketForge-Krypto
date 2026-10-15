@@ -130,6 +130,20 @@ test('virtualenv dicari di engine/.venv lalu di root repo', () => {
   assert.equal(findBot(() => false, 'win32').command, engineBot.command);
 });
 
+test('findBot melewati venv kosong dan memilih venv yang pustakanya lengkap', () => {
+  const root = path.resolve(__dirname, '..', '..');
+  const engineVenv = path.join(root, 'engine', '.venv');
+  const rootVenv = path.join(root, '.venv');
+  const pythons = [botFor(engineVenv, 'win32').command, botFor(rootVenv, 'win32').command];
+  const pil = path.join(rootVenv, 'Lib', 'site-packages', 'PIL');
+  // engine/.venv ada tetapi kosong; .venv di root lengkap
+  const exists = (file) => pythons.includes(file) || file === pil;
+  assert.equal(findBot(exists, 'win32').command, botFor(rootVenv, 'win32').command);
+  // keduanya kosong: tetap pakai yang pertama ada
+  const bare = (file) => pythons.includes(file);
+  assert.equal(findBot(bare, 'win32').command, botFor(engineVenv, 'win32').command);
+});
+
 test('proses engine: log per baris, lingkungan dari .env, berhenti', async () => {
   const dir = tempDir();
   const script = path.join(dir, 'fake-bot.js');

@@ -31,11 +31,33 @@ function botFor(venv, platform = process.platform) {
     : { command: path.join(venv, 'bin', 'python'), args: ['-m', 'binance_bot'] };
 }
 
-/** Virtualenv pertama yang ada: `engine/.venv`, lalu `.venv` di root repo. */
+/** Folder site-packages sebuah virtualenv (Windows: Lib; macOS/Linux: lib/pythonX.Y). */
+function sitePackages(venv, platform = process.platform) {
+  if (platform === 'win32') return [path.join(venv, 'Lib', 'site-packages')];
+  try {
+    return fs.readdirSync(path.join(venv, 'lib'))
+      .filter((name) => name.startsWith('python'))
+      .map((name) => path.join(venv, 'lib', name, 'site-packages'));
+  } catch {
+    return [];
+  }
+}
+
+/** Virtualenv yang sudah berisi pustaka engine (Pillow dipakai untuk menangkap layar). */
+function hasEngineDeps(venv, exists = fs.existsSync, platform = process.platform) {
+  return sitePackages(venv, platform).some((dir) => exists(path.join(dir, 'PIL')));
+}
+
+/**
+ * Virtualenv untuk engine: `engine/.venv` atau `.venv` di root repo. Yang dipilih adalah yang
+ * pustakanya lengkap; venv kosong (mis. sisa Python lama) dilewati. Bila tidak ada yang lengkap,
+ * pakai yang pertama ada supaya pesan galatnya tetap masuk akal.
+ */
 function findBot(exists = fs.existsSync, platform = process.platform) {
   const venvs = [path.join(ENGINE_DIR, '.venv'), path.join(REPO_DIR, '.venv')];
-  const found = venvs.map((venv) => botFor(venv, platform)).find((bot) => exists(bot.command));
-  return found || botFor(venvs[0], platform);
+  const present = venvs.filter((venv) => exists(botFor(venv, platform).command));
+  const ready = present.find((venv) => hasEngineDeps(venv, exists, platform));
+  return botFor(ready || present[0] || venvs[0], platform);
 }
 
 const DEFAULT_BOT = findBot();

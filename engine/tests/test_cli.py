@@ -1,7 +1,9 @@
 import argparse
+from pathlib import Path
 
 import pytest
 
+from binance_bot import cli
 from binance_bot.cli import build_parser, params_from, parse_ranks
 
 
@@ -70,3 +72,23 @@ def test_leader_and_follower_arguments() -> None:
         ["follower", "--hub", "http://10.0.0.2:8765", "--rank", "5", "--modal", "500"]
     )
     assert (follower.hub, follower.rank, follower.modal) == ("http://10.0.0.2:8765", 5, 500)
+
+
+def test_unexpected_error_is_logged_with_traceback(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    class Boom:
+        name = "boom"
+
+        def run(self) -> None:
+            raise RuntimeError("OCR rusak")
+
+    monkeypatch.chdir(tmp_path)  # .env dan log_dir ("logs") ada di folder sementara
+    monkeypatch.setattr(cli, "setup_logging", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "build_workflow", lambda args, settings: Boom())
+    with caplog.at_level("ERROR"):
+        code = cli.main(["cek"])
+    assert code == 1
+    record = next(r for r in caplog.records if "Galat tak terduga" in r.getMessage())
+    assert "RuntimeError: OCR rusak" in record.getMessage()
+    assert record.exc_info is not None  # traceback ikut tercatat

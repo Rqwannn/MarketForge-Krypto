@@ -80,6 +80,9 @@ def screen_too_small(areas: Sequence[Rect]) -> str:
 
 # Menu "Pasar" di sidebar kiri, agar navigasi selalu mulai dari halaman yang sama.
 SIDEBAR_MARKET = (0.023, 0.173)
+# Bila diisi, label "Pasar" di sidebar dicari dengan OCR (tata letak tiap laptop bisa berbeda) dan
+# SIDEBAR_MARKET hanya dipakai bila label tidak terbaca. None = posisi tetap.
+SIDEBAR_AREA: tuple[float, float, float, float] | None = None
 # Tab "Futures" pada daftar pasar (sub-tab USDⓈ-M terpilih secara default).
 MARKET_FUTURES_TAB = (0.267, 0.388)
 # Gulir halaman Pasar setelah tab Futures dibuka (0 = tidak perlu), di titik gulir ini.
@@ -98,6 +101,10 @@ FUTURES_CHANGE_HEADER = (0.5325, 0.5133)
 FUTURES_LIST_AREA = (0.11, 0.53, 0.60, 0.97)
 # Ikon trade di kolom "Tindakan" untuk baris 1..5 (baris 6 terpotong di layar).
 FUTURES_TRADE_ICON_X = 0.924
+# Bila diisi, judul kolom "Tindakan" dicari dengan OCR dan ikon trade diklik di x judul + DX; y-nya
+# dari baris hasil OCR. Tanpa ini, posisi ikon dihitung dari nilai tetap di atas.
+FUTURES_ACTION_AREA: tuple[float, float, float, float] | None = None
+FUTURES_TRADE_ICON_DX = 0.0
 FUTURES_FIRST_ROW_Y = 0.574
 FUTURES_ROW_STEP = 0.0745
 MAX_RANK = 5
