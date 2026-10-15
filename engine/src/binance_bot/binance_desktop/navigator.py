@@ -79,7 +79,8 @@ _CLOSE = re.compile(r"^\s*[xX\u00d7]\s*$")  # ikon tutup (x atau tanda kali)
 
 
 def _leverage_of(text: str) -> int | None:
-    match = _LEVERAGE_VALUE.search(text)
+    """Angka di kolom leverage setelah diketik; "x" boleh tidak ada (Tebbit: "2" lalu "X")."""
+    match = re.search(r"(?<![\d.,])(\d{1,3})\s*[xX]?(?![\d.,A-Za-z])", text)
     return int(match.group(1)) if match else None
 
 

@@ -147,3 +147,12 @@ def test_without_any_readable_name_the_row_is_clicked_on_its_change() -> None:
     rows = parse_gainer_rows([TextLine("+21.58%", 0.775, 0.331)], area)
     x0, _, x1, _ = area
     assert rows[0][1][0] == pytest.approx(x0 + 0.775 * (x1 - x0))
+
+
+def test_typed_leverage_is_read_with_or_without_the_x() -> None:
+    from binance_bot.binance_desktop.navigator import _leverage_of
+
+    assert _leverage_of("2") == 2  # Tebbit: angka dan "X" bisa terbaca terpisah
+    assert _leverage_of("2X") == 2
+    assert _leverage_of("— 2x +") == 2
+    assert _leverage_of("11.500") is None  # harga order book bukan leverage
