@@ -120,6 +120,7 @@ function plain(text) {
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],
     [/[Aa]nalisis AI|model/, 'AI belum bisa membaca grafik koin ini'],
+    [/Leverage tidak terbaca/, `Leverage di ${site} tidak terbaca di layar, koin dilewati`],
     [/Top gainer|terurut|tidak terbaca|tidak ditemukan/i, `Halaman ${site} belum terbaca dengan benar`],
     [/notional|di bawah minimal|melebihi/i, 'Modal tidak cocok dengan aturan jumlah koin ini'],
   ];

@@ -14,6 +14,7 @@ from binance_bot.tebbit_web.navigator import _legend_periods
 from binance_bot.tebbit_web.screen_text import (
     parse_gainer_rows,
     parse_header,
+    parse_margin,
     parse_order_book,
 )
 from fakes import TextLine
@@ -130,3 +131,25 @@ def test_legend_periods_survive_ocr_garbling(legend: str, periods: set[int]) -> 
 def test_header_price_without_a_decimal_point_still_gives_the_change() -> None:
     _, change = parse_header(["SOXSUSDT", "4454 +16.17%", "Perpetual"])
     assert change == 16.17
+
+
+@pytest.mark.parametrize(
+    ("texts", "isolated", "leverage"),
+    [
+        (["Cross-Merge", "sox"], False, 50),  # kasus nyata: "50X" terbaca "sox"
+        (["Isolated\u00b7Merge", "2X"], True, 2),
+        (["Cross\u00b7Merge  75X"], False, 75),
+        (["Isolated-Merge", "ZX"], True, 2),
+        (["Cross-Merge", "l50x"], False, 150),
+    ],
+)
+def test_margin_panel_survives_ocr_turning_digits_into_letters(
+    texts: list[str], isolated: bool, leverage: int
+) -> None:
+    settings = parse_margin(texts)
+    assert (settings.isolated, settings.leverage) == (isolated, leverage)
+
+
+def test_margin_panel_without_any_leverage_is_still_refused() -> None:
+    with pytest.raises(ScreenReadError, match="Leverage tidak terbaca"):
+        parse_margin(["Cross-Merge", "Merge"])

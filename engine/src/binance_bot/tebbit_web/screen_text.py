@@ -15,7 +15,9 @@ from binance_bot.tebbit_web import layout_tebbit as lay
 _PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)\s*(?:%|0/0)$")
 _PAIR = re.compile(r"([A-Z0-9]{1,20}USDT)\b")
 _PRICE = re.compile(r"^\d[\d,]*\.\d{2,}$")
-_LEVERAGE = re.compile(r"(\d{1,3})\s*[xX]\b")
+# Leverage sering salah baca di OCR: "50X" menjadi "sox" (5 jadi s, 0 jadi o), "2X" menjadi "ZX".
+_LEVERAGE = re.compile(r"(?<![A-Za-z])([0-9SsOoIlZz|]{1,3})\s*[xX]\b")
+_DIGIT_LOOKALIKES = str.maketrans("SsOoIl|Zz", "550011122")
 _URL_PAIR = re.compile(r"^/futures/contract/u_based/([^/?#]+)$")
 
 
@@ -117,7 +119,12 @@ def parse_order_book(
 def parse_margin(texts: Sequence[str]) -> MarginSettings:
     """Panel "Cross·Merge  75X" -> mode margin dan leverage."""
     joined = " ".join(texts)
-    leverage = _LEVERAGE.search(joined)
-    if not leverage:
+    leverage = None
+    for raw in _LEVERAGE.findall(joined):
+        digits = raw.translate(_DIGIT_LOOKALIKES)
+        if digits.isdigit() and 0 < int(digits) <= 500:
+            leverage = int(digits)
+            break
+    if leverage is None:
         raise ScreenReadError(f"Leverage tidak terbaca di panel margin: {texts}")
-    return MarginSettings(isolated="isolated" in joined.casefold(), leverage=int(leverage.group(1)))
+    return MarginSettings(isolated="isolated" in joined.casefold(), leverage=leverage)
