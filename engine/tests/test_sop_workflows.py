@@ -119,12 +119,26 @@ def test_pattern_not_ok_means_no_entry(tmp_path: Path, pattern: Any, word: str) 
     ("quote", "reason"),
     [(Quote(1.0, 1.0005, -0.001, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
 )
-def test_cost_filters_skip_before_any_ai_call(tmp_path: Path, quote: Quote, reason: str) -> None:
+def test_cost_filters_reject_after_the_pattern_is_judged(
+    tmp_path: Path, quote: Quote, reason: str
+) -> None:
+    # Urutan SOP: pola, lalu biaya. Koin yang biayanya mahal tetap dibaca AI dan tampil lengkap
+    # (grafik, penilaian), tapi tidak pernah dibuka.
     nav = FakeNavigator({1: "STRKUSDT"})
-    trader, _, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
+    trader, gate, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
     analyzer = FakePatternAnalyzer(OK)
     entry = trader.trade(1, "STRKUSDT", source(analyzer))
-    assert reason in entry.reason and analyzer.calls == []
+    assert entry.status == "skipped" and reason in entry.reason
+    assert len(analyzer.calls) == 1 and entry.verdict == "ok" and entry.screenshots
+    assert nav.filled == [] and gate.plans == []
+
+
+def test_pattern_reason_wins_over_cost_reason_when_pattern_is_not_ok(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    wide = FakeMarket(quote=Quote(1.0, 1.01, 0.0001, 50.0))
+    trader, _, _, _ = make_trader(tmp_path, nav, wide)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(NEVER)))
+    assert entry.verdict == "jangan" and "spread" not in entry.reason
 
 
 def test_min_gain_filter_is_off_by_default_and_optional(tmp_path: Path) -> None:

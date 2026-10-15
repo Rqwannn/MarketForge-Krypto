@@ -241,17 +241,20 @@ class SopTrader:
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
 
-        # Saringan biaya (gratis, sebelum AI): funding, spread, dan kenaikan minimal bila diisi.
+        # Harga, funding, dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini.
+        # Funding dan spread baru menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot),
+        # supaya penilaian AI dan grafiknya tetap tampil untuk koin yang biayanya mahal.
         quote = self._market.quote(symbol)
         entry.change_pct = quote.change_pct
         entry.funding_rate = quote.funding_rate
         entry.spread_pct = quote.spread_pct
         if quote.change_pct < params.min_gain_pct:
             raise _Skip(f"naik {quote.change_pct:.1f}% < {params.min_gain_pct:g}% dalam 24 jam")
+        cost_issue: str | None = None
         if quote.funding_rate * 100 < params.min_funding_pct:
-            raise _Skip(f"funding {quote.funding_rate * 100:.4f}% terlalu negatif (short membayar)")
-        if quote.spread_pct > params.max_spread_pct:
-            raise _Skip(f"spread {quote.spread_pct:.3f}% > {params.max_spread_pct:g}%")
+            cost_issue = f"funding {quote.funding_rate * 100:.4f}% terlalu negatif (short membayar)"
+        elif quote.spread_pct > params.max_spread_pct:
+            cost_issue = f"spread {quote.spread_pct:.3f}% > {params.max_spread_pct:g}%"
 
         # Saringan pola: garis kuning (MA7) terhadap MA25 di chart 15 menit.
         self._nav.show_15m_chart()
@@ -303,7 +306,11 @@ class SopTrader:
                 )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
 
-        # Langkah 4 SOP (setelah pola dan biaya): pair yang sama dan slot posisi.
+        # Langkah 3 SOP (setelah pola): funding dan spread.
+        if cost_issue:
+            raise _Skip(cost_issue)
+
+        # Langkah 4 SOP: pair yang sama dan slot posisi.
         if any(e.symbol == symbol and e.status == "open" for e in self._journal.load()):
             raise _Skip("sudah ada posisi uji yang masih terbuka untuk pair ini")
         blocker = self.slot_blocker()
