@@ -11,21 +11,26 @@ from __future__ import annotations
 import itertools
 import logging
 import re
+import sys
+import tempfile
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from binance_bot.binance_desktop.navigator import BinanceNavigator
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings, same_number
 from binance_bot.config import Settings
 from binance_bot.exceptions import SafetyError, ScreenReadError, WindowError
-from binance_bot.macos import AppController, Rect, TextReader
+from binance_bot.macos import AppController, Rect, TextLine, TextReader
 from binance_bot.tebbit_web import layout_tebbit as lay
 from binance_bot.tebbit_web.chrome import (
     CHROME_BUNDLE_ID,
+    CHROME_EXE,
     CHROME_NAME,
     HOME_URL,
-    ChromeController,
+    Browser,
     ChromeWindowController,
 )
 from binance_bot.tebbit_web.pattern_rules import TEBBIT
@@ -39,6 +44,9 @@ from binance_bot.tebbit_web.screen_text import (
 )
 from binance_bot.tebbit_web.visible import tab_window_is_visible
 
+if TYPE_CHECKING:
+    from binance_bot.tebbit_web.chrome_windows import WinChromeWindowController
+
 logger = logging.getLogger(__name__)
 
 _GAINERS = re.compile(r"\bGainers\b")
@@ -50,9 +58,17 @@ _QUANTITY = re.compile(r"Quantity", re.IGNORECASE)
 _LOGIN = re.compile(r"\b(Log\s*in|Sign\s*up|Register)\b", re.IGNORECASE)
 _GUEST_PAGE = re.compile(r"Welcome to log in", re.IGNORECASE)  # popup login (beranda tamu)
 _MA_LABEL = re.compile(r"MA\s*\d+")
+# Label legenda sering rusak di OCR: "MA 10 close" terbaca "BAIOc10seo", "mA10 closeo",
+# "MAIO closeo",
+# "BRA 30 close" atau hanya "IO close" (1 jadi I, 0 jadi O, "MA" berubah atau hilang). Dicari angka
+# (atau huruf mirip angka) sesudah awalan "MA" yang rusak sebelum "c", atau sebelum kata "clo".
+_MA_PERIOD = re.compile(r"[MmBb][RrAa4]{0,2}\s*([0-9IlOo|]{1,3})(?=\s*c)")
+_MA_BARE_PERIOD = re.compile(r"(?<![\d.])([0-9IlOo|]{1,3})\s*clo", re.IGNORECASE)
+_DIGIT_LOOKALIKES = str.maketrans("IlOo|", "11001")
 _CONTRACT_PATH = "/futures/contract/u_based/"
 _PAGE_TIMEOUT_S = 25.0
 _VERIFY_ATTEMPTS = 4
+_LEGEND_RETRIES = 3
 
 
 class TebbitNavigator(BinanceNavigator):
@@ -60,15 +76,16 @@ class TebbitNavigator(BinanceNavigator):
         self,
         settings: Settings,
         apps: AppController,
-        window: ChromeWindowController,
+        window: ChromeWindowController | WinChromeWindowController,
         reader: TextReader,
-        chrome: ChromeController,
+        chrome: Browser,
         *,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         screens: Callable[[], Sequence[Rect]],
     ) -> None:
-        chrome_settings = replace(settings, app_name=CHROME_NAME, app_bundle_id=CHROME_BUNDLE_ID)
+        app_id = CHROME_EXE if sys.platform == "win32" else CHROME_BUNDLE_ID
+        chrome_settings = replace(settings, app_name=CHROME_NAME, app_bundle_id=app_id)
         super().__init__(
             chrome_settings, apps, window, reader, sleep=sleep, clock=clock, screens=screens
         )
@@ -89,9 +106,9 @@ class TebbitNavigator(BinanceNavigator):
         self._chrome.set_bounds(self._window_id, area)
         self._chrome.raise_window(self._window_id)
         self._sleep(1.0)
-        self._rect = self._chrome.bounds(self._window_id)
+        self._rect = self._chrome.content_bounds(self._window_id)
         self._ensure_front()
-        self._chrome.set_zoom(lay.ZOOM_STEPS_DOWN)
+        self._chrome.set_zoom(lay.ZOOM_STEPS_DOWN, self._window_id)
         self._sleep(1.0)
         self._on_contract = False
         self._load(HOME_URL)
@@ -132,7 +149,7 @@ class TebbitNavigator(BinanceNavigator):
         self._raise_if_logged_out()
 
     def _raise_if_logged_out(self) -> None:
-        top = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.17))
+        top = self._read_texts(self.rect.sub(*lay.LOGIN_AREA))
         page = self._read_texts(self.rect.sub(0.0, 0.10, 1.0, 0.95))
         # Sesi kedaluwarsa: tombol Login atau popup login.
         if any(_LOGIN.search(text) or _GUEST_PAGE.search(text) for text in top + page):
@@ -145,6 +162,48 @@ class TebbitNavigator(BinanceNavigator):
         if self._window_id is not None:
             self._chrome.close_window(self._window_id)
             self._window_id = None
+
+    def _read_lines(self, area: Rect) -> list[TextLine]:
+        """Baca area; teks kecil Tebbit diperbesar dulu bila profil layout meminta."""
+        factor = lay.OCR_UPSCALE
+        if not factor:
+            return super()._read_lines(area)
+        return self._ocr_variant(area, "gray", factor)
+
+    def _read_lines_merged(
+        self, area: Rect, variants: tuple[tuple[str, int], ...] | None = None
+    ) -> list[TextLine]:
+        """Gabungan beberapa bacaan (kanal warna, pembesaran) untuk teks berwarna: harga, persen."""
+        variants = variants or lay.OCR_QUOTE_VARIANTS
+        if not variants:
+            return super()._read_lines(area)
+        merged: list[TextLine] = []
+        seen: set[tuple[str, int]] = set()
+        for channel, factor in variants:
+            for line in self._ocr_variant(area, channel, factor):
+                key = (line.text, round(line.y * 50))
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(line)
+        return sorted(merged, key=lambda item: (item.y, item.x))
+
+    def _ocr_variant(self, area: Rect, channel: str, factor: int) -> list[TextLine]:
+        from PIL import Image, ImageChops
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raw, big = Path(tmp) / "ocr.png", Path(tmp) / "ocr_big.png"
+            self._ensure_front()
+            self._window.capture(area, raw)
+            with Image.open(raw) as image:
+                rgb = image.convert("RGB")
+                if channel == "max":
+                    r, g, b = rgb.split()
+                    gray = ImageChops.lighter(ImageChops.lighter(r, g), b)
+                else:
+                    gray = rgb.convert("L")
+                size = (gray.width * factor, gray.height * factor)
+                gray.resize(size, Image.Resampling.LANCZOS).save(big)
+            return self._reader.read_lines(big)
 
     # ------------------------------------------------------------------ keamanan
     def _forbidden(self, target: tuple[float, float]) -> bool:
@@ -271,19 +330,30 @@ class TebbitNavigator(BinanceNavigator):
         self._click(found)
         deadline = self._clock() + _PAGE_TIMEOUT_S
         while True:
-            legend = " ".join(self._read_texts(self.rect.sub(*lay.LEGEND_AREA)))
+            legend = self._legend_text()
             if _MA_LABEL.search(legend):
                 break
             if self._clock() >= deadline:
                 raise ScreenReadError("Grafik 15 menit Tebbit belum termuat (legenda MA tidak ada)")
             self._sleep(1.0)
         # Baseline Tebbit (MA 5/10/30) dipakai apa adanya; indikator grafik tidak diubah bot.
-        periods = {int(n) for n in re.findall(r"MA\s*(\d+)", legend)}
+        periods = _legend_periods(legend)
+        for _ in range(_LEGEND_RETRIES):
+            if TEBBIT.legend_ready(periods):
+                break
+            # OCR kadang melewatkan satu label: gabungkan beberapa bacaan sebelum menolak koin.
+            self._sleep(0.5)
+            periods |= _legend_periods(self._legend_text())
         if not TEBBIT.legend_ready(periods):
             raise ScreenReadError(
                 f"Indikator MA di grafik Tebbit {sorted(periods)}; aturan Tebbit memakai "
                 f"{TEBBIT.baseline}. Kembalikan indikator koin ini ke bawaan Tebbit."
             )
+
+    def _legend_text(self) -> str:
+        """Teks legenda MA dari beberapa bacaan digabung (tiap bacaan melewatkan label berbeda)."""
+        lines = self._read_lines_merged(self.rect.sub(*lay.LEGEND_AREA), lay.OCR_LEGEND_VARIANTS)
+        return " ".join(line.text for line in lines)
 
     def _chart_area(self) -> Rect:
         return self.rect.sub(*lay.CHART_AREA)
@@ -294,9 +364,10 @@ class TebbitNavigator(BinanceNavigator):
 
     def read_quote(self) -> tuple[float, float, float, float]:
         """(bid, ask, harga terakhir, perubahan 24 jam %) dari halaman koin yang terbuka."""
-        price, change = parse_header(self._read_texts(self.rect.sub(*lay.HEADER_AREA)))
+        header = self._read_lines_merged(self.rect.sub(*lay.HEADER_AREA))
+        price, change = parse_header([line.text for line in header])
         area = lay.ORDERBOOK_AREA
-        bid, ask = parse_order_book(self._read_lines(self.rect.sub(*area)), area)
+        bid, ask = parse_order_book(self._read_lines_merged(self.rect.sub(*area)), area)
         return bid, ask, price, change
 
     def fill_quantity(self, text: str) -> None:
@@ -333,6 +404,16 @@ class TebbitNavigator(BinanceNavigator):
         else:
             raise ScreenReadError(f"Kolom Quantity menampilkan {shown}, bukan {text}")
         logger.info("Kolom Quantity terisi: %s USDT", text)
+
+
+def _legend_periods(text: str) -> set[int]:
+    """Periode MA yang tertulis di legenda, tahan salah baca huruf yang mirip angka."""
+    periods = {int(n) for n in re.findall(r"MA\s*(\d+)", text)}
+    for raw in _MA_PERIOD.findall(text) + _MA_BARE_PERIOD.findall(text):
+        digits = raw.translate(_DIGIT_LOOKALIKES)
+        if digits.isdigit() and 0 < int(digits) < 1000:
+            periods.add(int(digits))
+    return periods
 
 
 def _descending(rows: Sequence[tuple[GainerRow, tuple[float, float]]]) -> bool:

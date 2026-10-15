@@ -22,6 +22,8 @@ _ROW_TOLERANCE = 0.4
 # yang lebih pendek dari ini diperbesar dulu; koordinat hasil OCR tetap relatif (0..1).
 _MIN_OCR_HEIGHT = 220
 _MAX_UPSCALE = 6
+# OcrEngine menolak gambar dengan sisi lebih dari 10000 px (OcrEngine.MaxImageDimension).
+_MAX_DIMENSION = 9000
 
 _Word = tuple[str, float, float, float, float]  # teks, x, y, lebar, tinggi (piksel)
 
@@ -114,12 +116,15 @@ def _variants(image: Path, directory: Path) -> list[Path]:
     from PIL import Image, ImageOps
 
     with Image.open(image) as source:
-        factor = min(_MAX_UPSCALE, -(-_MIN_OCR_HEIGHT // source.height))
+        fits = _MAX_DIMENSION // max(source.width, source.height)
+        factor = min(_MAX_UPSCALE, -(-_MIN_OCR_HEIGHT // source.height), fits)
         if factor <= 1:
             return [image]
         gray = source.convert("L")
         paths: list[Path] = []
         for scale in dict.fromkeys((factor, max(2, factor // 2))):
+            if scale > fits:
+                continue
             big = gray.resize((gray.width * scale, gray.height * scale), Image.Resampling.LANCZOS)
             for mode, candidate in (("g", big), ("i", ImageOps.invert(big))):
                 target = directory / f"ocr_{mode}{scale}.png"

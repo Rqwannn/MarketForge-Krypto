@@ -8,6 +8,7 @@ jendela yang paling depan di beberapa titik area itu memang jendela Chrome terse
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -21,7 +22,26 @@ class OnScreenWindow:
 
 
 def on_screen_windows() -> list[OnScreenWindow]:
-    """Jendela biasa (layer 0) di Desktop yang sedang tampil, dari depan ke belakang."""
+    """Jendela biasa di Desktop yang sedang tampil, dari depan ke belakang."""
+    if sys.platform == "win32":
+        return _windows_on_screen()
+    return _mac_on_screen()
+
+
+def _windows_on_screen() -> list[OnScreenWindow]:
+    """Windows: urutan Z dari EnumWindows. Chrome dinamai "Google Chrome" agar sama dengan macOS."""
+    from binance_bot.windows import win32
+
+    return [
+        OnScreenWindow(
+            "Google Chrome" if name.casefold() == "chrome.exe" else name,
+            Rect(box.x, box.y, box.width, box.height),
+        )
+        for name, box in win32.on_screen_windows()
+    ]
+
+
+def _mac_on_screen() -> list[OnScreenWindow]:
     import Quartz
 
     options = Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements

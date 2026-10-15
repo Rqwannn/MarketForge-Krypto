@@ -11,7 +11,8 @@ from binance_bot.exceptions import ScreenReadError
 from binance_bot.macos import TextLine
 from binance_bot.tebbit_web import layout_tebbit as lay
 
-_PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)\s*%$")
+# OCR Windows kadang membaca "%" sebagai "0/0" pada font kecil.
+_PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)\s*(?:%|0/0)$")
 _PAIR = re.compile(r"([A-Z0-9]{1,20}USDT)\b")
 _PRICE = re.compile(r"^\d[\d,]*\.\d{2,}$")
 _LEVERAGE = re.compile(r"(\d{1,3})\s*[xX]\b")
@@ -75,10 +76,11 @@ def parse_gainer_rows(
 
 def parse_header(texts: Sequence[str]) -> tuple[float, float]:
     """Header koin -> (harga terakhir, perubahan 24 jam %)."""
-    joined = " ".join(texts)
+    joined = " ".join(texts).replace("_", ".")  # OCR kadang membaca titik desimal sebagai "_"
     # Harga terakhir tepat diikuti perubahannya, mis. "0.15384 +11.35%" (OCR bisa menyisipkan
     # spasi setelah tanda: "+ 11.35%").
-    found = re.search(r"(\d[\d,]*\.\d+)\s*([+-])\s*(\d+(?:\.\d+)?)\s*%", joined)
+    # Harga header tidak dipakai SOP (bid/ask dari order book); titik desimalnya kadang hilang.
+    found = re.search(r"(\d[\d,]*(?:\.\d+)?)\s*([+-])\s*(\d+(?:\.\d+)?)\s*(?:%|0/0)", joined)
     if not found:
         raise ScreenReadError(f"Harga atau perubahan 24 jam tidak terbaca di header: {texts}")
     price, sign, change = found.groups()
@@ -98,7 +100,7 @@ def parse_order_book(
         raise ScreenReadError("Order book Tebbit tidak terbaca (tulisan 'Mark Price' tidak ada)")
     asks, bids = [], []
     for line in lines:
-        text = line.text.strip()
+        text = line.text.strip().replace("_", ".")  # titik desimal sering terbaca "_"
         if line.x > 0.3 or not _PRICE.match(text):
             continue
         y = y0 + line.y * (y1 - y0)

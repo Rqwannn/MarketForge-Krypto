@@ -53,6 +53,11 @@ _CHART_TAB = re.compile(r"\bGrafik\b")
 _FUTURES_TAB = re.compile(r"\bFutures\b")
 _CHANGE_HEADER = re.compile(r"Perubahan")
 _MARKET_MENU = re.compile(r"^\s*Pasar\s*$", re.IGNORECASE)
+_UNIT_MENU_TITLE = re.compile(r"Preferensi\s*Unit|^\s*Unit\s*$")
+_UNIT_MENU_USDT = re.compile(r"dalam\s+USDT", re.IGNORECASE)
+# OCR membaca lingkaran radio sebagai huruf ("C. Ukuran Order"); huruf besar membedakannya dari
+# keterangan "...ukuran order dalam USDT".
+_UNIT_RADIO = re.compile(r"Ukuran\s*Order")
 _ACTION_HEADER = re.compile(r"Tindakan", re.IGNORECASE)
 _EXTRA_SCROLL_SHIFT = 0.05  # banner setinggi ini atau lebih: gulir satu langkah lagi
 _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
@@ -90,6 +95,9 @@ class BinanceNavigator:
         self._row_y: dict[int, float] = {}  # y baris top gainer yang terbaca di layar
         self._list_rows: list[GainerRow] = []  # daftar top gainers yang terakhir dibaca
         self._on_list = False  # bot sedang di daftar (belum membuka halaman koin)
+        self._unit_menu_click = (
+            False  # True hanya saat memilih satuan USDT (lihat _click_in_unit_menu)
+        )
 
     def prepare(self) -> None:
         """Bawa Binance ke depan dan pastikan ukuran jendela sesuai kalibrasi posisi klik."""
@@ -377,6 +385,7 @@ class BinanceNavigator:
         if not self._on_trade_page:
             raise SafetyError("Kolom Jumlah hanya diisi di halaman trade")
         self._click(layout.ORDER_TAB_MARKET)
+        self._ensure_usdt_unit()
         self._check_order_unit()
         self._click(layout.ORDER_QTY_FIELD)
         self._ensure_front()  # ketikan angka hanya boleh masuk ke Binance
@@ -394,6 +403,57 @@ class BinanceNavigator:
         else:
             raise ScreenReadError(f"Kolom Jumlah menampilkan {shown}, bukan {text}")
         logger.info("Kolom Jumlah terisi: %s", text)
+
+    def _ensure_usdt_unit(self) -> None:
+        """Pastikan satuan kolom Jumlah USDT (Ukuran Order); bila bukan, pilih lewat menu satuan."""
+        if layout.ORDER_UNIT_BUTTON is None or layout.ORDER_UNIT_MENU_AREA is None:
+            return  # tidak diotomatiskan: _check_order_unit akan berhenti dan meminta pengguna
+        joined = " ".join(self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA)))
+        if _USDT_UNIT.search(joined) and not _MARGIN_MODE.search(joined):
+            return
+        logger.info("Satuan kolom Jumlah bukan USDT: memilih USDT lewat menu satuan")
+        if not self._unit_menu_open():
+            self._click(layout.ORDER_UNIT_BUTTON)
+            if not self._unit_menu_open():
+                shot = self._save_debug_shot("menu-satuan")
+                raise ScreenReadError(f"Menu satuan Jumlah tidak terbuka. Foto layar: {shot}")
+        area = layout.ORDER_UNIT_MENU_AREA
+        radio = self._find_text(area, _UNIT_RADIO)
+        if radio is None or radio[1] < layout.ORDER_UNIT_MIN_Y:
+            shot = self._save_debug_shot("menu-satuan")
+            raise ScreenReadError(
+                f"Pilihan 'Ukuran Order' di menu satuan tidak ada di tempat aman. Foto: {shot}"
+            )
+        self._click_in_unit_menu(radio)
+        shown = " ".join(self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA)))
+        if not _USDT_UNIT.search(shown) or _MARGIN_MODE.search(shown):
+            shot = self._save_debug_shot("menu-satuan")
+            raise ScreenReadError(
+                f"Satuan kolom Jumlah masih bukan USDT (terbaca: {shown}). {shot}"
+            )
+
+    def _unit_menu_open(self) -> bool:
+        """Menu "Preferensi Unit" tampil: judulnya dan keterangan USDT-nya sama-sama terbaca."""
+        area = layout.ORDER_UNIT_MENU_AREA
+        assert area is not None
+        texts = self._read_texts(self.rect.sub(*area))
+        return any(_UNIT_MENU_TITLE.search(t) for t in texts) and any(
+            _UNIT_MENU_USDT.search(t) for t in texts
+        )
+
+    def _click_in_unit_menu(self, target: tuple[float, float]) -> None:
+        """Klik di dalam menu satuan, di zona yang biasanya terlarang (menu menutupi tombol order).
+
+        Hanya lewat jalur ini, dan hanya bila menu terbukti masih terbuka tepat sebelum klik dan
+        titiknya di bawah garis ORDER_UNIT_MIN_Y (di bawah tombol Beli/Long dan Jual/Short).
+        """
+        if target[1] < layout.ORDER_UNIT_MIN_Y or not self._unit_menu_open():
+            raise SafetyError("Klik di menu satuan dibatalkan: menu tidak terbukti terbuka")
+        self._unit_menu_click = True
+        try:
+            self._click(target)
+        finally:
+            self._unit_menu_click = False
 
     def _check_order_unit(self) -> None:
         """Kolom Jumlah harus bersatuan USDT (Ukuran Order), bukan koin atau Margin Awal.
@@ -447,6 +507,8 @@ class BinanceNavigator:
 
     def _forbidden(self, target: tuple[float, float]) -> bool:
         """Titik yang tidak boleh diklik (tombol order). Platform lain menimpanya."""
+        if self._unit_menu_click and target[1] >= layout.ORDER_UNIT_MIN_Y:
+            return False
         return self._on_trade_page and layout.in_order_button_zone(target)
 
     def _ensure_front(self) -> None:

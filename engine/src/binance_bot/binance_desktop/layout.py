@@ -126,6 +126,14 @@ ORDER_TAB_MARKET = (0.8575, 0.1782)
 ORDER_QTY_FIELD = (0.85, 0.2939)
 ORDER_QTY_AREA = (0.812, 0.268, 0.992, 0.318)
 
+# Dropdown satuan kolom Jumlah (koin/USDT) dan menu "Preferensi Unit" yang terbuka darinya. Binance
+# mengembalikan satuan ke koin tiap pindah koin, jadi bot memilih USDT sendiri. None = tidak
+# diotomatiskan (bot berhenti dan meminta pengguna memilih USDT). Menu itu menutupi tombol order,
+# jadi klik di zona terlarang HANYA boleh pada ORDER_UNIT_MIN_Y ke bawah (di bawah tombol).
+ORDER_UNIT_BUTTON: tuple[float, float] | None = None
+ORDER_UNIT_MENU_AREA: tuple[float, float, float, float] | None = None
+ORDER_UNIT_MIN_Y = 1.0
+
 # Zona tombol order di halaman trade (x0, y0, x1, y1). Klik ke sini SELALU ditolak oleh
 # navigator: beli/short belum boleh dijalankan oleh bot.
 ORDER_BUTTON_ZONES: tuple[tuple[float, float, float, float], ...] = (

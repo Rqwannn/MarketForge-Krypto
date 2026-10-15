@@ -7,6 +7,9 @@ di sini hanya area pencarian, area baca, dan zona terlarang.
 
 from __future__ import annotations
 
+import os
+import sys
+
 EXPECTED_WINDOW = (1470, 863)
 MIN_WINDOW = (1400, 780)  # layar lebih kecil dari ini: tata letak Tebbit tidak muat
 ZOOM_STEPS_DOWN = 2  # Cmd+0 (100%) lalu dua kali Cmd+minus = 80%
@@ -18,6 +21,19 @@ NAV_FUTURES_TOLERANCE = 0.03
 
 # Margin kosong di kiri halaman (bukan tautan, bukan zona terlarang): klik mengaktifkan jendela.
 BLANK_MARGIN = (0.04, 0.55)
+
+# Area teks menu atas untuk memeriksa login ("Log in"/"Sign up" tampil bila belum masuk).
+LOGIN_AREA = (0.0, 0.10, 1.0, 0.17)
+
+# Windows OCR membaca teks kecil (±12 px) dengan buruk: gambar diperbesar sekian kali sebelum
+# dibaca (koordinat hasil tetap relatif). None = tanpa pembesaran (macOS Vision tidak butuh ini).
+OCR_UPSCALE: int | None = None
+# Teks berwarna di latar gelap (harga merah/hijau, persen) lebih jelas lewat kanal warna paling
+# terang ("max") daripada abu-abu. Bacaan harga dan header digabung dari beberapa varian
+# (kanal, pembesaran), karena tiap varian kadang melewatkan bagian yang lain terbaca.
+OCR_QUOTE_VARIANTS: tuple[tuple[str, int], ...] | None = None
+# Legenda MA (teks kecil berwarna): lebih banyak varian, karena tiap varian melewatkan label lain.
+OCR_LEGEND_VARIANTS: tuple[tuple[str, int], ...] | None = None
 
 # Halaman depan: daftar Gainers (tab "Gainers", sub-tab "Futures") di bawah halaman.
 LIST_SEARCH_AREA = (0.0, 0.17, 0.75, 0.99)
@@ -57,3 +73,7 @@ def in_zone(
 ) -> bool:
     x, y = target
     return any(x0 <= x <= x1 and y0 <= y <= y1 for x0, y0, x1, y1 in zones)
+
+
+if (os.environ.get("BOT_LAYOUT") or ("windows" if sys.platform == "win32" else "mac")) == "windows":
+    from binance_bot.tebbit_web.layout_tebbit_windows import *  # noqa: F403
