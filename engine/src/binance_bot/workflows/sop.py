@@ -35,6 +35,7 @@ from binance_bot.strategy import (
     data_ma_pattern,
     evaluate_by_price,
     evaluate_open_trades,
+    ma_gap_pct,
     size_position,
 )
 from binance_bot.workflows.base import TradingNavigator
@@ -327,12 +328,12 @@ class SopTrader:
 
         try:
             profile = self.profile
+            klines = self._market.klines(symbol, "15m", limit=candles_needed(mid=profile.mid))
             data: MaPattern | None = data_ma_pattern(
-                self._market.klines(symbol, "15m", limit=candles_needed(mid=profile.mid)),
-                fast=profile.fast,
-                mid=profile.mid,
-                recent=profile.recent_candles,
+                klines, fast=profile.fast, mid=profile.mid, recent=profile.recent_candles
             )
+            # V3: jarak kedua garis dicatat tiap koin (angka batas "berjauhan" belum ditetapkan).
+            entry.ma_gap_pct = ma_gap_pct(klines, fast=profile.fast, mid=profile.mid)
         except MarketDataError as exc:  # bursa tanpa sumber candle: hanya AI yang menilai
             logger.info("Pembanding data tidak ada: %s", exc)
             data = None
@@ -360,6 +361,11 @@ class SopTrader:
             f" | {entry.ai_summary}" if entry.ai_summary else "",
         )
         if entry.verdict != "ok":
+            if entry.verdict == "tunggu" and decisive.lines_close and decisive.below_recent:
+                raise _Skip(
+                    "pola garis kuning TUNGGU (garis MA7 dan MA25 berdekatan; masuk hanya bila "
+                    "berjauhan)"
+                )
             if entry.verdict == "tunggu" and decisive.below_count >= params.min_crosses:
                 raise _Skip(
                     f"pola garis kuning TUNGGU (sudah {decisive.below_count} kali di bawah, "

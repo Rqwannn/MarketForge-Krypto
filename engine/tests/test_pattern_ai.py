@@ -148,3 +148,30 @@ def test_consensus_is_stable_when_all_reads_agree() -> None:
     same = [(0, False, False)] * 5
     reading = ConsensusAnalyzer(_Scripted(list(same)), reads=5).analyze(Path("x.png"))
     assert BINANCE.verdict(reading.pattern, 2) == "jangan"
+
+
+def test_binance_v3_lines_close_means_wait_but_tebbit_still_may_enter() -> None:
+    close = pattern_from_dict({**VALID, "ma7_ma25_close": True})
+    apart = pattern_from_dict({**VALID, "ma7_ma25_close": False})
+    assert close.pattern == MaPattern(3, True, True, lines_close=True)
+    assert BINANCE.verdict(close.pattern, 2) == "tunggu"  # garis berdekatan: jangan masuk dulu
+    assert BINANCE.verdict(apart.pattern, 2) == "ok"
+    assert TEBBIT.verdict(close.pattern, 2) == "ok"  # Tebbit: garis berdekatan boleh masuk
+    assert "ma7_ma25_close" in BINANCE.prompt and "ma7_ma25_close" not in TEBBIT.prompt
+    with pytest.raises(AnalysisError):
+        pattern_from_dict({**VALID, "ma7_ma25_close": "dekat"})
+
+
+class _CloseVotes:
+    def __init__(self, votes: list[bool]) -> None:
+        self._votes = votes
+
+    def analyze(self, image: Path) -> PatternReading:
+        return PatternReading(MaPattern(3, True, True, self._votes.pop(0)), "baca")
+
+
+def test_consensus_takes_the_majority_on_lines_close() -> None:
+    reading = ConsensusAnalyzer(_CloseVotes([True, False, True, True, False]), reads=5)
+    assert reading.analyze(Path("x.png")).pattern.lines_close is True
+    unjudged = ConsensusAnalyzer(_Scripted([(3, True, True)] * 5), reads=5)
+    assert unjudged.analyze(Path("x.png")).pattern.lines_close is None

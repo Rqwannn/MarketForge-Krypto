@@ -1,4 +1,4 @@
-"""Aturan pola garis kuning untuk Binance Desktop: baseline MA 7 / 25 / 99 (SOP V2).
+"""Aturan pola garis kuning untuk Binance Desktop: baseline MA 7 / 25 / 99 (SOP V3).
 
 Terpisah dari Tebbit (tebbit_web/pattern_rules.py): ubah di sini hanya memengaruhi Binance.
 """
@@ -25,6 +25,10 @@ Perhatikan khususnya bagian kanan grafik setelah harga naik: saat harga mendatar
 garis kuning sering berpotongan dengan garis magenta berkali-kali.
 Telusuri satu per satu dengan teliti sebelum menjawab.
 
+Lalu lihat UJUNG KANAN grafik: apakah garis kuning dan garis magenta BERDEKATAN (menempel, saling
+melilit, atau celahnya sangat tipis dibanding tinggi grafik) atau BERJAUHAN (ada celah yang jelas
+di antara keduanya, ke atas maupun ke bawah).
+
 Jawab HANYA dengan JSON valid, tanpa teks lain:
 {
  "ma7_below_ma25_count": <bilangan bulat>,
@@ -34,7 +38,10 @@ Jawab HANYA dengan JSON valid, tanpa teks lain:
    di 24 lilin terakhir itu garis kuning terus di atas garis magenta. Hitung lilinnya, jangan
    menebak dari label sumbu waktu: angka tanpa titik dua di sumbu (mis. "13", "14", "10/14")
    adalah TANGGAL (pergantian hari), bukan jam,
- "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia
+ "ma7_ma25_close": true jika di ujung kanan garis kuning dan garis magenta BERDEKATAN, false jika
+   BERJAUHAN,
+ "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia (sebut juga apakah garis
+   berdekatan atau berjauhan)
 }"""
 
 
@@ -45,6 +52,8 @@ def verdict(pattern: MaPattern, min_crosses: int) -> str:
         return "tunggu"  # baru sekali di bawah: masih bisa naik besar
     if not pattern.below_recent:
         return "tunggu"  # turunnya sebelum lonjakan; sekarang masih naik terus
+    if pattern.lines_close:
+        return "tunggu"  # V3: garis berdekatan, terbukti harga tidak turun; masuk bila berjauhan
     return "ok"  # berkali-kali di bawah dan baru saja turun lagi: cenderung turun
 
 

@@ -129,3 +129,12 @@ def test_data_counts_ma7_periods_below_ma25(drops: int, expected: MaPattern) -> 
 def test_data_pattern_needs_enough_candles() -> None:
     with pytest.raises(ValueError):
         data_ma_pattern(ma_candles(2)[:50])
+
+
+def test_ma_gap_is_how_far_the_fast_line_sits_below_the_slow_line() -> None:
+    from binance_bot.strategy import ma_gap_pct
+    from fakes import candle
+
+    closes = [100.0] * 18 + [90.0] * 7  # MA7 = 90, MA25 = 97,2
+    candles = [candle(c, c, c, c, 1, i) for i, c in enumerate([*closes, 0.0])]  # + lilin berjalan
+    assert ma_gap_pct(candles, fast=7, mid=25) == pytest.approx(100 * (97.2 - 90) / 97.2)

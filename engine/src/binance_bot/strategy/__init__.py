@@ -16,7 +16,7 @@ from binance_bot.strategy.execution import (
 )
 from binance_bot.strategy.journal import Journal, JournalEntry
 from binance_bot.strategy.params import SopParams
-from binance_bot.strategy.pattern import MaPattern, candles_needed, data_ma_pattern
+from binance_bot.strategy.pattern import MaPattern, candles_needed, data_ma_pattern, ma_gap_pct
 from binance_bot.strategy.profile import PatternProfile
 from binance_bot.strategy.sizing import Sizing, size_position
 
@@ -38,6 +38,7 @@ __all__ = [
     "data_ma_pattern",
     "evaluate_by_price",
     "evaluate_open_trades",
+    "ma_gap_pct",
     "size_position",
     "summarize",
 ]

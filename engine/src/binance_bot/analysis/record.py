@@ -33,6 +33,7 @@ class AnalysisRecord:
             "ma7_below_ma25_count": pattern.below_count,
             "ma7_below_ma25_now": pattern.below_now,
             "ma7_below_ma25_recent": pattern.below_recent,
+            **({} if pattern.lines_close is None else {"ma7_ma25_close": pattern.lines_close}),
             "summary": self.reading.summary,
         }
 
