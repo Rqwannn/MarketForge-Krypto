@@ -21,7 +21,14 @@ from binance_bot.hub import AnalysisStore, HubClient, HubServer
 from binance_bot.logging_setup import setup_logging
 from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.market import FuturesMarket, MarketData
-from binance_bot.strategy import DryRunOrderGate, Journal, SopParams
+from binance_bot.strategy import (
+    LIVE_ORDERS_ENABLED,
+    DryRunOrderGate,
+    Journal,
+    OrderGate,
+    ScreenOrderGate,
+    SopParams,
+)
 from binance_bot.strategy.params import SIGNAL_SOURCES
 from binance_bot.system import System, build_system
 from binance_bot.tebbit_web.chrome import Browser, ChromeController, ChromeWindowController
@@ -359,13 +366,20 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
 
     params = params_from(args)
+    # Order sungguhan hanya bila LIVE_ORDERS_ENABLED dibuka (sekarang terkunci): selain itu uji
+    # kertas, yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    gate: OrderGate = (
+        ScreenOrderGate(navigator)
+        if LIVE_ORDERS_ENABLED
+        else DryRunOrderGate(navigator.short_button)
+    )
     trader = SopTrader(
         settings,
         params,
         navigator,
         market,
         journal,
-        DryRunOrderGate(),
+        gate,
         fill_form=not args.no_fill,
         role="follower" if args.command == "follower" else "single",
         profile=profile,

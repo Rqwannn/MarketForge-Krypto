@@ -9,7 +9,13 @@ import pytest
 from binance_bot.analysis import AnalysisRecord
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError, ScreenReadError
+from binance_bot.exceptions import (
+    BotError,
+    MarketDataError,
+    NoHistoryError,
+    SafetyError,
+    ScreenReadError,
+)
 from binance_bot.hub import AnalysisStore, HubClient, HubServer, LeaderPlan, SharedAnalysis
 from binance_bot.market import Quote
 from binance_bot.strategy import Journal, JournalEntry, SopParams
@@ -494,7 +500,8 @@ def test_follower_gives_up_when_leader_never_judges_its_rank(tmp_path: Path) -> 
     follower, nav, journal = make_follower(tmp_path, FakeClient(None), {2: "CFXUSDT"}, wait_s=30)
     follower.run()
     assert follower.result is None
-    assert nav.calls == [] and journal.load() == []
+    assert nav.calls == ["show_app:2"]  # MarketForge tampil selama menunggu; bursa tidak disentuh
+    assert journal.load() == []
 
 
 # --------------------------------------------------------------------------- jurnal
@@ -810,3 +817,65 @@ def test_sell_works_on_exchange_without_price_history(tmp_path: Path) -> None:
     assert "error" not in result
     assert [c["symbol"] for c in result["closed"]] == ["CKBUSDT"]
     assert journal.load()[0].status == "manual"
+
+
+# --------------------------------------------------------------------------- tampilkan MarketForge
+
+
+def test_single_shows_the_app_while_ai_reads_and_returns_to_the_exchange_after(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "CFXUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    SingleWorkflow(nav, trader, FakePatternAnalyzer(OK), ranks=[1]).run()  # type: ignore[arg-type]
+    calls = nav.calls
+    # Urutan: grafik dibuka -> MarketForge tampil selama AI membaca -> kolom jumlah diisi
+    # (navigator membawa bursa ke depan lagi sebelum mengetik) -> pintu order (uji kertas).
+    assert calls.index("15m") < calls.index("show_app:CFXUSDT")
+    assert calls.index("show_app:CFXUSDT") < calls.index("fill:100")
+    assert len(gate.plans) == 1
+
+
+def test_leader_shows_the_app_while_ai_reads(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT", 2: "CFXUSDT"})
+    leader, analyzer, _ = make_leader(tmp_path, nav, Clock(1000.0))
+    leader.run_cycle()
+    assert nav.calls.index("15m") < nav.calls.index("show_app:STRKUSDT")
+    assert "show_app:CFXUSDT" in nav.calls and len(analyzer.calls) == 2
+
+
+# ------------------------------------------------------------------------- order sungguhan dikunci
+
+
+def test_live_orders_are_locked_everywhere() -> None:
+    from binance_bot.strategy import LIVE_ORDERS_ENABLED, ScreenOrderGate
+    from binance_bot.strategy.execution import OrderPlan
+
+    assert LIVE_ORDERS_ENABLED is False
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+
+    class Presser:
+        pressed = False
+
+        def press_short(self, plan: OrderPlan) -> None:
+            Presser.pressed = True
+
+    with pytest.raises(SafetyError, match="dinonaktifkan"):
+        ScreenOrderGate(Presser()).submit(plan)
+    assert Presser.pressed is False
+
+
+def test_dry_run_gate_finds_the_short_button_without_pressing_it(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from binance_bot.strategy import DryRunOrderGate
+    from binance_bot.strategy.execution import OrderPlan
+
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+    with caplog.at_level("INFO"):
+        DryRunOrderGate(lambda: (0.9, 0.51)).submit(plan)
+        DryRunOrderGate(lambda: (_ for _ in ()).throw(ScreenReadError("tidak ada"))).submit(plan)
+    text = caplog.text
+    assert "ditemukan di (0.900, 0.510); TIDAK ditekan" in text
+    assert "tidak ditemukan (uji kertas tetap jalan)" in text
+    assert "[DRY RUN] Tombol Jual/Short TIDAK ditekan" in text

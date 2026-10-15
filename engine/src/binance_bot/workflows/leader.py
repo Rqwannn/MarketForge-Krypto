@@ -200,6 +200,9 @@ class LeaderWorkflow:
         chart = self._nav.capture_chart(
             self._settings.screenshot_dir / f"{stamp}_rank{rank}_{symbol}_15m.png"
         )
+        self._nav.show_app(
+            f"AI membaca grafik {symbol}", symbol=symbol, rank=rank, chart=str(chart), stage="ai"
+        )
         started = time.monotonic()
         record = AnalysisRecord(symbol, rank, self._wall_clock(), self._analyzer.analyze(chart))
         self._charts[symbol] = str(chart)

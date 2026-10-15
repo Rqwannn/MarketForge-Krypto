@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
-from binance_bot.analysis import PatternAnalyzer
+from binance_bot.analysis import PatternAnalyzer, PatternReading
 from binance_bot.exceptions import BotError
 from binance_bot.logging_setup import event
 from binance_bot.market import is_futures_symbol
 from binance_bot.workflows.base import TradingNavigator
-from binance_bot.workflows.sop import SopTrader, log_top_gainers
+from binance_bot.workflows.sop import ReadingSource, SopTrader, log_top_gainers
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,19 @@ class SingleWorkflow:
         rows = {row.rank: row for row in self._nav.open_top_gainers()}
         log_top_gainers(list(rows.values()))
         analyzer = self._analyzer
-        source = (lambda _symbol, chart: analyzer.analyze(chart)) if analyzer else None
+        source: ReadingSource | None = None
+        if analyzer is not None:
+
+            def read_chart(symbol: str, chart: Path) -> PatternReading:
+                # Selama AI membaca, aplikasi MarketForge tampil supaya prosesnya terlihat; bursa
+                # dibawa ke depan lagi sebelum langkah berikutnya (isi jumlah, klik).
+                self._nav.show_app(
+                    f"AI membaca grafik {symbol}", symbol=symbol, chart=str(chart), stage="ai"
+                )
+                return analyzer.analyze(chart)
+
+            source = read_chart
+
         min_gain = self._trader.params.min_gain_pct
 
         opened = 0

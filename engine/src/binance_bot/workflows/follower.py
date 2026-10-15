@@ -179,10 +179,16 @@ class FollowerWorkflow:
         """Tunggu leader menilai Top ini; None bila leader selesai putaran tanpa menilainya."""
         assert self._client is not None
         deadline = self._clock() + self._settings.follower_wait_s
+        shown = False
         while True:
             shared = self._client.by_rank(rank)
             if shared is not None and shared.age_s <= self._settings.analysis_ttl_s:
                 return shared
+            if not shown:  # menunggu AI pemimpin: tampilkan MarketForge selama menunggu
+                self._nav.show_app(
+                    f"Menunggu AI pemimpin menilai Top {rank}", rank=rank, stage="ai"
+                )
+                shown = True
             plan = self._client.plan()
             if plan.done and plan.age_s <= _PLAN_FRESH_S:
                 return None  # leader sudah selesai putaran ini dan tidak menilai Top ini

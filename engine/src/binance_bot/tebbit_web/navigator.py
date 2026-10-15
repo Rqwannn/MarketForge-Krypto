@@ -355,6 +355,15 @@ class TebbitNavigator(BinanceNavigator):
         lines = self._read_lines_merged(self.rect.sub(*lay.LEGEND_AREA), lay.OCR_LEGEND_VARIANTS)
         return " ".join(line.text for line in lines)
 
+    def _on_coin_page(self) -> bool:
+        return self._on_contract
+
+    def _order_form_zones(self) -> list[tuple[float, float, float, float]]:
+        return [zone for zone in lay.CONTRACT_FORBIDDEN if zone[0] >= 0.5]
+
+    def _quantity_area(self) -> tuple[float, float, float, float]:
+        return lay.ORDER_FORM_AREA
+
     def _chart_area(self) -> Rect:
         return self.rect.sub(*lay.CHART_AREA)
 

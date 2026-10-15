@@ -142,13 +142,17 @@ function activity(entry) {
     return { text: `${e.symbol} dilewati: ${plain(e.reason).toLowerCase()}` };
   }
   if (e?.type === 'hub') return { text: 'Mulai membagikan hasil ke laptop pengikut', css: 'good' };
+  if (e?.type === 'view') return { text: entry.message };  // "AI membaca grafik X", "Kembali ke Binance"
 
   const m = entry.message || '';
   const opened = m.match(/^Top gainer #(\d+): (\S+)/);
   if (opened) return { text: `Membuka top ${opened[1]}: ${opened[2]}` };
   if (/^(Tidak masuk putaran ini|Berhenti memantau): /.test(m)) return { text: plain(m), css: 'warn' };
   if (/^Tidak ada koin dengan pola OK/.test(m)) return { text: 'Belum ada koin yang layak, pantau lagi nanti' };
-  if (/tidak di depan/.test(m)) return { text: 'Binance tertutup jendela lain, dibawa ke depan lagi' };
+  if (/tidak di depan/.test(m)) return { text: `${platform?.name || 'Binance'} tertutup jendela lain, dibawa ke depan lagi` };
+  if (/^Tombol Jual\/Short ditemukan/.test(m)) return { text: 'Tombol Short ditemukan di layar, tidak ditekan (uji kertas)' };
+  if (/^Tombol Jual\/Short tidak ditemukan/.test(m)) return { text: 'Tombol Short tidak terbaca di layar (uji kertas tetap jalan)', css: 'warn' };
+  if (/^\[DRY RUN\] Tombol Jual\/Short TIDAK ditekan/.test(m)) return { text: 'Uji kertas: order dicatat, tombol Short tidak ditekan', css: 'good' };
   const waitingLeader = m.match(/^Menunggu leader menganalisis (Top \d+)/);
   if (waitingLeader) return { text: `Menunggu hasil AI dari pemimpin untuk ${waitingLeader[1]}` };
   const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
@@ -364,7 +368,25 @@ function dips(count) {
   return el('span', { class: 'dips' }, ...blocks, el('span', { textContent: `${count}×` }));
 }
 
+/** Baris sementara selama AI membaca grafik koin ini; diganti hasilnya oleh addCoin. */
+function addPending(e) {
+  $('coins').querySelector('.empty-row')?.remove();
+  $('coins').querySelector(`tr[data-pending="${CSS.escape(e.symbol)}"]`)?.remove();
+  const row = el('tr', { class: 'pending-row' },
+    el('td', { class: 'rank' }, e.rank ? el('span', { class: 'rank-badge', textContent: String(e.rank) }) : null),
+    el('td', { class: 'sym', textContent: e.symbol }),
+    el('td', {}, el('span', { class: 'dips', textContent: '…' })),
+    el('td', {}, el('span', { class: 'tag reading', textContent: 'AI membaca…' })),
+    el('td', { class: 'why' },
+      el('strong', { class: 'act', textContent: 'Menunggu hasil AI' }),
+      el('span', { textContent: 'Grafik 15 menit yang sedang dibaca:' }),
+      chartThumb(e.chart, `${e.symbol} · sedang dibaca`)));
+  row.dataset.pending = e.symbol;
+  $('coins').append(row);
+}
+
 function addCoin(e) {
+  $('coins').querySelector(`tr[data-pending="${CSS.escape(e.symbol)}"]`)?.remove();
   counts.seen += 1;
   if (e.verdict === 'ok') counts.ok += 1;
   if (e.status === 'open') counts.open += 1;
@@ -510,6 +532,7 @@ window.bot.onLog((entry) => {
     emptyCoins('Membaca top gainers…');
     $('cycle-info').textContent = `Dimulai ${clock(entry.ts || Date.now() / 1000)}`;
   }
+  if (e?.type === 'view' && e.target === 'app' && e.symbol) addPending(e);
   if (e?.type === 'coin') addCoin(e);
   if (e?.type === 'hub') $('share').hidden = false;
   advanceFlow(entry);

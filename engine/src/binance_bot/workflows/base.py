@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Protocol
 
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
+from binance_bot.strategy.execution import OrderPlan
 
 
 class Workflow(Protocol):
@@ -28,6 +29,12 @@ class TradingNavigator(Protocol):
     def open_symbol(self, symbol: str) -> str: ...
 
     def show_15m_chart(self) -> None: ...
+
+    def show_app(self, text: str, **fields: object) -> None: ...
+
+    def short_button(self) -> tuple[float, float]: ...
+
+    def press_short(self, plan: OrderPlan) -> None: ...
 
     def capture_window(self, path: Path) -> Path: ...
 

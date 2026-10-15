@@ -31,6 +31,7 @@ from binance_bot.exceptions import (
     ScreenReadError,
     WindowError,
 )
+from binance_bot.logging_setup import event
 from binance_bot.macos import (
     AppController,
     Rect,
@@ -41,6 +42,7 @@ from binance_bot.macos import (
     wait_until_frontmost,
 )
 from binance_bot.macos.screens import visible_areas
+from binance_bot.strategy.execution import LIVE_ORDERS_ENABLED, OrderPlan
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,7 @@ _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
 _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
+_SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
 _CHART_LOAD_TIMEOUT_S = 25.0  # aplikasi bisa lambat memuat grafik
 
 
@@ -94,6 +97,7 @@ class BinanceNavigator:
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
         self._row_y: dict[int, float] = {}  # y baris top gainer yang terbaca di layar
         self._list_rows: list[GainerRow] = []  # daftar top gainers yang terakhir dibaca
+        self._away = False  # layar sedang diserahkan ke aplikasi MarketForge (show_app)
         self._on_list = False  # bot sedang di daftar (belum membuka halaman koin)
         self._unit_menu_click = (
             False  # True hanya saat memilih satuan USDT (lihat _click_in_unit_menu)
@@ -518,8 +522,17 @@ class BinanceNavigator:
         Binance di depan; aplikasi lain bisa merebut fokus di tengah jalan."""
         bundle = self._settings.app_bundle_id
         if (self._apps.frontmost_bundle_id() or "").casefold() == bundle.casefold():
+            self._away = False
             return
-        logger.warning("%s tidak di depan, dibawa ke depan lagi", self._settings.app_name)
+        if self._away:  # kembali dari aplikasi MarketForge (show_app): memang direncanakan
+            logger.info(
+                "Kembali ke %s",
+                self._settings.app_name,
+                extra=event("view", target="exchange"),
+            )
+            self._away = False
+        else:
+            logger.warning("%s tidak di depan, dibawa ke depan lagi", self._settings.app_name)
         # Aplikasi lain (atau pengguna yang sedang memakai laptop) bisa merebut fokus lagi
         # segera setelah Binance dibawa ke depan, jadi dicoba beberapa kali.
         for attempt in range(_FRONT_ATTEMPTS):
@@ -538,6 +551,57 @@ class BinanceNavigator:
                 if attempt + 1 == _FRONT_ATTEMPTS:
                     raise
         self._sleep(0.5)
+
+    def show_app(self, text: str, **fields: object) -> None:
+        """Serahkan layar ke aplikasi MarketForge selama bot menunggu (AI membaca grafik).
+
+        Aplikasi memunculkan dirinya saat menerima kejadian ini (sama di macOS dan Windows).
+        Bursa dibawa ke depan lagi oleh `_ensure_front` sebelum klik, ketikan, atau tangkapan
+        layar berikutnya, jadi bot tidak pernah bekerja di jendela yang salah.
+        """
+        self._away = True
+        logger.info(text, extra=event("view", target="app", **fields))
+
+    # ------------------------------------------------------------------ tombol order (dikunci)
+    def _on_coin_page(self) -> bool:
+        return self._on_trade_page
+
+    def _order_form_zones(self) -> list[tuple[float, float, float, float]]:
+        """Zona tombol order di panel form (kanan), bukan widget melayang di atas grafik."""
+        return [zone for zone in layout.ORDER_BUTTON_ZONES if zone[0] >= 0.5]
+
+    def _quantity_area(self) -> tuple[float, float, float, float]:
+        return layout.ORDER_QTY_AREA
+
+    def short_button(self) -> tuple[float, float]:
+        """Posisi tombol Jual/Short di form order, dicari dengan OCR. Tidak mengklik apa pun."""
+        if not self._on_coin_page():
+            raise SafetyError("Tombol Short hanya dicari di halaman koin")
+        for zone in self._order_form_zones():
+            found = self._find_text(zone, _SHORT_BUTTON)
+            if found is not None:
+                return found
+        raise ScreenReadError("Tombol Jual/Short di form order tidak ditemukan")
+
+    def press_short(self, plan: OrderPlan) -> None:
+        """Order sungguhan: tekan Jual/Short. DIKUNCI selama LIVE_ORDERS_ENABLED False.
+
+        Urutan: kunci, halaman koin, kolom jumlah berisi angka rencana, cari tombol, klik.
+        Satu-satunya jalur yang boleh mengklik zona tombol order.
+        """
+        if not LIVE_ORDERS_ENABLED:
+            raise SafetyError("Order sungguhan dinonaktifkan (LIVE_ORDERS_ENABLED = False)")
+        if not self._on_coin_page():
+            raise SafetyError("Order hanya di halaman koin")
+        shown = self._read_texts(self.rect.sub(*self._quantity_area()))
+        if not any(same_number(value, plan.order_text) for value in shown):
+            raise SafetyError(
+                f"Kolom jumlah menampilkan {shown}, bukan {plan.order_text}: order dibatalkan"
+            )
+        target = self.short_button()
+        logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
+        self._ensure_front()
+        self._window.click(*self.rect.point_at(*target))
 
     def _capture(self, area: Rect, path: Path) -> Path:
         self._ensure_front()

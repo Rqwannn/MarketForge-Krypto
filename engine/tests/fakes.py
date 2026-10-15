@@ -219,6 +219,16 @@ class FakeNavigator:
             raise symbol_opened
         return symbol_opened
 
+    def show_app(self, text: str, **fields: object) -> None:
+        self.calls.append(f"show_app:{fields.get('symbol') or fields.get('rank')}")
+
+    def short_button(self) -> tuple[float, float]:
+        self.calls.append("short_button")
+        return (0.9, 0.5)
+
+    def press_short(self, plan: object) -> None:
+        raise AssertionError("press_short tidak boleh dipanggil selama order dikunci")
+
     def show_15m_chart(self) -> None:
         self.calls.append("15m")
 
@@ -232,6 +242,7 @@ class FakeNavigator:
         return self.margin
 
     def fill_quantity(self, text: str) -> None:
+        self.calls.append(f"fill:{text}")
         self.filled.append(text)
 
     def _capture(self, path: Path) -> Path:

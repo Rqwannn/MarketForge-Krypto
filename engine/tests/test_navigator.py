@@ -630,3 +630,56 @@ def test_open_symbol_skips_a_coin_that_slid_out_of_the_top_five() -> None:
     nav._list_rows, nav._on_list = rows, True
     with pytest.raises(ScreenReadError, match="di luar Top 5"):
         nav.open_symbol("AKEUSDT")  # klik baris 6 tidak didukung layout: dilewati, bukan crash
+
+
+def _locked_order_nav(
+    monkeypatch: pytest.MonkeyPatch, shown: list[str]
+) -> tuple[BinanceNavigator, list[tuple[int, int]]]:
+    nav = make_nav()
+    nav._rect, nav._on_trade_page = WINDOW, True
+    pressed: list[tuple[int, int]] = []
+    monkeypatch.setattr(nav._window, "click", lambda x, y: pressed.append((x, y)))
+    monkeypatch.setattr(nav, "_read_texts", lambda area: shown)
+    monkeypatch.setattr(nav, "_ensure_front", lambda: None)
+    monkeypatch.setattr(nav, "short_button", lambda: (0.95, 0.51))
+    return nav, pressed
+
+
+def test_press_short_is_locked_even_when_called_directly(monkeypatch: pytest.MonkeyPatch) -> None:
+    from binance_bot.strategy.execution import OrderPlan
+
+    nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+    with pytest.raises(SafetyError, match="dinonaktifkan"):
+        nav.press_short(plan)
+    assert pressed == []
+
+
+def test_press_short_logic_when_unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Hanya di tes: kunci dibuka untuk membuktikan logikanya; aplikasi tetap terkunci.
+    from binance_bot.binance_desktop import navigator as nav_module
+    from binance_bot.strategy.execution import OrderPlan
+
+    monkeypatch.setattr(nav_module, "LIVE_ORDERS_ENABLED", True)
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+
+    nav, pressed = _locked_order_nav(monkeypatch, ["50", "USDT"])  # kolom jumlah tidak cocok
+    with pytest.raises(SafetyError, match="order dibatalkan"):
+        nav.press_short(plan)
+    assert pressed == []
+
+    nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
+    nav.press_short(plan)
+    assert pressed == [nav.rect.point_at(0.95, 0.51)]  # hanya tombol Short yang ditemukan
+
+    nav._on_trade_page = False
+    with pytest.raises(SafetyError, match="halaman koin"):
+        nav.press_short(plan)
+
+
+def test_short_button_is_searched_only_in_the_order_form_not_the_chart_widget() -> None:
+    nav = make_nav()
+    zones = nav._order_form_zones()
+    assert zones and all(
+        x0 >= 0.5 for x0, _, _, _ in zones
+    )  # widget melayang di grafik dikecualikan

@@ -23,10 +23,10 @@ from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
 from binance_bot.strategy import (
-    DryRunOrderGate,
     Journal,
     JournalEntry,
     MaPattern,
+    OrderGate,
     OrderPlan,
     PatternProfile,
     SopParams,
@@ -117,7 +117,7 @@ class SopTrader:
         navigator: TradingNavigator,
         market: MarketData,
         journal: Journal,
-        gate: DryRunOrderGate,
+        gate: OrderGate,
         *,
         fill_form: bool = True,
         role: str = "single",
