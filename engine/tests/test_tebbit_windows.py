@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from binance_bot.config import Settings
 from binance_bot.exceptions import ScreenReadError
 from binance_bot.macos.window import Rect
 from binance_bot.tebbit_web import layout_tebbit as mac_layout
@@ -13,6 +14,7 @@ from binance_bot.tebbit_web.navigator import _legend_periods
 from binance_bot.tebbit_web.screen_text import (
     parse_gainer_rows,
     parse_header,
+    parse_margin,
     parse_order_book,
 )
 from fakes import TextLine
@@ -131,3 +133,96 @@ def test_legend_periods_survive_ocr_garbling(legend: str, periods: set[int]) -> 
 def test_header_price_without_a_decimal_point_still_gives_the_change() -> None:
     _, change = parse_header(["SOXSUSDT", "4454 +16.17%", "Perpetual"])
     assert change == 16.17
+
+
+@pytest.mark.parametrize(
+    ("texts", "isolated", "leverage"),
+    [
+        (["Cross-Merge", "sox"], False, 50),  # kasus nyata: "50X" terbaca "sox"
+        (["Isolated\u00b7Merge", "2X"], True, 2),
+        (["Cross\u00b7Merge  75X"], False, 75),
+        (["Isolated-Merge", "ZX"], True, 2),
+        (["Cross-Merge", "l50x"], False, 150),
+    ],
+)
+def test_margin_panel_survives_ocr_turning_digits_into_letters(
+    texts: list[str], isolated: bool, leverage: int
+) -> None:
+    settings = parse_margin(texts)
+    assert (settings.isolated, settings.leverage) == (isolated, leverage)
+
+
+def test_margin_panel_without_any_leverage_is_still_refused() -> None:
+    with pytest.raises(ScreenReadError, match="Leverage tidak terbaca"):
+        parse_margin(["Cross-Merge", "Merge"])
+
+
+# ------------------------------------------------------------------ pengaturan margin Tebbit
+
+# Titik yang diklik bot di dialog "Modify leverage" dan "Trading Mode" (relatif isi halaman),
+# diukur dari tampilan Tebbit: tombol di atas form, kolom nilai, Isolated, Confirm, dan X.
+TEBBIT_MARGIN_CLICKS = {
+    "kotak leverage": (0.944, 0.128),
+    "kotak mode": (0.868, 0.128),
+    "kolom nilai leverage": (0.50, 0.412),
+    "Confirm leverage": (0.50, 0.62),
+    "X leverage": (0.578, 0.359),
+    "Isolated": (0.568, 0.364),
+    "Confirm mode": (0.50, 0.70),
+    "X mode": (0.627, 0.282),
+}
+
+
+@windows_only
+def test_no_tebbit_margin_click_lands_in_a_forbidden_zone() -> None:
+    from binance_bot.tebbit_web import layout_tebbit_windows as win
+
+    zones = win.ALWAYS_FORBIDDEN + win.CONTRACT_FORBIDDEN
+    for name, point in TEBBIT_MARGIN_CLICKS.items():
+        assert not mac_layout.in_zone(point, zones), name
+    # dan jauh dari tombol Buy/Long dan Sell/Short (kolom order di x >= 0,83)
+    assert all(x < 0.83 or y < 0.2 for x, y in TEBBIT_MARGIN_CLICKS.values())
+
+
+@windows_only
+def test_tebbit_dialog_profile_matches_the_measured_layout() -> None:
+    from binance_bot.tebbit_web import layout_tebbit_windows as win
+
+    x0, y0, x1, y1 = win.MARGIN_DIALOG_AREA
+    for name in ("kolom nilai leverage", "Confirm leverage", "X leverage", "Isolated",
+                 "Confirm mode", "X mode"):  # fmt: skip
+        x, y = TEBBIT_MARGIN_CLICKS[name]
+        assert x0 <= x <= x1 and y0 <= y <= y1, name
+    # kolom nilai ada di pita judul..label slider: judul y 0,359, nilai 0,412, label slider 0,489
+    near, far = win.MARGIN_FIELD_BAND
+    assert 0.359 + near <= 0.412 <= 0.359 + far < 0.489
+
+
+def test_tebbit_margin_dialogs_are_off_without_a_dialog_layout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from binance_bot.tebbit_web import layout_tebbit as lay
+    from binance_bot.tebbit_web.navigator import TebbitNavigator
+    from fakes import AREA, FakeApps, FakeScreen
+
+    screen = FakeScreen()
+    nav = TebbitNavigator(
+        Settings(),
+        FakeApps(),
+        screen,
+        screen,
+        object(),
+        screens=lambda: [AREA],  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(lay, "MARGIN_DIALOG_AREA", None)
+    assert nav._margin_dialogs() is None and nav.apply_margin(2) is False
+    monkeypatch.setattr(lay, "MARGIN_DIALOG_AREA", (0.34, 0.22, 0.68, 0.78))
+    dialogs = nav._margin_dialogs()
+    assert dialogs is not None
+    assert dialogs.leverage_title.search("Modify leverage")
+    assert dialogs.mode_title.search("Trading Mode")
+    assert dialogs.confirm.search("Confirm") and not dialogs.confirm.search("Confirm leverage?")
+    assert dialogs.isolated_option.search("Isolated") and not dialogs.isolated_option.search(
+        "Cross"
+    )
+    assert dialogs.leverage_close_x != dialogs.mode_close_x  # tiap dialog punya letak X sendiri

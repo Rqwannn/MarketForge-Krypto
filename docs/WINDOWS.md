@@ -139,3 +139,18 @@ dari macOS:
 Diverifikasi di Windows 11 (layar 1920x1080, skala 125%, Chrome 14 Okt 2026): daftar Top 5, halaman
 koin, grafik 15 menit, margin, bid/ask, mengisi kolom Quantity (USDT), dan satu putaran `single`
 lengkap dengan AI. Belum diuji: mode pemimpin/pengikut lewat Tebbit, layar skala selain 125%.
+
+## Leverage dan mode margin otomatis (opsional, Binance)
+
+Secara bawaan bot hanya **memperingatkan** bila leverage di Binance bukan 2x atau mode margin
+bukan Isolated. Dengan `BOT_ATUR_MARGIN` di `.env` (`tebbit`, `binance`, `binance,tebbit`, atau `1` untuk semua), bot
+mengaturnya sendiri untuk koin yang dibuka di platform itu, lewat dialog "Sesuaikan Leverage" dan "Mode Margin".
+
+**Ini mengubah pengaturan akun Binance** (per kontrak) dan berlaku juga untuk posisi dan order
+terbuka koin itu, jadi sengaja dimatikan secara bawaan. Pengamannya: dialog harus terbukti terbuka
+lewat OCR, kolom nilai dibaca ulang setelah diketik, dan Konfirmasi baru ditekan bila nilainya
+benar-benar leverage yang dituju (label slider "10x 20x" tidak pernah dikira kolom nilai).
+Gagal di langkah mana pun berarti dialog dibatalkan lewat X dan peringatan lama tetap muncul.
+Berlaku untuk Binance dan Tebbit (dialog "Modify leverage" dan "Trading Mode"; di Tebbit pengaturannya per koin). Status: di **Tebbit** sudah terbukti mengubah SOXSUSDT dari Cross 25x menjadi Isolated 2x (15 Okt 2026). Kolom leverage Tebbit kembali ke nilai minimum (1) bila dikosongkan, jadi isinya diganti dengan Ctrl+A lalu mengetik, bukan Backspace. Di **Binance** perubahan nilai sungguhan belum diuji. Tombol beli/jual tidak pernah disentuh.
+
+Di Tebbit leverage diatur **begitu halaman koin terbuka**, untuk tiap koin yang dibuka bot (bukan hanya yang akhirnya dimasuki). Terbukti 15 Okt 2026: SKDD (50x), SQQQ (25x), PYTH (150x), dan UVXY (25x) menjadi 2x dalam satu putaran. Mode margin diatur terpisah (`BOT_ATUR_MODE_MARGIN`).

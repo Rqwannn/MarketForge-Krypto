@@ -8,6 +8,7 @@ from binance_bot.binance_desktop.layout import MAX_RANK
 from binance_bot.config import Settings
 from binance_bot.exceptions import ConfigError, HubError
 from binance_bot.hub import HubClient, SharedAnalysis
+from binance_bot.logging_setup import event
 from binance_bot.strategy import JournalEntry
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import SopTrader, log_top_gainers
@@ -57,17 +58,34 @@ class FollowerWorkflow:
         self._sleep = sleep
         self._clock = clock
         self.result: JournalEntry | None = None
+        self._opened = 0  # posisi uji yang dibuka di putaran ini
 
     def run(self) -> None:
+        # Kejadian putaran seperti di Sendiri/Pemimpin: aplikasi memakainya untuk subjudul "Putaran
+        # ini", langkah alur yang tercentang, dan ringkasan akhir.
+        self._opened = 0
+        logger.info("Putaran pengikut dimulai", extra=event("cycle", phase="start"))
+        try:
+            self._run_round()
+        finally:
+            logger.info(
+                "Putaran selesai",
+                extra=event("cycle", phase="done", opened=self._opened, next_in_s=0),
+            )
+
+    def _run_round(self) -> None:
         uses_ai = self._trader.params.signal_source == "ai"
         if uses_ai and self._client is None:
             raise ConfigError("SINYAL=ai butuh hub leader: isi --hub atau BOT_HUB_URL")
+        assigned = list(self._ranks) if self._ranks is not None else list(range(1, MAX_RANK + 1))
         if self._trader.halted(self._trader.refresh_journal()):
+            self._note_all(assigned, "3 stop-loss berturut-turut hari ini")
             return
         try:
             ranks = self._ranks_to_follow(uses_ai)
         except HubError as exc:
             logger.warning("Tidak masuk: %s", exc)
+            self._note_all(assigned, str(exc))
             return
         if not ranks:
             logger.info("Tidak ada Top yang perlu diikuti: leader tidak memainkan Top tugas ini")
@@ -78,6 +96,12 @@ class FollowerWorkflow:
             outcome = self._follow(rank, uses_ai, handled)
             if outcome is not None:
                 self.result = outcome
+                if outcome.status == "open":
+                    self._opened += 1
+
+    def _note_all(self, ranks: Sequence[int], reason: str) -> None:
+        for rank in ranks:
+            self._trader.note(rank, reason)
 
     def _ranks_to_follow(self, uses_ai: bool) -> list[int]:
         if not uses_ai:
@@ -92,6 +116,8 @@ class FollowerWorkflow:
                 "Top %s tidak dimainkan leader putaran ini, dilewati",
                 ", ".join(str(r) for r in skipped),
             )
+            for rank in skipped:
+                self._trader.note(rank, f"Leader tidak memainkan Top {rank} di putaran ini")
         return [r for r in self._ranks if r in planned]
 
     def _leader_ranks(self) -> list[int]:
@@ -119,9 +145,11 @@ class FollowerWorkflow:
             shared = self._wait_for_leader(rank)
         except HubError as exc:
             logger.warning("Tidak masuk Top %d: %s", rank, exc)
+            self._trader.note(rank, str(exc))
             return None
         if shared is None:
             logger.info("Leader tidak menilai Top %d di putaran ini", rank)
+            self._trader.note(rank, f"Leader tidak menilai Top {rank} di putaran ini")
             return None
         record = shared.record
         reading = record.reading
@@ -138,6 +166,7 @@ class FollowerWorkflow:
         )
         if record.symbol in handled:
             logger.info("%s sudah diikuti di putaran ini, dilewati", record.symbol)
+            self._trader.note(rank, f"{record.symbol} sudah diikuti di putaran ini", record.symbol)
             return None
         handled.add(record.symbol)
         if verdict != "ok":
@@ -165,12 +194,15 @@ class FollowerWorkflow:
         opened = self._nav.open_gainer(now)
         if opened != record.symbol:
             return self._trader.skip(
-                now,
+                rank,
                 record.symbol,
                 f"peringkat bergeser: yang terbuka {opened}, bukan {record.symbol}",
                 reading,
             )
-        return self._trader.trade(now, opened, lambda _symbol, _chart: reading)
+        # Dicatat dengan Top versi pemimpin (`rank`), bukan posisi koin di daftar laptop ini saat
+        # ini (`now`, hanya untuk membuka koinnya): peringkat bisa bergeser dan dua baris tabel
+        # jadi berlabel sama.
+        return self._trader.trade(rank, opened, lambda _symbol, _chart: reading)
 
     def _wait_for_leader(self, rank: int) -> SharedAnalysis | None:
         """Tunggu leader menilai Top ini; None bila leader selesai putaran tanpa menilainya."""

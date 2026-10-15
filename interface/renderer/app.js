@@ -90,6 +90,9 @@ function plain(text) {
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
     [/sedang rugi/, 'Posisi pertama sedang rugi, koin berikutnya ditunda'],
+    [/Leader tidak (memainkan|menilai) Top/, 'Pemimpin tidak menilai Top ini di putaran ini, tidak ada tindakan'],
+    [/belum memulai putaran/, 'Pemimpin belum memulai putaran baru, tidak ada tindakan'],
+    [/sudah diikuti di putaran ini/, 'Koin ini sudah diikuti dari Top lain di putaran ini'],
     [/sudah ada posisi uji/, 'Koin ini sudah punya posisi yang berjalan'],
     [/funding (-?[\d.]+)%/i, (m) => `Biaya funding terlalu mahal (${m[1].replace('.', ',')}%): short membayar`],
     [/funding/i, 'Biaya funding sedang terlalu mahal'],
@@ -115,6 +118,7 @@ function plain(text) {
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],
     [/[Aa]nalisis AI|model/, 'AI belum bisa membaca grafik koin ini'],
+    [/Leverage tidak terbaca/, `Leverage di ${site} tidak terbaca di layar, koin dilewati`],
     [/Top gainer|terurut|tidak terbaca|tidak ditemukan/i, `Halaman ${site} belum terbaca dengan benar`],
     [/notional|di bawah minimal|melebihi/i, 'Modal tidak cocok dengan aturan jumlah koin ini'],
   ];
@@ -354,8 +358,20 @@ async function toggleRun() {
 function addFeed(item, ts) {
   const feed = $('feed');
   feed.querySelector('.idle')?.remove();
+  // Baris yang sama berturut-turut (mis. "Menunggu hasil AI..." tiap 5 detik) digabung: waktu
+  // diperbarui dan jumlahnya ditulis, supaya baris penting tidak tertimbun.
+  const top = feed.firstElementChild;
+  const topText = top?.querySelector('span');
+  if (top && topText && topText.base === item.text && top.className === (item.css || '')) {
+    const repeats = Number(topText.repeats || 1) + 1;
+    topText.repeats = repeats;
+    topText.textContent = `${item.text} (${repeats}×)`;
+    top.querySelector('time').textContent = clock(ts);
+    if (state === 'running') $('status-sub').textContent = item.text;
+    return;
+  }
   feed.prepend(el('li', { class: item.css || '' }, el('i'),
-    el('div', {}, el('span', { textContent: item.text }), el('time', { textContent: clock(ts) }))));
+    el('div', {}, el('span', { textContent: item.text, base: item.text }), el('time', { textContent: clock(ts) }))));
   while (feed.childElementCount > MAX_FEED) feed.lastElementChild.remove();
   if (state === 'running') $('status-sub').textContent = item.text;
 }
@@ -527,7 +543,7 @@ function resetFlow(mode, sub) {
 window.bot.onLog((entry) => {
   const e = entry.event;
   if (e?.type === 'cycle' && e.phase === 'start') {
-    emptyCoins('Membaca top gainers…');
+    emptyCoins(flow.mode === 'follower' ? 'Menunggu hasil AI dari pemimpin…' : 'Membaca top gainers…');
     $('cycle-info').textContent = `Dimulai ${clock(entry.ts || Date.now() / 1000)}`;
   }
   if (e?.type === 'view' && e.target === 'app' && e.symbol) addPending(e);
@@ -547,12 +563,13 @@ window.bot.onLog((entry) => {
   }
 });
 
-window.bot.onExit(({ code, signal }) => {
-  const stopped = code === 130 || Boolean(signal);
-  if (code === 0) setState('stopped', 'Selesai', 'Putaran selesai. Rekap ada di Hasil uji.');
+window.bot.onExit(({ code, signal, stopped: requested }) => {
+  // Diminta pengguna (Hentikan): di Windows keluar dengan kode 1, bukan 130.
+  const stopped = Boolean(requested) || code === 130 || Boolean(signal);
+  if (code === 0 && !requested) setState('stopped', 'Selesai', 'Putaran selesai. Rekap ada di Hasil uji.');
   else if (stopped) setState('stopped', 'Dihentikan', 'Bot berhenti atas permintaan.');
   else setState('stopped', 'Berhenti karena kendala', 'Buka Cek laptop lalu coba lagi.');
-  const text = code === 0 ? 'Bot selesai' : stopped ? 'Bot dihentikan' : 'Bot berhenti karena kendala';
+  const text = code === 0 && !requested ? 'Bot selesai' : stopped ? 'Bot dihentikan' : 'Bot berhenti karena kendala';
   addFeed({ text, css: code === 0 || stopped ? '' : 'bad' }, Date.now() / 1000);
   window.bot.reportActivity({ text }).catch(() => {});
   flow.nextAt = 0;
@@ -1255,9 +1272,11 @@ window.bot.team.onChanged((info) => {
   if (info.notice) addFeed({ text: info.notice, css: 'warn' }, Date.now() / 1000);
 });
 window.bot.team.onError((message) => addFeed({ text: message, css: 'bad' }, Date.now() / 1000));
-window.bot.team.onStarted(({ leaderName, rank }) => {
+window.bot.team.onStarted(({ leaderName, rank, exchange }) => {
   Object.assign(counts, { seen: 0, ok: 0, open: 0 });
   setCounts();
+  // Tampilan pengikut berpindah ke platform pemimpin (jurnal dan posisi dibaca dari platform itu).
+  if (exchange && exchange !== platform?.id) choosePlatform(exchange);
   emptyCoins(`Menyiapkan ${platform?.name || 'Binance'}…`);
   emptyFeed('Menunggu aktivitas pertama…');
   setState('running', 'Mengikuti pemimpin', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);

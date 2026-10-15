@@ -28,11 +28,8 @@ def clear_field(run: Runner = run_command) -> None:
     _system_events(['\tkeystroke "a" using command down', f"\tkey code {_DELETE}"], run)
 
 
-def select_field(run: Runner = run_command) -> None:
-    """Pilih seluruh isi kolom yang sedang fokus (Cmd+A); ketikan berikutnya menggantinya.
-
-    Untuk kolom yang langsung mengisi nilai minimum saat dikosongkan (mis. leverage).
-    """
+def select_all(run: Runner = run_command) -> None:
+    """Pilih seluruh isi kolom yang sedang fokus (Cmd+A), tanpa menghapus."""
     _system_events(['\tkeystroke "a" using command down'], run)
 
 

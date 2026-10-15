@@ -20,7 +20,7 @@ from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError, ScreenReadError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
 from binance_bot.strategy import (
@@ -221,14 +221,52 @@ class SopTrader:
             entry.verdict = self.profile.verdict(reading.pattern, self.params.min_crosses)
         return self._finish(entry)
 
-    def _ensure_leverage(self, leverage: int) -> MarginSettings:
-        """Bot mengubah leverage koin ke SOP (2x) sebelum mengisi form. Bila bursa menolak
-        (mis. akun Futures belum aktif), uji kertas tetap berjalan dengan peringatan."""
+    def note(self, rank: int, reason: str, symbol: str = "-") -> None:
+        """Tampilkan Top yang TIDAK diproses di aplikasi, beserta alasannya.
+
+        Hanya kejadian untuk tabel "Putaran ini": tidak masuk jurnal, tidak membuka aplikasi, dan
+        tidak bertanya ke hub. Tanpa ini tabel pengikut hanya berisi Top yang sempat diproses.
+        """
+        entry = JournalEntry(
+            id=f"{self._now():%Y%m%d_%H%M%S}_top{rank}",
+            created_at=self._wall_clock(),
+            symbol=symbol,
+            rank=rank,
+            status="skipped",
+            reason=reason,
+            role=self._role,
+        )
+        logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry))
+
+    def _prepare_margin(self, symbol: str) -> None:
+        """Atur leverage (dan mode, bila diminta) koin yang halamannya baru terbuka."""
+        platform = self.profile.platform
+        if not self._settings.auto_margin_for(platform):
+            return
+        wants_mode = self._settings.auto_mode_for(platform)
         try:
-            return self._nav.ensure_leverage(leverage)
-        except ScreenReadError as exc:
-            logger.warning("Leverage tidak bisa diubah ke %dx: %s", leverage, exc)
-            return self._nav.read_margin_settings()
+            margin = self._nav.read_margin_settings()
+        except BotError as exc:
+            logger.warning("Margin %s tidak terbaca, tidak diatur otomatis: %s", symbol, exc)
+            return
+        if margin.leverage != self.params.leverage or (wants_mode and margin.isolated is not True):
+            self._fix_margin(symbol, self.params.leverage, margin, wants_mode)
+
+    def _fix_margin(
+        self, symbol: str, leverage: int, before: MarginSettings, isolated: bool
+    ) -> MarginSettings:
+        """Atur leverage dan mode margin koin ini sesuai SOP (hanya bila ATUR_MARGIN=1).
+
+        Gagal bukan masalah bagi uji kertas: dicatat, lalu pembacaan terakhir dipakai dan
+        peringatan seperti biasa muncul.
+        """
+        target = f"Isolated {leverage}x" if isolated else f"leverage {leverage}x"
+        logger.info("Mengatur margin %s: %s -> %s", symbol, before.describe(), target)
+        try:
+            self._nav.apply_margin(leverage, isolated=isolated)
+        except BotError as exc:
+            logger.warning("Margin %s tidak bisa diatur otomatis: %s", symbol, exc)
+        return self._nav.read_margin_settings()
 
     def _finish(self, entry: JournalEntry) -> JournalEntry:
         rank, symbol = entry.rank, entry.symbol
@@ -250,6 +288,10 @@ class SopTrader:
         params, symbol = self.params, entry.symbol
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
+
+        # Leverage diatur begitu halaman koin terbuka, untuk TIAP koin yang dibuka (bukan hanya yang
+        # akhirnya dimasuki): koin yang dilewati karena pola, biaya, atau slot juga ikut diatur.
+        self._prepare_margin(symbol)
 
         # Harga, funding, dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini.
         # Funding dan spread baru menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot),
@@ -334,10 +376,7 @@ class SopTrader:
         if isinstance(sizing, str):
             raise _Skip(sizing)
 
-        if self._fill_form:
-            margin = self._ensure_leverage(params.leverage)
-        else:
-            margin = self._nav.read_margin_settings()
+        margin = self._nav.read_margin_settings()
         entry.margin = margin.describe()
         for issue in margin.problems(params.leverage):
             logger.warning("Margin di aplikasi: %s. Wajib diubah sebelum order sungguhan.", issue)

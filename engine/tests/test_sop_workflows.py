@@ -1,5 +1,6 @@
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -176,26 +177,58 @@ def test_data_signal_mode_decides_without_ai(tmp_path: Path) -> None:
     assert entry.verdict == "tunggu" and entry.pattern_ai is None
 
 
-def test_the_bot_sets_leverage_to_2x_before_filling(tmp_path: Path) -> None:
+def with_auto_margin(trader: SopTrader, mode: bool = False) -> None:
+    trader._settings = replace(trader._settings, auto_margin="1", auto_mode="1" if mode else "")
+
+
+def test_margin_is_left_alone_unless_auto_margin_is_on(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    trader, *_ = make_trader(tmp_path, nav)
+    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == []
+
+
+def test_auto_margin_sets_leverage_and_isolated_before_the_form_is_filled(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader, mode=True)  # leverage dan mode Isolated sama-sama diminta
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == [(2, True)]
+    assert entry.status == "open" and entry.margin == "Isolated 2x"
+    assert not any("Margin di aplikasi" in r.getMessage() for r in caplog.records)
+
+
+def test_auto_margin_does_nothing_when_the_margin_already_matches(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(True, 2))
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == []
+
+
+def test_a_failed_auto_margin_is_logged_and_the_paper_trade_continues(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
+    nav.margin_apply_fails = True
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert entry.status == "open"  # uji kertas tetap jalan
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("tidak bisa diatur otomatis" in m for m in messages)
+    assert any("leverage 20x, SOP 2x" in m for m in messages)  # peringatan lama tetap muncul
+
+
+def test_margin_differences_are_warned_but_paper_trade_continues(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
     trader, _, _, _ = make_trader(tmp_path, nav)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
-    assert (entry.status, entry.margin) == ("open", "Cross 2x")
-    assert nav.calls.index("leverage:2") < nav.calls.index("fill:100")
-
-
-def test_a_refused_leverage_change_is_warned_but_paper_trade_continues(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    class Refusing(FakeNavigator):
-        def ensure_leverage(self, leverage: int) -> MarginSettings:
-            raise ScreenReadError("Bursa tidak mengubah leverage (masih 20x, bukan 2x)")
-
-    nav = Refusing({1: "STRKUSDT"}, margin=MarginSettings(False, 20))
-    trader, _, _, _ = make_trader(tmp_path, nav)
-    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert (entry.status, entry.margin) == ("open", "Cross 20x")
-    assert "Leverage tidak bisa diubah ke 2x" in caplog.text
 
 
 # --------------------------------------------------------------------------- slot (langkah 4)
@@ -427,6 +460,8 @@ def test_follower_enters_the_same_coin_as_the_leader_even_after_ranks_shift(tmp_
     assert (follower.result.symbol, follower.result.status) == ("CFXUSDT", "open")
     assert follower.result.pattern_ai == OK.as_dict()  # pola dari AI di leader
     assert nav.filled == ["100"]
+    # Dicatat dengan Top versi leader (2), bukan posisinya di daftar laptop ini saat itu (3).
+    assert follower.result.rank == 2
 
 
 def test_follower_with_all_tops_follows_every_top_the_leader_plays(tmp_path: Path) -> None:
@@ -515,6 +550,37 @@ def test_follower_gives_up_when_leader_never_judges_its_rank(tmp_path: Path) -> 
     follower.run()
     assert follower.result is None
     assert nav.calls == ["show_app:2"]  # MarketForge tampil selama menunggu; bursa tidak disentuh
+    assert journal.load() == []
+
+
+def noted(caplog: pytest.LogCaptureFixture) -> list[tuple[int, str, str]]:
+    """(rank, symbol, alasan) tiap Top yang ditampilkan sebagai tidak diproses."""
+    return [
+        (r.event["rank"], r.event["symbol"], r.event["reason"])
+        for r in caplog.records
+        if hasattr(r, "event") and r.getMessage().find("tidak diproses") >= 0
+    ]
+
+
+def test_an_assigned_top_the_leader_does_not_play_is_shown_instead_of_vanishing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    client = FakeClient({1: AnalysisRecord("WUSDT", 1, 1000.0, reading(OK))}, plan_done=True)
+    follower, _nav, journal = make_follower(tmp_path, client, {1: "WUSDT"}, ranks=[2])
+    follower.run()
+    assert noted(caplog) == [(2, "-", "Leader tidak memainkan Top 2 di putaran ini")]
+    assert journal.load() == []
+
+
+def test_a_top_the_leader_never_judged_is_shown_with_the_hub_message(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    follower, _nav, journal = make_follower(tmp_path, FakeClient(None), {2: "CFXUSDT"}, wait_s=30)
+    follower.run()
+    assert [(r, sym) for r, sym, _ in noted(caplog)] == [(2, "-")]
+    assert "belum menilai Top 2" in noted(caplog)[0][2]
     assert journal.load() == []
 
 
@@ -933,3 +999,79 @@ def test_follower_held_by_a_losing_position_still_records_the_leaders_decisions(
     assert rows["C1USDT"].status == "skipped" and "CFXUSDT sedang rugi" in rows["C1USDT"].reason
     assert rows["C2USDT"].verdict == "tunggu"
     assert nav.filled == []  # bursa tidak dibuka untuk koin yang tertahan
+
+
+def test_auto_margin_changes_only_the_leverage_unless_the_mode_is_also_enabled(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 25))
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)  # hanya leverage
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == [(2, False)]  # mode Cross tidak disentuh
+    assert entry.margin == "Cross 2x"
+
+
+def test_auto_margin_leaves_a_coin_alone_when_its_leverage_is_already_right(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 2))  # Cross 2x
+    trader, *_ = make_trader(tmp_path, nav)
+    with_auto_margin(trader)
+    trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert nav.margin_applied == []  # mode Cross dibiarkan karena mode tidak diminta
+
+
+def test_leverage_is_set_for_every_coin_that_is_opened_even_if_it_is_then_skipped(
+    tmp_path: Path,
+) -> None:
+    """Koin yang dilewati (di sini: kenaikan kurang dari batas) juga diatur ke 2x."""
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 50))
+    trader, *_ = make_trader(tmp_path, nav, min_gain_pct=1000.0)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert entry.status == "skipped"
+    assert nav.margin_applied == [(2, False)]
+
+
+def test_an_unreadable_margin_panel_does_not_stop_the_coin_from_being_evaluated(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 50))
+
+    def unreadable() -> MarginSettings:
+        raise ScreenReadError("Leverage tidak terbaca di panel margin")
+
+    nav.read_margin_settings = unreadable  # type: ignore[method-assign]
+    trader, *_ = make_trader(tmp_path, nav, min_gain_pct=1000.0)
+    with_auto_margin(trader)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
+    assert entry.status == "skipped" and nav.margin_applied == []
+    assert any("tidak terbaca, tidak diatur otomatis" in r.getMessage() for r in caplog.records)
+
+
+def cycle_events(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
+    return [r.event for r in caplog.records if hasattr(r, "event") and r.event["type"] == "cycle"]
+
+
+def test_a_follower_round_reports_its_start_and_end_like_the_other_modes(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    client = FakeClient(AnalysisRecord("CFXUSDT", 2, 1000.0, reading(OK)), plan_done=True)
+    follower, _nav, _journal = make_follower(tmp_path, client, {2: "CFXUSDT"})
+    follower.run()
+    events = cycle_events(caplog)
+    assert [e["phase"] for e in events] == ["start", "done"]
+    assert events[1]["opened"] == 1
+
+
+def test_the_follower_round_still_reports_its_end_when_it_stops_early(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    follower, _nav, _journal = make_follower(tmp_path, FakeClient(None), {2: "CFXUSDT"}, wait_s=30)
+    follower.run()  # leader tidak pernah menilai Top 2
+    events = cycle_events(caplog)
+    assert [e["phase"] for e in events] == ["start", "done"] and events[1]["opened"] == 0

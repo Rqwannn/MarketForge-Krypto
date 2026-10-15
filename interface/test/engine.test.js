@@ -172,12 +172,28 @@ test('proses engine: log per baris, lingkungan dari .env, berhenti', async () =>
   assert.equal(logs[0].event.type, 'cycle');
   assert.equal(logs[1].message, 'hub=http://h:1 arg=single');
   proc.stop();
-  const { code } = await exited;
+  const { code, stopped } = await exited;
   assert.equal(proc.running, false);
+  assert.equal(stopped, true); // diminta berhenti, apa pun kode keluarnya (Windows: taskkill = 1)
   if (process.platform !== 'win32') {
     assert.equal(code, 130);
     assert.ok(logs.some((l) => l.level === 'ERROR' && l.message === 'berhenti'));
   }
+});
+
+test('proses engine yang keluar sendiri dengan galat tidak dianggap diminta berhenti', async () => {
+  const dir = tempDir();
+  const script = path.join(dir, 'crash.js');
+  fs.writeFileSync(script, "process.exit(1);");
+  const proc = new EngineProcess({ bot: process.execPath, botArgs: [script], cwd: dir, env: () => process.env });
+  const exited = new Promise((resolve) => proc.once('exit', resolve));
+  proc.start([]);
+  const info = await exited;
+  assert.equal(info.code, 1);
+  assert.equal(info.stopped, false);
+  proc.start([]); // dijalankan lagi: penanda dibersihkan
+  assert.equal(proc.stopRequested, false);
+  await new Promise((resolve) => proc.once('exit', resolve));
 });
 
 test('grafik hanya dibaca dari folder screenshots engine', () => {
