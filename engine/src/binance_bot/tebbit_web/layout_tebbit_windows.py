@@ -38,6 +38,8 @@ def zoom_steps_down(scale: float) -> int:
 ZOOM_STEPS_DOWN = zoom_steps_down(_display_scale())
 
 OCR_UPSCALE = 2
+OCR_QUOTE_VARIANTS = (("max", 3), ("max", 2), ("gray", 2))
+OCR_LEGEND_VARIANTS = (("max", 2), ("max", 3), ("max", 4), ("gray", 2))
 
 # Menu atas situs: "Futures" di x 0,21 y 0,04 (jangkar zoom); bila login, email tampil di kanan.
 NAV_FUTURES_AREA = (0.0, 0.0, 0.6, 0.09)

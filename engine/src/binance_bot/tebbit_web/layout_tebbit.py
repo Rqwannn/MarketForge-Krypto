@@ -25,6 +25,12 @@ LOGIN_AREA = (0.0, 0.10, 1.0, 0.17)
 # Windows OCR membaca teks kecil (±12 px) dengan buruk: gambar diperbesar sekian kali sebelum
 # dibaca (koordinat hasil tetap relatif). None = tanpa pembesaran (macOS Vision tidak butuh ini).
 OCR_UPSCALE: int | None = None
+# Teks berwarna di latar gelap (harga merah/hijau, persen) lebih jelas lewat kanal warna paling
+# terang ("max") daripada abu-abu. Bacaan harga dan header digabung dari beberapa varian
+# (kanal, pembesaran), karena tiap varian kadang melewatkan bagian yang lain terbaca.
+OCR_QUOTE_VARIANTS: tuple[tuple[str, int], ...] | None = None
+# Legenda MA (teks kecil berwarna): lebih banyak varian, karena tiap varian melewatkan label lain.
+OCR_LEGEND_VARIANTS: tuple[tuple[str, int], ...] | None = None
 
 # Halaman depan: daftar Gainers (tab "Gainers", sub-tab "Futures") di bawah halaman.
 LIST_SEARCH_AREA = (0.0, 0.17, 0.75, 0.99)

@@ -380,19 +380,24 @@ def browser_zoom(steps_down: int, guard: Callable[[], bool] | None = None) -> No
         time.sleep(0.15)
 
 
-def browser_go(url: str, guard: Callable[[], bool] | None = None) -> None:
-    """Ketik alamat di bilah alamat lalu Enter. Hanya dipanggil dengan alamat yang sudah divalidasi.
+def browser_type_address(url: str, guard: Callable[[], bool] | None = None) -> None:
+    """Pilih bilah alamat (Ctrl+L) lalu ketik `url`, TANPA Enter. Alamat sudah divalidasi pemanggil.
 
-    Delete sebelum Enter membuang saran pelengkapan otomatis, supaya yang dibuka persis `url`.
-    `guard` diperiksa sebelum Ctrl+L, tiap beberapa karakter, dan sebelum Enter.
+    `guard` diperiksa sebelum Ctrl+L dan tiap beberapa karakter. Bilah alamat butuh sesaat untuk
+    menerima fokus; karakter pertama yang datang terlalu cepat bisa hilang, jadi pemanggil wajib
+    membaca isinya sebelum `browser_commit_address`.
     """
     _check(guard)
     _combo(_VK_CONTROL, _VK_L)
-    time.sleep(0.2)
+    time.sleep(0.5)
     for index, char in enumerate(url):
         if index % 6 == 0:
             _check(guard)
         type_char(char)
+
+
+def browser_commit_address(guard: Callable[[], bool] | None = None) -> None:
+    """Enter di bilah alamat. Delete dulu membuang saran pelengkapan otomatis Chrome."""
     _check(guard)
     _send([_key(_VK_DELETE), _key(_VK_DELETE, flags=_KEYEVENTF_KEYUP)])
     time.sleep(0.1)

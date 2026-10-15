@@ -28,8 +28,11 @@ logger = logging.getLogger(__name__)
 _OPEN_TIMEOUT_S = 25.0
 _FOCUS_TIMEOUT_S = 4.0
 _URL_ATTEMPTS = 4
+_TYPE_ATTEMPTS = 3
 
-# Membaca kotak alamat lewat UI Automation. Chrome menampilkan alamat tanpa "https://".
+# Membaca kotak alamat lewat UI Automation. Chrome menampilkan alamat tanpa "https://". Dicari
+# dulu menurut namanya ("Address and search bar"); bila tidak ada, kotak teks pertama yang isinya
+# berbentuk alamat (kotak isian di dalam halaman tidak ikut).
 _READ_ADDRESS = r"""
 $Hwnd = __HWND__
 Add-Type -AssemblyName UIAutomationClient
@@ -37,7 +40,16 @@ $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
 $type = [System.Windows.Automation.AutomationElement]::ControlTypeProperty
 $kind = [System.Windows.Automation.ControlType]::Edit
 $edit = New-Object System.Windows.Automation.PropertyCondition($type, $kind)
-foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $edit)) {
+$all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $edit)
+foreach ($e in $all) {
+  if ($e.Current.Name -match 'Address|Alamat|search bar|penelusuran') {
+    try {
+      $pattern = [System.Windows.Automation.ValuePattern]::Pattern
+      Write-Output $e.GetCurrentPattern($pattern).Current.Value; exit
+    } catch {}
+  }
+}
+foreach ($e in $all) {
   try {
     $v = $e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
     if ($v -match '^[\w.-]+\.[a-z]{2,}(/|$)|^https?://') { Write-Output $v; break }
@@ -60,6 +72,12 @@ def chrome_path(env: Mapping[str, str] | None = None) -> Path:
         "Google Chrome tidak ditemukan. Pasang Chrome, atau isi BOT_CHROME_PATH di .env dengan "
         "path lengkap chrome.exe."
     )
+
+
+def address_key(address: str) -> str:
+    """Bentuk bandingan alamat: tanpa skema, "www.", dan garis miring akhir; huruf kecil."""
+    text = re.sub(r"^https?://", "", address.strip().lower())
+    return re.sub(r"^www\.", "", text).rstrip("/")
 
 
 def with_scheme(address: str) -> str:
@@ -126,9 +144,26 @@ class WinChromeController:
                 )
 
     def open_url(self, window_id: int, url: str) -> None:
+        """Ketik alamat, pastikan isi kotak alamat persis sama, baru tekan Enter.
+
+        Karakter pertama kadang hilang saat bilah alamat belum menerima fokus (alamat jadi
+        "ttps://..." dan Chrome mencarinya di Google). Isinya dibaca ulang; bila beda, diketik
+        ulang. Enter tidak pernah ditekan untuk alamat yang tidak cocok.
+        """
         check_url(url)
-        self.raise_window(window_id)
-        self._type(lambda guard: self._win.browser_go(url, guard), window_id)
+        wanted = address_key(url)
+        shown = ""
+        for _ in range(_TYPE_ATTEMPTS):
+            self.raise_window(window_id)
+            self._type(lambda guard: self._win.browser_type_address(url, guard), window_id)
+            shown = self._read_address(window_id).strip()
+            if address_key(shown).startswith(wanted):  # boleh lebih panjang: saran otomatis
+                self._type(lambda guard: self._win.browser_commit_address(guard), window_id)
+                return
+            self._sleep(0.3)
+        raise WindowError(
+            f"Alamat yang diketik di Chrome tidak sesuai (terbaca: {shown!r}); Enter tidak ditekan."
+        )
 
     def current_url(self, window_id: int) -> str:
         for _ in range(_URL_ATTEMPTS):
