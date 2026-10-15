@@ -455,6 +455,8 @@ def test_follower_enters_the_same_coin_as_the_leader_even_after_ranks_shift(tmp_
     assert (follower.result.symbol, follower.result.status) == ("CFXUSDT", "open")
     assert follower.result.pattern_ai == OK.as_dict()  # pola dari AI di leader
     assert nav.filled == ["100"]
+    # Dicatat dengan Top versi leader (2), bukan posisinya di daftar laptop ini saat itu (3).
+    assert follower.result.rank == 2
 
 
 def test_follower_with_all_tops_follows_every_top_the_leader_plays(tmp_path: Path) -> None:
@@ -954,3 +956,29 @@ def test_an_unreadable_margin_panel_does_not_stop_the_coin_from_being_evaluated(
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer()))
     assert entry.status == "skipped" and nav.margin_applied == []
     assert any("tidak terbaca, tidak diatur otomatis" in r.getMessage() for r in caplog.records)
+
+
+def cycle_events(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
+    return [r.event for r in caplog.records if hasattr(r, "event") and r.event["type"] == "cycle"]
+
+
+def test_a_follower_round_reports_its_start_and_end_like_the_other_modes(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    client = FakeClient(AnalysisRecord("CFXUSDT", 2, 1000.0, reading(OK)), plan_done=True)
+    follower, _nav, _journal = make_follower(tmp_path, client, {2: "CFXUSDT"})
+    follower.run()
+    events = cycle_events(caplog)
+    assert [e["phase"] for e in events] == ["start", "done"]
+    assert events[1]["opened"] == 1
+
+
+def test_the_follower_round_still_reports_its_end_when_it_stops_early(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    follower, _nav, _journal = make_follower(tmp_path, FakeClient(None), {2: "CFXUSDT"}, wait_s=30)
+    follower.run()  # leader tidak pernah menilai Top 2
+    events = cycle_events(caplog)
+    assert [e["phase"] for e in events] == ["start", "done"] and events[1]["opened"] == 0

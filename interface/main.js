@@ -155,17 +155,20 @@ function teamState() {
 }
 
 /** Pemimpin memulai putaran: pengikut yang sudah menerima ikut menjalankan bot. */
-function startFollower({ leaderName, rank, modal, hub }) {
+function startFollower({ leaderName, rank, modal, hub, exchange: leaderExchange }) {
   if (proc.running) return;
+  // Pengikut memakai platform pemimpin (Binance atau Tebbit); tanpa keterangan, platform laptop ini.
+  const platform = engine.EXCHANGES.includes(leaderExchange) ? leaderExchange : exchange;
   try {
-    proc.start(engine.buildArgs('follower', { rank, modal, hub }));
+    proc.start(engine.buildArgs('follower', { rank, modal, hub, exchange: platform }));
   } catch (err) {
     send('team:error', `Gagal mengikuti ${leaderName}: ${err.message}`);
     return;
   }
+  exchange = platform;
   runningMode = 'follower';
   syncPresence();
-  send('team:started', { leaderName, rank });
+  send('team:started', { leaderName, rank, exchange: platform });
   win?.minimize();
 }
 
@@ -224,7 +227,7 @@ proc.on('log', (entry) => {
   send('engine:log', entry);
   const e = entry.event;
   if (team && runningMode === 'leader' && e?.type === 'cycle' && e.phase === 'start') {
-    team.startCycle(); // pengikut ikut memulai putaran ini
+    team.startCycle(exchange); // pengikut ikut memulai putaran ini, di platform yang sama
     syncPresence();
   }
 });

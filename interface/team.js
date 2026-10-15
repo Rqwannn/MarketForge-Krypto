@@ -6,7 +6,8 @@
 // - Laptop yang diajak menampilkan ajakan; pemiliknya harus menekan Terima.
 // - Pengikut mengumumkan `leader=<id pemimpin>` dan `rank`.
 // - Setiap putaran pemimpin dimulai, pemimpin mengumumkan `cycle=<waktu>`; pengikut yang sudah
-//   menerima ikut menjalankan bot untuk putaran itu.
+//   menerima ikut menjalankan bot untuk putaran itu, di platform yang sama dengan pemimpin
+//   (`ex=binance|tebbit`).
 //
 // Semua TXT ditandatangani HMAC dengan BOT_HUB_TOKEN. Data kelompok dari laptop yang tanda
 // tangannya tidak cocok diabaikan, sehingga perangkat lain di WiFi tidak bisa memalsukan ajakan
@@ -16,6 +17,7 @@ const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 
 const SHORT_ID = 8;
+const EXCHANGES = ['binance', 'tebbit']; // platform yang boleh diumumkan pemimpin
 const SIG_LENGTH = 32;
 const CYCLE_FRESH_MS = 2 * 60 * 1000; // sinyal putaran lebih tua dari ini tidak memicu bot
 const HUB_PORT = 8765;
@@ -80,7 +82,7 @@ function decodeInvites(text) {
 /** Field kelompok dari TXT laptop lain; hanya bila tanda tangannya cocok dengan token kita. */
 function teamFieldsFrom(txt, token) {
   if (!isSigned(token, txt)) {
-    return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, close: null };
+    return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, exchange: '', close: null };
   }
   const rank = normalizeRank(txt.rank);
   const close = CLOSE.exec(txt.cls || '');
@@ -90,6 +92,7 @@ function teamFieldsFrom(txt, token) {
     leader: /^[0-9a-f]{8}$/.test(txt.leader || '') ? txt.leader : '',
     rank,
     cycle: Number.isFinite(Number(txt.cycle)) ? Number(txt.cycle) : 0,
+    exchange: EXCHANGES.includes(txt.ex) ? txt.ex : '',
     close: close ? { seq: Number(close[1]), target: close[2], symbol: close[3] } : null,
   };
 }
@@ -103,6 +106,7 @@ class Team extends EventEmitter {
     this.now = now;
     this.invites = new Map(); // pemimpin: id pengikut -> top
     this.cycle = 0; // pemimpin: waktu mulai putaran terakhir
+    this.exchange = ''; // pemimpin: platform putaran itu (pengikut memakai platform yang sama)
     this.closeCommand = null; // pemimpin: perintah Sell terakhir { seq, target, symbol }
     this.membership = null; // pengikut: { leaderId, leaderName, rank, modal }
     this.answered = new Set(); // ajakan yang sudah dijawab atau sedang ditampilkan
@@ -121,7 +125,10 @@ class Team extends EventEmitter {
     if (role !== 'leader') return {};
     const fields = {};
     if (this.invites.size) fields.inv = encodeInvites(this.invites);
-    if (this.cycle) fields.cycle = String(this.cycle);
+    if (this.cycle) {
+      fields.cycle = String(this.cycle);
+      if (this.exchange) fields.ex = this.exchange;
+    }
     const c = this.closeCommand;
     if (c) fields.cls = `${c.seq}:${c.target}:${c.symbol}`;
     return fields;
@@ -149,8 +156,9 @@ class Team extends EventEmitter {
     this.closeCommand = { seq: this.now(), target: target === '*' ? '*' : shortId(target), symbol };
   }
 
-  startCycle() {
+  startCycle(exchange = '') {
     this.cycle = this.now();
+    this.exchange = EXCHANGES.includes(exchange) ? exchange : '';
   }
 
   accept({ leaderId, leaderName, rank, modal }) {
@@ -212,6 +220,7 @@ class Team extends EventEmitter {
             rank: member.rank,
             modal: member.modal,
             hub: `http://${peer.address}:${HUB_PORT}`,
+            ...(peer.team.exchange ? { exchange: peer.team.exchange } : {}),
           });
         }
         const close = peer.team.close;

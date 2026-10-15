@@ -202,3 +202,35 @@ test('pengikut menerima tugas beberapa Top, lalu pemimpin mengubahnya tanpa ajak
   team.evaluate([leaderPeer({ inv: '11111111:*', cycle: String(NOW - 1000) })]);
   assert.deepEqual(events.at(-1), ['start', { leaderName: 'MacBook Pemimpin', rank: '*', modal: '100', hub: 'http://192.168.1.19:8765' }]);
 });
+
+test('putaran pemimpin membawa platformnya (ditandatangani) dan pengikut memakainya', () => {
+  const leader = new Team({ myId: LEADER, token: TOKEN, now: () => NOW });
+  leader.startCycle('tebbit');
+  assert.deepEqual(leader.fields('leader'), { cycle: String(NOW), ex: 'tebbit' });
+
+  const { team, events } = follower();
+  team.accept({ leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: 2, modal: '100' });
+  team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000), ex: 'tebbit' })]);
+  assert.deepEqual(events.at(-1), ['start', {
+    leaderName: 'MacBook Pemimpin', rank: '2', modal: '100', hub: 'http://192.168.1.19:8765', exchange: 'tebbit',
+  }]);
+});
+
+test('platform yang tidak dikenal tidak diumumkan dan tidak dipercaya; tanpa platform bawaan lama', () => {
+  const leader = new Team({ myId: LEADER, token: TOKEN, now: () => NOW });
+  leader.startCycle('kripto-palsu');
+  assert.deepEqual(leader.fields('leader'), { cycle: String(NOW) }); // tidak ada ex
+  assert.equal(teamFieldsFrom({ ex: 'sembarang' }, TOKEN).exchange, '');
+
+  const { team, events } = follower();
+  team.accept({ leaderId: LEADER, leaderName: 'P', rank: 2, modal: '100' });
+  team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000), ex: 'kripto-palsu' })]);
+  assert.equal(events.at(-1)[0], 'start'); // putaran tetap memicu bot
+  assert.equal('exchange' in events.at(-1)[1], false); // tetapi tanpa platform palsu
+});
+
+test('platform di putaran tidak bisa dipalsukan: tanda tangan harus cocok', () => {
+  const forged = leaderPeer({ cycle: String(NOW), ex: 'tebbit' }, 'token-lain');
+  assert.equal(forged.team.verified, false);
+  assert.equal(forged.team.exchange, '');
+});

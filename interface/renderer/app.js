@@ -356,8 +356,20 @@ async function toggleRun() {
 function addFeed(item, ts) {
   const feed = $('feed');
   feed.querySelector('.idle')?.remove();
+  // Baris yang sama berturut-turut (mis. "Menunggu hasil AI..." tiap 5 detik) digabung: waktu
+  // diperbarui dan jumlahnya ditulis, supaya baris penting tidak tertimbun.
+  const top = feed.firstElementChild;
+  const topText = top?.querySelector('span');
+  if (top && topText && topText.base === item.text && top.className === (item.css || '')) {
+    const repeats = Number(topText.repeats || 1) + 1;
+    topText.repeats = repeats;
+    topText.textContent = `${item.text} (${repeats}×)`;
+    top.querySelector('time').textContent = clock(ts);
+    if (state === 'running') $('status-sub').textContent = item.text;
+    return;
+  }
   feed.prepend(el('li', { class: item.css || '' }, el('i'),
-    el('div', {}, el('span', { textContent: item.text }), el('time', { textContent: clock(ts) }))));
+    el('div', {}, el('span', { textContent: item.text, base: item.text }), el('time', { textContent: clock(ts) }))));
   while (feed.childElementCount > MAX_FEED) feed.lastElementChild.remove();
   if (state === 'running') $('status-sub').textContent = item.text;
 }
@@ -511,7 +523,7 @@ function resetFlow(mode, sub) {
 window.bot.onLog((entry) => {
   const e = entry.event;
   if (e?.type === 'cycle' && e.phase === 'start') {
-    emptyCoins('Membaca top gainers…');
+    emptyCoins(flow.mode === 'follower' ? 'Menunggu hasil AI dari pemimpin…' : 'Membaca top gainers…');
     $('cycle-info').textContent = `Dimulai ${clock(entry.ts || Date.now() / 1000)}`;
   }
   if (e?.type === 'coin') addCoin(e);
@@ -1239,10 +1251,12 @@ window.bot.team.onChanged((info) => {
   if (info.notice) addFeed({ text: info.notice, css: 'warn' }, Date.now() / 1000);
 });
 window.bot.team.onError((message) => addFeed({ text: message, css: 'bad' }, Date.now() / 1000));
-window.bot.team.onStarted(({ leaderName, rank }) => {
+window.bot.team.onStarted(({ leaderName, rank, exchange }) => {
   Object.assign(counts, { seen: 0, ok: 0, open: 0 });
   setCounts();
-  emptyCoins('Menyiapkan Binance…');
+  // Tampilan pengikut berpindah ke platform pemimpin (jurnal dan posisi dibaca dari platform itu).
+  if (exchange && exchange !== platform?.id) choosePlatform(exchange);
+  emptyCoins(`Menyiapkan ${platform?.name || 'Binance'}…`);
   emptyFeed('Menunggu aktivitas pertama…');
   setState('running', 'Mengikuti pemimpin', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
   resetFlow('follower', `${leaderName} memulai putaran; laptop ini menilai Top ${rank}.`);
