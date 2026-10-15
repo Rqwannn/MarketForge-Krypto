@@ -24,7 +24,6 @@ class Sizing:
     order_text: str  # yang diketik di kolom "Jumlah" (USDT, Ukuran Order), mis. "100" atau "99,50"
     notional: float  # nilai posisi (USDT)
     margin_usdt: float  # margin yang terpakai = nilai posisi / leverage
-    loss_at_stop: float  # rugi bila stop-loss kena, sebelum biaya (USDT)
 
 
 def floor_to_step(value: float, step: float) -> Decimal:
@@ -79,5 +78,4 @@ def size_position(
         order_text=format_usdt(order, decimal_separator),
         notional=notional,
         margin_usdt=margin,
-        loss_at_stop=notional * params.stop_pct / 100,
     )

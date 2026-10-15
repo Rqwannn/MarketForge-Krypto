@@ -53,12 +53,22 @@ class SingleWorkflow:
             if self._interval_s <= 0:
                 return
             logger.info("Pantau ulang dalam %.0f menit", self._interval_s / 60)
-            self._sleep(self._interval_s)
+            self._wait_and_watch(self._interval_s)
+
+    def _wait_and_watch(self, seconds: float) -> None:
+        """Tunggu putaran berikutnya sambil menjalankan jual otomatis posisi yang terbuka."""
+        step = self._trader.watch_interval_s
+        left = seconds
+        while left > 0:
+            wait = min(step, left)
+            self._sleep(wait)
+            left -= wait
+            if left > 0:  # putaran berikutnya memeriksanya sendiri di awal
+                self._trader.refresh_journal()
 
     def run_cycle(self) -> int:
         """Satu putaran pemantauan. Mengembalikan jumlah posisi uji baru."""
-        if self._trader.halted(self._trader.refresh_journal()):
-            return 0
+        self._trader.refresh_journal()  # jual otomatis posisi yang sudah mencapai target
         self._nav.prepare()
         rows = {row.rank: row for row in self._nav.open_top_gainers()}
         log_top_gainers(list(rows.values()))

@@ -116,20 +116,19 @@ class JournalWorkflow:
     def _report(self, entries: list[JournalEntry], now: float) -> None:
         stats = summarize(entries, self._params, now)
         logger.info(
-            "Selesai %d (target %d, stop-loss %d, batas waktu %d) | terbuka %d | dilewati %d",
+            "Selesai %d (target %d, likuidasi %d, tutup manual %d) | terbuka %d | dilewati %d",
             stats.closed,
             stats.targets,
-            stats.stops,
-            stats.timeouts,
+            stats.liquidations,
+            stats.manual,
             stats.open,
             stats.skipped,
         )
         if stats.needs_review:
             logger.warning(
-                "%d posisi terbuka sudah lewat %g jam: tinjau (SOP: tutup paling lambat %g jam)",
+                "%d posisi terbuka sudah lewat %g jam: tinjau bersama beliau (tanpa batas waktu)",
                 stats.needs_review,
                 self._params.review_after_h,
-                self._params.max_hold_h,
             )
         win_rate = "-" if stats.win_rate is None else f"{stats.win_rate:.1%}"
         logger.info(
@@ -142,10 +141,8 @@ class JournalWorkflow:
         worst = "-" if stats.worst_against_pct is None else f"{stats.worst_against_pct:+.2f}%"
         agree, compared = stats.signal_agreement
         logger.info(
-            "Harga paling jauh melawan posisi: %s | stop-loss berturut-turut: %d | "
-            "AI dan data sepakat soal pola OK: %d dari %d koin",
+            "Harga paling jauh melawan posisi: %s | AI dan data sepakat soal pola OK: %d dari %d",
             worst,
-            stats.stop_streak,
             agree,
             compared,
         )

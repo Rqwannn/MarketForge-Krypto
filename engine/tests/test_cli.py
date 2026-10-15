@@ -18,13 +18,13 @@ def test_parse_ranks_rejects_invalid(text: str) -> None:
         parse_ranks(text)
 
 
-def test_single_defaults_follow_sop_v2() -> None:
+def test_single_defaults_follow_sop_v3() -> None:
     args = build_parser().parse_args(["single"])
     params = params_from(args)
     assert args.ranks == [1, 2, 3, 4, 5]  # pantau top 5
     assert (params.leverage, params.margin_pct) == (2, 50.0)
-    assert (params.target_pct, params.stop_pct, params.fee_pct) == (2.0, 2.0, 0.1)
-    assert (params.min_crosses, params.min_gain_pct, params.max_hold_h) == (2, 0.0, 4.0)
+    assert (params.target_pct, params.fee_pct) == (3.0, 0.1)  # tanpa stop-loss dan batas waktu
+    assert (params.min_crosses, params.min_gain_pct) == (2, 0.0)
 
 
 def test_single_maps_sop_parameters() -> None:
@@ -39,8 +39,6 @@ def test_single_maps_sop_parameters() -> None:
             "25",
             "--leverage",
             "2",
-            "--sl",
-            "1.5",
             "--target",
             "1",
             "--min-turun",
@@ -56,12 +54,7 @@ def test_single_maps_sop_parameters() -> None:
     )
     params = params_from(args)
     assert args.ranks == [1, 2] and args.no_fill and args.interval == 5
-    assert (params.capital_usdt, params.margin_pct, params.stop_pct, params.target_pct) == (
-        1000,
-        25,
-        1.5,
-        1,
-    )
+    assert (params.capital_usdt, params.margin_pct, params.target_pct) == (1000, 25, 1)
     assert (params.min_crosses, params.order_usdt, params.signal_source) == (3, 75, "data")
 
 

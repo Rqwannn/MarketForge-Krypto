@@ -3,8 +3,8 @@
 from binance_bot.strategy.evaluate import (
     Stats,
     close_short_now,
+    evaluate_by_price,
     evaluate_open_trades,
-    stop_streak,
     summarize,
 )
 from binance_bot.strategy.execution import (
@@ -36,8 +36,8 @@ __all__ = [
     "candles_needed",
     "close_short_now",
     "data_ma_pattern",
+    "evaluate_by_price",
     "evaluate_open_trades",
     "size_position",
-    "stop_streak",
     "summarize",
 ]

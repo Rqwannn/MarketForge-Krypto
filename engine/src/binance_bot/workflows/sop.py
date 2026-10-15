@@ -33,9 +33,9 @@ from binance_bot.strategy import (
     SopParams,
     candles_needed,
     data_ma_pattern,
+    evaluate_by_price,
     evaluate_open_trades,
     size_position,
-    stop_streak,
 )
 from binance_bot.workflows.base import TradingNavigator
 
@@ -67,7 +67,6 @@ def coin_event(entry: JournalEntry) -> dict[str, dict[str, Any]]:
         reason=entry.reason,
         entry_price=entry.entry_price,
         target_price=entry.target_price,
-        stop_price=entry.stop_price,
         chart=chart_of(entry),
     )
 
@@ -88,26 +87,48 @@ def log_top_gainers(rows: Sequence[GainerRow]) -> None:
     )
 
 
+# Jual otomatis (Aturan SELL V3) memeriksa posisi terbuka sesering ini selama bot menunggu
+# putaran berikutnya. Binance memakai data publik (tanpa layar); Tebbit membaca harga dari layar
+# (OCR, tanpa AI) sehingga lebih jarang.
+WATCH_INTERVAL_S = {"binance": 60.0, "tebbit": 300.0}
+
+
 def refresh_journal(
     journal: Journal, market: MarketData, fee_pct: float, now_s: float
 ) -> list[JournalEntry]:
     """Langkah 6 SOP: nilai posisi uji yang masih terbuka dari candle sungguhan."""
     entries = journal.load()
-    updated = evaluate_open_trades(entries, market, now_s, fee_pct)
-    changed = [new for old, new in zip(entries, updated, strict=True) if old != new]
+    return record_changes(journal, entries, evaluate_open_trades(entries, market, now_s, fee_pct))
+
+
+def record_changes(
+    journal: Journal, before: list[JournalEntry], after: list[JournalEntry]
+) -> list[JournalEntry]:
+    """Simpan hasil penilaian posisi; posisi yang selesai dicatat (jual otomatis, uji kertas)."""
+    changed = [new for old, new in zip(before, after, strict=True) if old != new]
     for entry in changed:
         if entry.is_closed:
-            logger.info(
-                "Uji kertas %s selesai: %s, hasil %+.2f%% posisi (%+.2f USDT = %+.2f%% modal)",
+            logger.warning(
+                "[DRY RUN] Tombol tutup posisi TIDAK ditekan. Jual otomatis %s (%s) di %g: "
+                "%+.2f%% posisi (%+.2f USDT = %+.2f%% modal)",
                 entry.symbol,
                 entry.status,
+                entry.exit_price or 0,
                 entry.pnl_pct or 0,
                 entry.pnl_usdt or 0,
                 entry.pnl_capital_pct or 0,
+                extra=event(
+                    "sell",
+                    symbol=entry.symbol,
+                    status=entry.status,
+                    exit_price=entry.exit_price,
+                    pnl_pct=entry.pnl_pct,
+                    pnl_usdt=entry.pnl_usdt,
+                ),
             )
     if changed:
-        journal.save(updated)
-    return updated
+        journal.save(after)
+    return after
 
 
 class SopTrader:
@@ -139,28 +160,38 @@ class SopTrader:
         self._wall_clock = wall_clock
         self._now = now
 
+    @property
+    def watch_interval_s(self) -> float:
+        return WATCH_INTERVAL_S.get(self.profile.platform, 60.0)
+
     def refresh_journal(self) -> list[JournalEntry]:
+        """Jual otomatis: posisi yang sudah mencapai target ditutup (uji kertas) dan dicatat."""
         try:
             return refresh_journal(
                 self._journal, self._market, self.params.fee_pct, self._wall_clock()
             )
-        except NoHistoryError:  # bursa tanpa riwayat harga (Tebbit): memang tidak dinilai otomatis
-            return self._journal.load()
+        except NoHistoryError:  # bursa tanpa candle (Tebbit): harga terkini dari layar
+            return self._refresh_by_price()
         except MarketDataError as exc:
             logger.warning("Posisi uji belum bisa dinilai: %s", exc)
             return self._journal.load()
 
-    def halted(self, entries: list[JournalEntry]) -> bool:
-        """SOP: setelah 3 stop-loss berturut-turut, berhenti hari itu dan tinjau catatan."""
-        today = self._now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-        streak = stop_streak(entries, since_s=today)
-        if streak >= self.params.max_stop_streak:
-            logger.error(
-                "%d stop-loss berturut-turut hari ini. Sesuai SOP: berhenti dan tinjau catatan.",
-                streak,
-            )
-            return True
-        return False
+    def _refresh_by_price(self) -> list[JournalEntry]:
+        entries = self._journal.load()
+        now = self._wall_clock()
+        updated = []
+        for entry in entries:
+            if entry.status == "open" and entry.entry_price and entry.target_price:
+                try:
+                    ask = self._market.quote(entry.symbol).ask
+                except BotError as exc:
+                    logger.warning(
+                        "Harga %s belum terbaca untuk jual otomatis: %s", entry.symbol, exc
+                    )
+                else:
+                    entry = evaluate_by_price(entry, ask, now, self.params.fee_pct)
+            updated.append(entry)
+        return record_changes(self._journal, entries, updated)
 
     def slot_blocker(self) -> str | None:
         """Langkah 4 SOP: koin berikutnya hanya bila posisi yang terbuka tidak sedang rugi.
@@ -373,7 +404,6 @@ class SopTrader:
             margin_usdt=sizing.margin_usdt,
             entry_price=price,
             target_price=price * (1 - params.target_pct / 100),
-            stop_price=price * (1 + params.stop_pct / 100),
             leverage=params.leverage,
             margin_mode=margin.mode,
         )
@@ -382,15 +412,14 @@ class SopTrader:
         entry.status = "open"
         entry.entry_price = plan.entry_price
         entry.max_price = plan.entry_price
+        entry.min_price = plan.entry_price
         entry.quantity = sizing.quantity
         entry.notional = sizing.notional
         entry.margin_usdt = sizing.margin_usdt
         entry.target_price = plan.target_price
-        entry.stop_price = plan.stop_price
-        entry.deadline = entry.created_at + params.max_hold_h * 3600
         logger.info(
-            "#%d %s MASUK UJI KERTAS: short %s USDT @ %g (%dx, margin %.2f USDT) | target %g | "
-            "stop-loss %g | tinjau %s, tutup paling lambat %s",
+            "#%d %s MASUK UJI KERTAS: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
+            "di %g (turun %g%%), tanpa stop-loss dan tanpa batas waktu",
             entry.rank,
             symbol,
             sizing.order_text,
@@ -398,9 +427,5 @@ class SopTrader:
             params.leverage,
             sizing.margin_usdt,
             plan.target_price,
-            plan.stop_price,
-            datetime.fromtimestamp(entry.created_at + params.review_after_h * 3600).strftime(
-                "%H:%M"
-            ),
-            datetime.fromtimestamp(entry.deadline).strftime("%H:%M"),
+            params.target_pct,
         )

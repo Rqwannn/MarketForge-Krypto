@@ -98,8 +98,12 @@ def _sop_options() -> argparse.ArgumentParser:
     )
     g.add_argument("--margin", type=float, default=d.margin_pct, help="Margin %% modal per posisi")
     g.add_argument("--leverage", type=int, default=d.leverage, help="Leverage")
-    g.add_argument("--sl", type=float, default=d.stop_pct, help="Stop-loss %% di atas harga masuk")
-    g.add_argument("--target", type=float, default=d.target_pct, help="Target %% turun (1-4)")
+    g.add_argument(
+        "--target",
+        type=float,
+        default=d.target_pct,
+        help="Jual otomatis saat harga turun %% (V3: 3-5)",
+    )
     g.add_argument(
         "--min-turun",
         type=int,
@@ -112,7 +116,6 @@ def _sop_options() -> argparse.ArgumentParser:
         default=d.min_gain_pct,
         help="Naik minimal 24 jam (%%); 0 = tidak disaring",
     )
-    g.add_argument("--batas-jam", type=float, default=d.max_hold_h, help="Tutup setelah N jam")
     g.add_argument("--biaya", type=float, default=d.fee_pct, help="Fee per putaran (%%)")
     g.add_argument(
         "--maks-spread", type=float, default=d.max_spread_pct, help="Spread maksimal (%%)"
@@ -136,11 +139,9 @@ def params_from(args: argparse.Namespace) -> SopParams:
         order_usdt=args.jumlah,
         margin_pct=args.margin,
         leverage=args.leverage,
-        stop_pct=args.sl,
         target_pct=args.target,
         min_crosses=args.min_turun,
         min_gain_pct=args.min_naik,
-        max_hold_h=args.batas_jam,
         fee_pct=args.biaya,
         max_spread_pct=args.maks_spread,
         min_funding_pct=args.min_funding,

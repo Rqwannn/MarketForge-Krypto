@@ -13,7 +13,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-CLOSED_STATUSES = ("target", "stop", "timeout", "manual")
+# stop dan timeout hanya ada di catatan lama (SOP V2); V3 tanpa stop-loss dan batas waktu.
+CLOSED_STATUSES = ("target", "likuidasi", "manual", "stop", "timeout")
 
 
 @dataclass(slots=True)
@@ -22,7 +23,7 @@ class JournalEntry:
     created_at: float  # epoch detik; juga waktu masuk uji kertas
     symbol: str
     rank: int
-    # skipped | open | target | stop | timeout | manual (Sell) | contoh (gambar contoh)
+    # skipped | open | target | likuidasi | manual (Sell) | contoh (gambar contoh)
     status: str = "skipped"
     role: str = "single"  # single (Sendiri) | follower (Pengikut) | contoh (gambar contoh)
     reason: str = ""
@@ -41,9 +42,12 @@ class JournalEntry:
     quantity: float | None = None
     notional: float | None = None
     target_price: float | None = None
-    stop_price: float | None = None
-    deadline: float | None = None
+    stop_price: float | None = None  # catatan lama (SOP V2)
+    deadline: float | None = None  # catatan lama (SOP V2)
     max_price: float | None = None  # harga tertinggi setelah masuk (melawan posisi short)
+    min_price: float | None = None  # harga terendah setelah masuk (seberapa jauh harga turun)
+    ma_gap_pct: float | None = None  # jarak garis cepat ke garis pembanding saat masuk (%)
+    checked_ms: int | None = None  # posisi sudah dinilai dari candle sampai waktu ini
     exit_price: float | None = None
     closed_at: float | None = None
     funding_pct: float | None = None

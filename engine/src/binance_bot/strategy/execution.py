@@ -26,8 +26,7 @@ class OrderPlan:
     notional: float  # nilai posisi (USDT)
     margin_usdt: float  # margin terpakai = nilai posisi / leverage
     entry_price: float
-    target_price: float
-    stop_price: float
+    target_price: float  # jual otomatis (V3: tanpa stop-loss)
     leverage: int
     side: str = "SHORT"
     margin_mode: str = "?"  # mode margin yang terbaca di bursa (bawaan bursa, Cross/Isolated)
@@ -78,7 +77,7 @@ class DryRunOrderGate:
         logger.warning(
             "[DRY RUN] Tombol Jual/Short TIDAK ditekan. Rencana: %s %s USDT %s (~%s koin) | "
             "nilai ~%.2f USDT, "
-            "margin ~%.2f USDT, %s %dx | masuk ~%g | target %g | stop-loss %g",
+            "margin ~%.2f USDT, %s %dx | masuk ~%g | jual otomatis di %g (tanpa stop-loss)",
             plan.side,
             plan.order_text,
             plan.symbol,
@@ -89,5 +88,4 @@ class DryRunOrderGate:
             plan.leverage,
             plan.entry_price,
             plan.target_price,
-            plan.stop_price,
         )

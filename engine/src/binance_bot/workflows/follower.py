@@ -78,9 +78,7 @@ class FollowerWorkflow:
         if uses_ai and self._client is None:
             raise ConfigError("SINYAL=ai butuh hub leader: isi --hub atau BOT_HUB_URL")
         assigned = list(self._ranks) if self._ranks is not None else list(range(1, MAX_RANK + 1))
-        if self._trader.halted(self._trader.refresh_journal()):
-            self._note_all(assigned, "3 stop-loss berturut-turut hari ini")
-            return
+        self._trader.refresh_journal()  # jual otomatis posisi yang sudah mencapai target
         try:
             ranks = self._ranks_to_follow(uses_ai)
         except HubError as exc:

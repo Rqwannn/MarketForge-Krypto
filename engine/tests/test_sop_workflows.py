@@ -104,11 +104,11 @@ def test_ok_pattern_is_sized_2x_filled_and_paper_traded(tmp_path: Path) -> None:
     assert nav.filled == ["100"]  # Jumlah dalam USDT (Ukuran Order): 100 x margin 50% x 2x
     plan = gate.plans[0]
     assert (plan.side, plan.leverage, plan.margin_usdt) == ("SHORT", 2, pytest.approx(50.0))
-    assert plan.target_price == pytest.approx(0.98)  # target 2% di bawah
-    assert plan.stop_price == pytest.approx(1.02)  # stop-loss 2% di atas
+    assert plan.target_price == pytest.approx(0.97)  # jual otomatis 3% di bawah (V3)
+    assert entry.stop_price is None and entry.deadline is None  # tanpa stop-loss dan batas waktu
     assert entry.pattern_ai == {"below_count": 3, "below_now": True, "below_recent": True}
     assert entry.pattern_data == {"below_count": 2, "below_now": False, "below_recent": False}
-    assert entry.max_price == pytest.approx(1.0)
+    assert entry.max_price == pytest.approx(1.0) and entry.min_price == pytest.approx(1.0)
     assert [e.status for e in journal.load()] == ["open"]
 
 
@@ -220,7 +220,8 @@ def test_second_coin_only_when_first_is_not_losing(tmp_path: Path) -> None:
     assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
 
 
-def test_three_stop_losses_today_halts_the_engine(tmp_path: Path) -> None:
+def test_old_stop_losses_no_longer_halt_the_engine(tmp_path: Path) -> None:
+    # V3 tanpa stop-loss: catatan stop lama (V2) tidak menghentikan bot.
     nav = FakeNavigator({1: "STRKUSDT"})
     trader, _, journal, _ = make_trader(tmp_path, nav)
     for i in range(3):
@@ -236,7 +237,7 @@ def test_three_stop_losses_today_halts_the_engine(tmp_path: Path) -> None:
         )
     analyzer = FakePatternAnalyzer(OK)
     SingleWorkflow(nav, trader, analyzer, ranks=[1]).run()  # type: ignore[arg-type]
-    assert nav.calls == [] and analyzer.calls == []
+    assert "prepare" in nav.calls and len(analyzer.calls) == 1
 
 
 # --------------------------------------------------------------------------- mode single
@@ -304,7 +305,7 @@ def test_single_interval_repeats_monitoring(tmp_path: Path) -> None:
 
     def sleep(seconds: float) -> None:
         sleeps.append(seconds)
-        if len(sleeps) == 2:
+        if len(sleeps) == 6:  # 5 x 60 detik menunggu, lalu putaran kedua mulai menunggu lagi
             raise KeyboardInterrupt
 
     workflow = SingleWorkflow(
@@ -317,7 +318,8 @@ def test_single_interval_repeats_monitoring(tmp_path: Path) -> None:
     )
     with pytest.raises(KeyboardInterrupt):
         workflow.run()
-    assert nav.calls.count("prepare") == 2 and sleeps == [300, 300]
+    # Selama menunggu, jual otomatis memeriksa posisi tiap menit (Binance: data publik).
+    assert nav.calls.count("prepare") == 2 and sleeps == [60] * 6
 
 
 # --------------------------------------------------------------------------- mode banyak
@@ -663,7 +665,7 @@ def test_each_evaluated_coin_emits_one_event(
         ("coin", "STRKUSDT", "open", "ok"),
         ("coin", "WUSDT", "skipped", "tunggu"),
     ]
-    assert events[0]["count_ai"] == 3 and events[0]["stop_price"] is not None
+    assert events[0]["count_ai"] == 3 and events[0]["target_price"] is not None
     assert "TUNGGU" in events[1]["reason"]
 
 
@@ -992,3 +994,31 @@ def test_the_follower_round_still_reports_its_end_when_it_stops_early(
     follower.run()  # leader tidak pernah menilai Top 2
     events = cycle_events(caplog)
     assert [e["phase"] for e in events] == ["start", "done"] and events[1]["opened"] == 0
+
+
+# --------------------------------------------------------------------------- jual otomatis (V3)
+
+
+class ScreenOnlyMarket(FakeMarket):
+    """Seperti Tebbit: tanpa candle, harga terkini hanya dari layar."""
+
+    def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
+        raise NoHistoryError("Tebbit tidak punya sumber candle")
+
+
+def test_tebbit_auto_sells_from_the_screen_price_when_the_target_is_reached(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO")
+    market = ScreenOnlyMarket()
+    trader, _, journal, _ = make_trader(tmp_path, FakeNavigator({}), market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)  # jual otomatis di 0,98 (open_trade)
+    held.created_at = NOW.timestamp() - 600
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.991, funding_rate=0.0, change_pct=20.0)
+    assert trader.refresh_journal()[0].status == "open"  # belum sampai target: tahan
+    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, funding_rate=0.0, change_pct=20.0)
+    [sold] = trader.refresh_journal()
+    assert (sold.status, sold.exit_price) == ("target", 0.976)
+    assert journal.load()[0].status == "target"
+    assert any("Tombol tutup posisi TIDAK ditekan" in r.getMessage() for r in caplog.records)
