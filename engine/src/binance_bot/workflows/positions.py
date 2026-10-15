@@ -12,9 +12,16 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from binance_bot.exceptions import MarketDataError, NoHistoryError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.market import MarketData
-from binance_bot.strategy import Journal, JournalEntry, SopParams, close_short_now
+from binance_bot.strategy import (
+    Journal,
+    JournalEntry,
+    PositionCloser,
+    SopParams,
+    close_short_now,
+    live_orders_enabled,
+)
 from binance_bot.workflows.sop import refresh_by_price, refresh_journal
 
 logger = logging.getLogger(__name__)
@@ -33,6 +40,7 @@ class PositionsWorkflow:
         *,
         close: str | None = None,  # None = hanya daftar, "semua", atau nama pair
         check: bool = False,  # Tebbit: baca harga dari layar sekarang (jual otomatis bila target)
+        closer: PositionCloser | None = None,  # Real Fund Trading: tutup posisi di bursa
         output: Callable[[str], None] = print,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
@@ -41,6 +49,7 @@ class PositionsWorkflow:
         self._market = market
         self._close = close
         self._check = check
+        self._closer = closer
         self._output = output
         self._wall_clock = wall_clock
 
@@ -70,6 +79,10 @@ class PositionsWorkflow:
                 error = f"Harga tidak bisa diambil: {exc}"
                 self._output(json.dumps({"error": error, "closed": [], "positions": []}))
                 return
+            except BotError as exc:  # Real Fund Trading: tutup posisi di bursa gagal
+                error = f"Posisi belum ditutup di bursa: {exc}"
+                self._output(json.dumps({"error": error, "closed": [], "positions": []}))
+                return
         result = {
             "warning": warning or None,
             "closed": [self._closed_dict(e) for e in closed],
@@ -84,6 +97,10 @@ class PositionsWorkflow:
         updated, closed = [], []
         for entry in entries:
             if entry.status == "open" and wanted in (ALL, entry.symbol):
+                live = live_orders_enabled() and self._closer is not None
+                if live and self._closer is not None:
+                    # Real Fund Trading: tutup dulu di bursa; gagal = posisi tetap tercatat terbuka.
+                    self._closer.close_position(entry.symbol)
                 ask = self._market.quote(entry.symbol).ask
                 try:
                     funding = self._market.funding_history(
@@ -94,8 +111,12 @@ class PositionsWorkflow:
                 entry = close_short_now(entry, ask, now, funding, self._params.fee_pct)
                 closed.append(entry)
                 logger.warning(
-                    "[DRY RUN] Tombol tutup posisi TIDAK ditekan. %s ditutup (uji kertas) di %g: "
-                    "%+.2f%% posisi (%+.2f%% modal)",
+                    (
+                        "Posisi ditutup di bursa (Market). "
+                        if live
+                        else "[DRY RUN] Tombol tutup posisi TIDAK ditekan. "
+                    )
+                    + "%s ditutup di %g: %+.2f%% posisi (%+.2f%% modal)",
                     entry.symbol,
                     ask,
                     entry.pnl_pct or 0,

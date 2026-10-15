@@ -42,7 +42,7 @@ from binance_bot.macos import (
     wait_until_frontmost,
 )
 from binance_bot.macos.screens import visible_areas
-from binance_bot.strategy.execution import LIVE_ORDERS_ENABLED, OrderPlan
+from binance_bot.strategy.execution import OrderPlan, live_orders_enabled
 from binance_bot.tebbit_web.visible import OnScreenWindow, front_owner_at
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,8 @@ _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
+_POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\(\d+\)", re.IGNORECASE)
+_MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
 # Angka leverage (label di atas form dan kolom dialog); OCR bisa menggabungkannya dengan
 # tombol - dan + ("— 10x +").
@@ -715,13 +717,13 @@ class BinanceNavigator:
         raise ScreenReadError("Tombol Jual/Short di form order tidak ditemukan")
 
     def press_short(self, plan: OrderPlan) -> None:
-        """Order sungguhan: tekan Jual/Short. DIKUNCI selama LIVE_ORDERS_ENABLED False.
+        """Order sungguhan: tekan Jual/Short. Terkunci kecuali Real Fund Trading dinyalakan.
 
         Urutan: kunci, halaman koin, kolom jumlah berisi angka rencana, cari tombol, klik.
         Satu-satunya jalur yang boleh mengklik zona tombol order.
         """
-        if not LIVE_ORDERS_ENABLED:
-            raise SafetyError("Order sungguhan dinonaktifkan (LIVE_ORDERS_ENABLED = False)")
+        if not live_orders_enabled():
+            raise SafetyError("Order sungguhan terkunci (Real Fund Trading belum dinyalakan)")
         if not self._on_coin_page():
             raise SafetyError("Order hanya di halaman koin")
         shown = self._read_texts(self.rect.sub(*self._quantity_area()))
@@ -733,6 +735,64 @@ class BinanceNavigator:
         logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
         self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
+
+    def close_position(self, symbol: str) -> None:
+        """Tutup posisi `symbol` di bursa: tab Posisi -> baris koin -> tombol Market.
+
+        Hanya saat Real Fund Trading. Tombol Market di baris posisi langsung menutup seluruh posisi
+        koin itu (tanpa dialog). Setelah klik, tabel dibaca ulang: bila baris koin masih ada,
+        dianggap gagal supaya jurnal tidak mencatat posisi tertutup padahal masih terbuka.
+        """
+        if not live_orders_enabled():
+            raise SafetyError(
+                "Tutup posisi sungguhan terkunci (Real Fund Trading belum dinyalakan)"
+            )
+        if self._rect is None:  # menu Posisi (Sell manual): Binance belum disiapkan
+            self.prepare()
+        tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
+        if tab is None:
+            raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
+        self._click(tab)
+        row_y = self._position_row(symbol)
+        if row_y is None:
+            raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
+        x0, y0, x1, y1 = layout.POSITIONS_TABLE_AREA
+        middle = self.rect.point_at((x0 + x1) / 2, row_y)
+        self._ensure_front()
+        self._window.scroll_horizontal(*middle, layout.POSITIONS_SCROLL_NOTCHES)
+        self._sleep(0.8)
+        try:
+            target = None
+            for line in self._read_lines(self.rect.sub(*layout.POSITIONS_TABLE_AREA)):
+                match = _MARKET_CLOSE.search(line.text)
+                y = y0 + line.y * (y1 - y0)
+                if match and abs(y - row_y) < 0.02:
+                    x = line.x
+                    if line.width and len(line.text) > len(match.group()):
+                        mid = (match.start() + match.end()) / 2
+                        x = line.x - line.width / 2 + line.width * mid / len(line.text)
+                    target = (x0 + x * (x1 - x0), y)
+                    break
+            if target is None:
+                raise ScreenReadError(f"Tombol Market di baris posisi {symbol} tidak ditemukan")
+            logger.warning("ORDER SUNGGUHAN: tutup posisi %s (Market)", symbol)
+            self._click(target)
+            self._sleep(self._settings.settle_delay_s)
+        finally:
+            self._ensure_front()
+            self._window.scroll_horizontal(*middle, -layout.POSITIONS_SCROLL_NOTCHES)
+            self._sleep(0.5)
+        if self._position_row(symbol) is not None:
+            raise ScreenReadError(f"Posisi {symbol} masih terlihat di tab Posisi setelah ditutup")
+        logger.info("Posisi %s sudah tertutup di Binance", symbol)
+
+    def _position_row(self, symbol: str) -> float | None:
+        """Tinggi baris posisi `symbol` (relatif jendela) di tabel Posisi, atau None."""
+        _, y0, _, y1 = layout.POSITIONS_TABLE_AREA
+        for line in self._read_lines(self.rect.sub(*layout.POSITIONS_TABLE_AREA)):
+            if symbol in line.text.replace(" ", "").upper():
+                return y0 + line.y * (y1 - y0)
+        return None
 
     def _capture(self, area: Rect, path: Path) -> Path:
         self._ensure_front()

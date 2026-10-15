@@ -897,11 +897,11 @@ def test_leader_shows_the_app_while_ai_reads(tmp_path: Path) -> None:
 
 
 def test_live_orders_are_locked_everywhere() -> None:
-    from binance_bot.strategy import LIVE_ORDERS_ENABLED, ScreenOrderGate
+    from binance_bot.strategy import ScreenOrderGate, live_orders_enabled
     from binance_bot.strategy.execution import OrderPlan
 
-    assert LIVE_ORDERS_ENABLED is False
-    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+    assert live_orders_enabled() is False  # bawaan: uji kertas, tanpa --uang-sungguhan
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 2)
 
     class Presser:
         pressed = False
@@ -909,7 +909,7 @@ def test_live_orders_are_locked_everywhere() -> None:
         def press_short(self, plan: OrderPlan) -> None:
             Presser.pressed = True
 
-    with pytest.raises(SafetyError, match="dinonaktifkan"):
+    with pytest.raises(SafetyError, match="terkunci"):
         ScreenOrderGate(Presser()).submit(plan)
     assert Presser.pressed is False
 
@@ -1022,3 +1022,29 @@ def test_tebbit_auto_sells_from_the_screen_price_when_the_target_is_reached(
     assert (sold.status, sold.exit_price) == ("target", 0.976)
     assert journal.load()[0].status == "target"
     assert any("Tombol tutup posisi TIDAK ditekan" in r.getMessage() for r in caplog.records)
+
+
+def test_real_fund_auto_sell_closes_on_the_exchange_or_keeps_the_position_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.created_at = NOW.timestamp() - 600
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, funding_rate=0.0, change_pct=20.0)
+
+    class Refusing(FakeNavigator):
+        def close_position(self, symbol: str) -> None:
+            raise ScreenReadError("Tombol Market tidak ditemukan")
+
+    failing, _, failing_journal, _ = make_trader(tmp_path / "gagal", Refusing({}), market)
+    failing_journal.append(held)
+    assert failing.refresh_journal()[0].status == "open"  # gagal di bursa: tetap terbuka
+
+    assert trader.refresh_journal()[0].status == "target"
+    assert nav.calls == ["close_position:SKDDUSDT"]

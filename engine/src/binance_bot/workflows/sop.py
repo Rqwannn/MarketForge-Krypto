@@ -30,11 +30,13 @@ from binance_bot.strategy import (
     OrderGate,
     OrderPlan,
     PatternProfile,
+    PositionCloser,
     SopParams,
     candles_needed,
     data_ma_pattern,
     evaluate_by_price,
     evaluate_open_trades,
+    live_orders_enabled,
     ma_gap_pct,
     size_position,
 )
@@ -95,15 +97,24 @@ WATCH_INTERVAL_S = {"binance": 60.0, "tebbit": 300.0}
 
 
 def refresh_journal(
-    journal: Journal, market: MarketData, fee_pct: float, now_s: float
+    journal: Journal,
+    market: MarketData,
+    fee_pct: float,
+    now_s: float,
+    closer: PositionCloser | None = None,
 ) -> list[JournalEntry]:
     """Langkah 6 SOP: nilai posisi uji yang masih terbuka dari candle sungguhan."""
     entries = journal.load()
-    return record_changes(journal, entries, evaluate_open_trades(entries, market, now_s, fee_pct))
+    updated = evaluate_open_trades(entries, market, now_s, fee_pct)
+    return record_changes(journal, entries, updated, closer)
 
 
 def refresh_by_price(
-    journal: Journal, market: MarketData, fee_pct: float, now_s: float
+    journal: Journal,
+    market: MarketData,
+    fee_pct: float,
+    now_s: float,
+    closer: PositionCloser | None = None,
 ) -> list[JournalEntry]:
     """Jual otomatis untuk bursa tanpa candle (Tebbit): harga ask terkini dari layar (OCR)."""
     entries = journal.load()
@@ -117,19 +128,42 @@ def refresh_by_price(
             else:
                 entry = evaluate_by_price(entry, ask, now_s, fee_pct)
         updated.append(entry)
-    return record_changes(journal, entries, updated)
+    return record_changes(journal, entries, updated, closer)
 
 
 def record_changes(
-    journal: Journal, before: list[JournalEntry], after: list[JournalEntry]
+    journal: Journal,
+    before: list[JournalEntry],
+    after: list[JournalEntry],
+    closer: PositionCloser | None = None,
 ) -> list[JournalEntry]:
-    """Simpan hasil penilaian posisi; posisi yang selesai dicatat (jual otomatis, uji kertas)."""
+    """Simpan hasil penilaian posisi; posisi yang mencapai target dijual otomatis.
+
+    Real Fund Trading: posisi ditutup sungguhan di bursa lebih dulu. Bila gagal, posisi tetap
+    tercatat terbuka (dicoba lagi pada pengecekan berikutnya), tidak pernah tercatat terjual
+    padahal masih terbuka di bursa. Uji kertas: hanya dicatat, tombol tidak ditekan.
+    """
+    after = list(after)
+    live = live_orders_enabled() and closer is not None
+    for i, (old, new) in enumerate(zip(before, after, strict=True)):
+        if live and closer is not None and old.status == "open" and new.is_closed:
+            try:
+                closer.close_position(new.symbol)
+            except BotError as exc:
+                logger.error(
+                    "Jual otomatis %s GAGAL di bursa, posisi tetap terbuka: %s", new.symbol, exc
+                )
+                after[i] = old
     changed = [new for old, new in zip(before, after, strict=True) if old != new]
     for entry in changed:
         if entry.is_closed:
             logger.warning(
-                "[DRY RUN] Tombol tutup posisi TIDAK ditekan. Jual otomatis %s (%s) di %g: "
-                "%+.2f%% posisi (%+.2f USDT = %+.2f%% modal)",
+                (
+                    "Posisi ditutup di bursa. "
+                    if live
+                    else "[DRY RUN] Tombol tutup posisi TIDAK ditekan. "
+                )
+                + "Jual otomatis %s (%s) di %g: %+.2f%% posisi (%+.2f USDT = %+.2f%% modal)",
                 entry.symbol,
                 entry.status,
                 entry.exit_price or 0,
@@ -140,6 +174,7 @@ def record_changes(
                     "sell",
                     symbol=entry.symbol,
                     status=entry.status,
+                    real=live,
                     exit_price=entry.exit_price,
                     pnl_pct=entry.pnl_pct,
                     pnl_usdt=entry.pnl_usdt,
@@ -184,10 +219,10 @@ class SopTrader:
         return WATCH_INTERVAL_S.get(self.profile.platform, 60.0)
 
     def refresh_journal(self) -> list[JournalEntry]:
-        """Jual otomatis: posisi yang sudah mencapai target ditutup (uji kertas) dan dicatat."""
+        """Jual otomatis: posisi yang sudah mencapai target ditutup dan dicatat."""
         try:
             return refresh_journal(
-                self._journal, self._market, self.params.fee_pct, self._wall_clock()
+                self._journal, self._market, self.params.fee_pct, self._wall_clock(), self._nav
             )
         except NoHistoryError:  # bursa tanpa candle (Tebbit): harga terkini dari layar
             return self._refresh_by_price()
@@ -197,7 +232,7 @@ class SopTrader:
 
     def _refresh_by_price(self) -> list[JournalEntry]:
         return refresh_by_price(
-            self._journal, self._market, self.params.fee_pct, self._wall_clock()
+            self._journal, self._market, self.params.fee_pct, self._wall_clock(), self._nav
         )
 
     def slot_blocker(self) -> str | None:

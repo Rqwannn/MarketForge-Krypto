@@ -136,11 +136,19 @@ ORDER_UNIT_BUTTON: tuple[float, float] | None = None
 ORDER_UNIT_MENU_AREA: tuple[float, float, float, float] | None = None
 ORDER_UNIT_MIN_Y = 1.0
 
+# Panel bawah halaman trade: tab "Posisi(n)" dan tabel posisi terbuka. Tabelnya lebih lebar dari
+# jendela: tombol tutup "Market" (langsung menutup, tanpa dialog) baru terlihat setelah tabel
+# digulir ke kanan. Klik di sini hanya lewat navigator.close_position (Real Fund Trading).
+POSITIONS_TAB_AREA = (0.05, 0.79, 0.60, 0.85)
+POSITIONS_TABLE_AREA = (0.05, 0.85, 0.82, 1.0)
+POSITIONS_SCROLL_NOTCHES = 12
+
 # Zona tombol order di halaman trade (x0, y0, x1, y1). Klik ke sini SELALU ditolak oleh
 # navigator: beli/short belum boleh dijalankan oleh bot.
 ORDER_BUTTON_ZONES: tuple[tuple[float, float, float, float], ...] = (
-    (0.80, 0.47, 1.00, 0.55),  # Beli/Long dan Jual/Short pada tab Pasar
-    (0.80, 0.59, 1.00, 0.67),  # Beli/Long dan Jual/Short pada tab Limit
+    # Beli/Long dan Jual/Short pada tab Pasar dan Limit. Satu zona lebar: opsi form yang dicentang
+    # (mis. Toleransi Slippage dengan kolom isiannya) menggeser tombol ke bawah sampai ~0,56.
+    (0.80, 0.45, 1.00, 0.67),
     (0.05, 0.38, 0.30, 0.45),  # widget Beli/Long-Jual/Short yang melayang di atas grafik
 )
 

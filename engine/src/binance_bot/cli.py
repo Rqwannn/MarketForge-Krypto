@@ -22,12 +22,13 @@ from binance_bot.logging_setup import setup_logging
 from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.market import FuturesMarket, MarketData
 from binance_bot.strategy import (
-    LIVE_ORDERS_ENABLED,
     DryRunOrderGate,
     Journal,
     OrderGate,
     ScreenOrderGate,
     SopParams,
+    enable_live_orders,
+    live_orders_enabled,
 )
 from binance_bot.strategy.params import SIGNAL_SOURCES
 from binance_bot.system import System, build_system
@@ -165,6 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=BURSA,
         default="binance",
         help="Platform: binance (aplikasi desktop) atau tebbit (website di Chrome)",
+    )
+    parser.add_argument(
+        "--uang-sungguhan",
+        action="store_true",
+        help="Real Fund Trading: tekan tombol order dan tutup posisi di bursa (bukan uji kertas)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sop = _sop_options()
@@ -374,7 +380,22 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
-        return PositionsWorkflow(params_from(args), journal, market, close=target, check=args.cek)
+        closer = None
+        if args.uang_sungguhan and target is not None:  # Sell manual, Real Fund Trading
+            if tebbit:
+                raise BotError("Real Fund Trading untuk Tebbit belum tersedia (Binance dulu)")
+            enable_live_orders()
+            closer = BinanceNavigator(
+                settings,
+                apps,
+                window,
+                system.reader,
+                screens=system.screens,
+                windows=on_screen_windows,
+            )
+        return PositionsWorkflow(
+            params_from(args), journal, market, close=target, check=args.cek, closer=closer
+        )
 
     if not tebbit:
         navigator = BinanceNavigator(
@@ -398,11 +419,15 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
 
     params = params_from(args)
-    # Order sungguhan hanya bila LIVE_ORDERS_ENABLED dibuka (sekarang terkunci): selain itu uji
-    # kertas, yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    # Order sungguhan hanya dengan --uang-sungguhan (Real Fund Trading): selain itu uji kertas,
+    # yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    if args.uang_sungguhan:
+        if tebbit:
+            raise BotError("Real Fund Trading untuk Tebbit belum tersedia (Binance dulu)")
+        enable_live_orders()
     gate: OrderGate = (
         ScreenOrderGate(navigator)
-        if LIVE_ORDERS_ENABLED
+        if live_orders_enabled()
         else DryRunOrderGate(navigator.short_button)
     )
     trader = SopTrader(
