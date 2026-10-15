@@ -48,6 +48,7 @@ from binance_bot.tebbit_web.visible import OnScreenWindow, front_owner_at
 logger = logging.getLogger(__name__)
 
 _SORT_ATTEMPTS = 4
+_OPEN_SYMBOL_ATTEMPTS = 2  # buka ulang lewat nama bila daftar bergeser saat diklik
 _VERIFY_ATTEMPTS = 4
 _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
@@ -315,16 +316,20 @@ class BinanceNavigator:
         (mis. koin yang sama dua kali, dan koin ke-N hilang tak tertangani). Daftar dibaca ulang
         bila bot sedang tidak di daftar, lalu baris koin yang dimaksud dicari dengan namanya.
         """
-        rows = self._list_rows if self._on_list else self.open_top_gainers()
-        rank = next((row.rank for row in rows if row.symbol == symbol), None)
-        if rank is None:
-            raise ScreenReadError(f"{symbol} sudah tidak di daftar top gainers")
-        if rank > layout.MAX_RANK:
-            raise ScreenReadError(f"{symbol} sudah bergeser ke peringkat {rank}, di luar Top 5")
-        opened = self.open_gainer(rank)
-        if opened != symbol:
-            raise ScreenReadError(f"Yang terbuka {opened}, bukan {symbol} (peringkat bergeser)")
-        return opened
+        opened = ""
+        for _attempt in range(_OPEN_SYMBOL_ATTEMPTS):
+            rows = self._list_rows if self._on_list else self.open_top_gainers()
+            rank = next((row.rank for row in rows if row.symbol == symbol), None)
+            if rank is None:
+                raise ScreenReadError(f"{symbol} sudah tidak di daftar top gainers")
+            if rank > layout.MAX_RANK:
+                raise ScreenReadError(f"{symbol} sudah bergeser ke peringkat {rank}, di luar Top 5")
+            opened = self.open_gainer(rank)
+            if opened == symbol:
+                return opened
+            # Daftar bergeser di antara dibaca dan diklik (hitungan detik): baca ulang, coba lagi.
+            logger.info("Yang terbuka %s, bukan %s: daftar dibaca ulang", opened, symbol)
+        raise ScreenReadError(f"Yang terbuka {opened}, bukan {symbol} (peringkat terus bergeser)")
 
     def _trade_icon(self, rank: int) -> tuple[float, float]:
         """Titik ikon trade baris `rank`.

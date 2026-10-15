@@ -119,3 +119,25 @@ renderer  --IPC-->  main.js  --spawn-->  python -m binance_bot --events single|l
 | "Pengaturan AI di laptop ini belum lengkap" | Isi `VIKEY_API_BASE` dan `VIKEY_API_KEY` di `interface/.env` |
 | "Belum terhubung ke laptop pemimpin" | Samakan `BOT_HUB_TOKEN`, cek `BOT_HUB_URL` dan WiFi |
 | Detail kendala lain | `engine/logs/bot.log` |
+
+## Layar selama AI membaca grafik (Sendiri, Pemimpin, Pengikut)
+
+- Setelah grafik 15 menit diambil, engine memanggil `navigator.show_app()`: aplikasi MarketForge
+  memajukan jendelanya sendiri (Electron, sama di macOS dan Windows) dan menampilkan baris
+  "AI membaca…" berisi grafik yang sedang dibaca. Pengikut menampilkan aplikasi selama menunggu
+  hasil AI pemimpin.
+- Sebelum klik, ketikan, atau tangkapan layar berikutnya, navigator membawa Binance/Tebbit ke
+  depan lagi (`_ensure_front`, dicatat "Kembali ke …"). Selain aplikasi aktif, jendela yang
+  benar-benar tampil di tengah jendela bursa ikut diperiksa (macOS: nama pemilik jendela,
+  Windows: nama exe), karena sistem bisa tetap menganggap bursa aktif walau tertutup MarketForge.
+- Bila Layak: kolom jumlah (USDT) diisi, lalu pintu order. Uji kertas mencari tombol Jual/Short
+  dengan OCR di form order (bukan widget melayang di grafik) dan mencatat posisinya, tanpa klik.
+
+## Order sungguhan (dikunci)
+
+`LIVE_ORDERS_ENABLED = False` di `engine/src/binance_bot/strategy/execution.py`. Logikanya sudah
+ada: `ScreenOrderGate` -> `navigator.press_short()` memeriksa kunci, halaman koin, angka di kolom
+jumlah sama dengan rencana, mencari tombol Jual/Short, baru mengklik. Selama terkunci keduanya
+menolak sebelum mencari atau mengklik apa pun; klik biasa navigator tetap menolak zona tombol
+order. Zona pencarian tombol diambil dari profil layout tiap platform (Binance/Tebbit,
+macOS/Windows).

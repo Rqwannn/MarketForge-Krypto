@@ -701,3 +701,31 @@ def test_exchange_window_covered_by_marketforge_is_detected_on_mac_and_windows()
         assert nav._covered() is covered, owner
     nav._windows = None  # tanpa daftar jendela (tes lain): tidak diperiksa
     assert nav._covered() is False
+
+
+def test_open_symbol_retries_once_when_the_list_moves_between_read_and_click() -> None:
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav = make_nav()
+    first = [GainerRow(1, "AAAUSDT", 50), GainerRow(2, "BBBUSDT", 40)]
+    again = [GainerRow(1, "BBBUSDT", 51), GainerRow(2, "AAAUSDT", 49)]
+    reads = [again]
+    # Klik baris 2 (BBB menurut daftar) ternyata membuka AAA: daftar bergeser tepat saat diklik.
+    trade_pages = ["AAAUSDT", "BBBUSDT"]
+    clicked: list[int] = []
+
+    def top() -> list[GainerRow]:
+        rows = reads.pop(0)
+        nav._list_rows, nav._on_list = rows, True
+        return rows
+
+    def gainer(rank: int) -> str:
+        clicked.append(rank)
+        nav._on_list = False
+        return trade_pages.pop(0)
+
+    nav.open_top_gainers = top  # type: ignore[method-assign]
+    nav.open_gainer = gainer  # type: ignore[method-assign]
+    nav._list_rows, nav._on_list = first, True
+    assert nav.open_symbol("BBBUSDT") == "BBBUSDT"
+    assert clicked == [2, 1]  # klik pertama meleset, daftar dibaca ulang, BBB kini baris 1
