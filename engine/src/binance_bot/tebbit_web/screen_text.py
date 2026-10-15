@@ -56,10 +56,10 @@ def parse_gainer_rows(
         match = _PERCENT.match(line.text.strip())
         x = to_x(line.x)
         if match and lay.FUTURES_PERCENT_X[0] <= x <= lay.FUTURES_PERCENT_X[1]:
-            percents.append((to_y(line.y), float(match.group(1).replace(",", "."))))
+            percents.append((to_y(line.y), x, float(match.group(1).replace(",", "."))))
     percents.sort()
-    rows = []
-    for index, (y, change) in enumerate(percents[: lay.MAX_ROWS], start=1):
+    found = []
+    for y, percent_x, change in percents[: lay.MAX_ROWS]:
         names = [
             line
             for line in lines
@@ -68,9 +68,15 @@ def parse_gainer_rows(
             and "Perpetual" not in line.text
         ]
         names.sort(key=lambda line: abs(to_y(line.y) - y))
+        found.append((y, percent_x, change, names))
+    # Baris yang namanya tidak terbaca diklik di kolom nama baris lain (kolomnya sejajar);
+    # tanpa nama sama sekali, di persentasenya. Keduanya di dalam baris, bukan margin kosong.
+    name_x = next((to_x(names[0].x) for *_, names in found if names), None)
+    rows = []
+    for index, (y, percent_x, change, names) in enumerate(found, start=1):
         pair = next((m.group(1) for line in names if (m := _PAIR.search(line.text))), None)
-        click = (to_x(names[0].x) if names else lay.FUTURES_NAME_X[0] + 0.05, y)
-        rows.append((GainerRow(index, pair or f"#{index}", change), click))
+        x = to_x(names[0].x) if names else (name_x if name_x is not None else percent_x)
+        rows.append((GainerRow(index, pair or f"#{index}", change), (x, y)))
     return rows
 
 

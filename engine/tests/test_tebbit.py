@@ -117,3 +117,33 @@ def test_header_without_a_readable_price_still_gives_the_change() -> None:
     assert change == 7.46 and math.isnan(price)  # harga header tidak dipakai SOP
     with pytest.raises(Exception, match="tidak terbaca"):
         parse_header(["24H Low", "16.98"])
+
+
+def test_a_gainer_whose_name_is_unreadable_is_clicked_inside_its_row() -> None:
+    """Bacaan nyata: nama Top 1 gagal terbaca. Klik harus di kolom nama, bukan margin kosong."""
+    from binance_bot.macos import TextLine
+    from binance_bot.tebbit_web.screen_text import parse_gainer_rows
+
+    area = lay.LIST_ROWS_AREA
+    lines = [
+        TextLine("+21.58%", 0.775, 0.331),
+        TextLine("S SKDDUSDT", 0.216, 0.393),
+        TextLine("+20.06%", 0.775, 0.395),
+        TextLine("S SQQQUSDT", 0.216, 0.456),
+        TextLine("+10.39%", 0.774, 0.458),
+    ]
+    rows = parse_gainer_rows(lines, area)
+    assert [row.symbol for row, _ in rows] == ["#1", "SKDDUSDT", "SQQQUSDT"]
+    (_, first), (_, second) = rows[0], rows[1]
+    assert first[0] == pytest.approx(second[0])  # kolom nama yang sama dengan baris lain
+    assert first[0] > lay.FUTURES_NAME_X[0] + 0.1
+
+
+def test_without_any_readable_name_the_row_is_clicked_on_its_change() -> None:
+    from binance_bot.macos import TextLine
+    from binance_bot.tebbit_web.screen_text import parse_gainer_rows
+
+    area = lay.LIST_ROWS_AREA
+    rows = parse_gainer_rows([TextLine("+21.58%", 0.775, 0.331)], area)
+    x0, _, x1, _ = area
+    assert rows[0][1][0] == pytest.approx(x0 + 0.775 * (x1 - x0))

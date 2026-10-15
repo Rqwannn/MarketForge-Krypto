@@ -24,6 +24,7 @@ from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings, s
 from binance_bot.config import Settings
 from binance_bot.exceptions import SafetyError, ScreenReadError, WindowError
 from binance_bot.macos import AppController, Rect, TextLine, TextReader
+from binance_bot.market import is_futures_symbol
 from binance_bot.tebbit_web import layout_tebbit as lay
 from binance_bot.tebbit_web.chrome import (
     CHROME_BUNDLE_ID,
@@ -255,6 +256,10 @@ class TebbitNavigator(BinanceNavigator):
         self._click(futures)
         self._sleep(self._settings.settle_delay_s)
         rows = self._read_rows()
+        if any(not is_futures_symbol(row.symbol) for row, _ in rows):
+            # OCR kadang melewatkan satu nama; bacaan kedua biasanya lengkap.
+            self._sleep(1.0)
+            rows = self._read_rows()
         if len(rows) < 2 or not _descending(rows):
             raise ScreenReadError(
                 f"Daftar Futures Gainers tidak terbaca atau tidak terurut ({len(rows)} baris)"
