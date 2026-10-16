@@ -5,10 +5,10 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
-from binance_bot.exceptions import MarketDataError
+from binance_bot.exceptions import BotError, MarketDataError
 from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, summarize
 from binance_bot.strategy.params import REQUIRED_TEST_TRADES
@@ -18,7 +18,28 @@ logger = logging.getLogger(__name__)
 
 _RECENT_TRADES = 20
 _RECENT_ANALYSES = 30
+_RANGE_TRADES = 500  # dengan filter tanggal, semua trade dalam rentang tampil (dibatasi wajar)
+_RANGE_ANALYSES = 500
 _ROW = "%-11s %-13s %-8s %-10s %-10s %-10s %-9s %-9s %s"
+
+
+def day_bounds(dari: str | None, sampai: str | None) -> tuple[float | None, float | None]:
+    """Rentang tanggal (YYYY-MM-DD, zona waktu laptop, kedua ujung termasuk) -> detik epoch.
+
+    Nilai pertama = awal hari `dari`; nilai kedua = awal hari setelah `sampai` (batas eksklusif).
+    """
+
+    def parse(text: str, label: str) -> datetime:
+        try:
+            return datetime.strptime(text, "%Y-%m-%d")
+        except ValueError:
+            raise BotError(f"Tanggal {label} harus berbentuk YYYY-MM-DD, bukan {text!r}") from None
+
+    start = parse(dari, "awal").timestamp() if dari else None
+    end = (parse(sampai, "akhir") + timedelta(days=1)).timestamp() if sampai else None
+    if start is not None and end is not None and start >= end:
+        raise BotError("Tanggal awal tidak boleh setelah tanggal akhir")
+    return start, end
 
 
 def _fmt(value: float | None, spec: str, suffix: str = "") -> str:
@@ -41,9 +62,13 @@ class JournalWorkflow:
         market: MarketData,
         *,
         as_json: bool = False,
+        since: float | None = None,  # filter waktu masuk posisi: dari (termasuk)
+        until: float | None = None,  # sampai (tidak termasuk)
         output: Callable[[str], None] = print,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
+        self._since = since
+        self._until = until
         self._params = params
         self._journal = journal
         self._market = market
@@ -61,6 +86,7 @@ class JournalWorkflow:
             warning = f"Posisi terbuka belum dinilai ulang: {exc}"
             logger.warning("%s", warning)
             entries = self._journal.load()
+        entries = self._in_range(entries)
         trades = [e for e in entries if e.status not in ("skipped", "contoh")]
         if self._as_json:
             self._output(json.dumps(self._as_dict(entries, trades, now, warning), default=str))
@@ -93,11 +119,27 @@ class JournalWorkflow:
             )
         self._report(entries, now)
 
+    def _in_range(self, entries: list[JournalEntry]) -> list[JournalEntry]:
+        """Saring semua rekap (angka, grafik, tabel, analisis) menurut waktu masuk posisi."""
+        return [
+            e
+            for e in entries
+            if (self._since is None or e.created_at >= self._since)
+            and (self._until is None or e.created_at < self._until)
+        ]
+
+    @property
+    def _filtered(self) -> bool:
+        return self._since is not None or self._until is not None
+
     def _as_dict(
         self, entries: list[JournalEntry], trades: list[JournalEntry], now: float, warning: str
     ) -> dict[str, Any]:
         stats = summarize(entries, self._params, now)
+        trade_limit = _RANGE_TRADES if self._filtered else _RECENT_TRADES
+        analysis_limit = _RANGE_ANALYSES if self._filtered else _RECENT_ANALYSES
         return {
+            "range": {"since": self._since, "until": self._until},
             "path": str(self._journal.path),
             "warning": warning or None,
             "stats": {
@@ -106,11 +148,10 @@ class JournalWorkflow:
                 "required_trades": REQUIRED_TEST_TRADES,
             },
             "trades": [
-                {**e.to_dict(), "pnl_capital_pct": e.pnl_capital_pct}
-                for e in trades[-_RECENT_TRADES:]
+                {**e.to_dict(), "pnl_capital_pct": e.pnl_capital_pct} for e in trades[-trade_limit:]
             ],
             # Riwayat setiap koin yang dinilai (termasuk yang dilewati) untuk aplikasi.
-            "analyses": [_analysis(e) for e in entries[-_RECENT_ANALYSES:] if e.verdict],
+            "analyses": [_analysis(e) for e in entries[-analysis_limit:] if e.verdict],
         }
 
     def _report(self, entries: list[JournalEntry], now: float) -> None:

@@ -225,6 +225,20 @@
         </div>
       </header>
       <p class="notice" id="journal-notice" hidden></p>
+      <section class="range-bar" id="range-bar" aria-label="Filter waktu">
+        <div class="seg" id="range-presets" role="radiogroup" aria-label="Rentang waktu">
+          <button type="button" role="radio" data-range="all">Semua</button>
+          <button type="button" role="radio" data-range="today">Hari ini</button>
+          <button type="button" role="radio" data-range="7">7 hari</button>
+          <button type="button" role="radio" data-range="30">30 hari</button>
+          <button type="button" role="radio" data-range="custom">Pilih tanggal</button>
+        </div>
+        <div class="range-dates" id="range-dates" hidden>
+          <label>Dari <input type="date" id="range-from"></label>
+          <label>Sampai <input type="date" id="range-to"></label>
+        </div>
+        <p class="range-note" id="range-note"></p>
+      </section>
 
       <section class="kpis" id="journal-kpis"></section>
 
@@ -240,7 +254,7 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><div><h2>Trade terakhir</h2><p>20 posisi uji terbaru.</p></div></div>
+        <div class="card-head"><div><h2>Trade terakhir</h2><p id="trades-note">20 posisi uji terbaru.</p></div></div>
         <table class="table">
           <thead><tr><th>Waktu</th><th>Koin</th><th>Peran</th><th>Status</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Hasil</th></tr></thead>
           <tbody id="trades"></tbody>

@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('bot', {
   stop: () => call('engine:stop'),
   status: () => call('engine:status'),
   checks: () => call('engine:checks'),
-  summary: () => call('engine:summary'),
+  summary: (range) => call('engine:summary', range),
   setPlatform: (id) => call('platform:set', id),
   chartImage: (file) => call('chart:image', file),
   history: {

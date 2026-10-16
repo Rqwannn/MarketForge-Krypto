@@ -761,13 +761,90 @@ function donut(s) {
   return [chart, legend];
 }
 
+// --------------------------------------------------------------------------- filter waktu Hasil uji
+
+// Satu filter untuk seluruh halaman (angka, grafik, donat, tabel, analisis AI), berlaku per
+// tanggal masuk posisi. Pilihan diingat per laptop; kegagalan penyimpanan tidak masalah.
+const RANGE_KEY = 'marketforge.range.v1';
+const range = { preset: 'all', from: '', to: '' };
+
+try {
+  Object.assign(range, JSON.parse(localStorage.getItem(RANGE_KEY) || '{}'));
+} catch { /* bawaan: Semua */ }
+if (!['all', 'today', '7', '30', 'custom'].includes(range.preset)) range.preset = 'all';
+
+const dayText = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+const shiftDays = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return dayText(d); };
+
+/** Rentang tanggal {from, to} (YYYY-MM-DD, kedua ujung termasuk) dari pilihan sekarang. */
+function activeRange() {
+  switch (range.preset) {
+    case 'today': return { from: shiftDays(0), to: shiftDays(0) };
+    case '7': return { from: shiftDays(-6), to: shiftDays(0) };
+    case '30': return { from: shiftDays(-29), to: shiftDays(0) };
+    case 'custom': return { from: range.from || '', to: range.to || '' };
+    default: return {};
+  }
+}
+
+function renderRange() {
+  for (const btn of $('range-presets').children) btn.classList.toggle('on', btn.dataset.range === range.preset);
+  $('range-dates').hidden = range.preset !== 'custom';
+  $('range-from').value = range.from;
+  $('range-to').value = range.to;
+  $('range-from').max = range.to || '';
+  $('range-to').min = range.from || '';
+}
+
+const dayLabel = (text) => new Date(`${text}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function rangeNote(report) {
+  const { from, to } = activeRange();
+  if (!from && !to) return 'Menampilkan semua catatan.';
+  const span = from && to ? (from === to ? dayLabel(from) : `${dayLabel(from)} – ${dayLabel(to)}`)
+    : from ? `sejak ${dayLabel(from)}` : `sampai ${dayLabel(to)}`;
+  return `Posisi yang masuk ${span} · ${report.stats.closed} selesai, ${report.stats.open} berjalan`;
+}
+
+function saveRange() {
+  try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)); } catch { /* tidak masalah */ }
+}
+
+$('range-presets').addEventListener('click', (ev) => {
+  const value = ev.target.closest('button')?.dataset.range;
+  if (!value) return;
+  range.preset = value;
+  if (value === 'custom' && !range.from && !range.to) { // mulai dari 7 hari terakhir
+    range.from = shiftDays(-6);
+    range.to = shiftDays(0);
+  }
+  saveRange();
+  renderRange();
+  loadJournal();
+});
+for (const [id, key] of [['range-from', 'from'], ['range-to', 'to']]) {
+  $(id).addEventListener('change', () => {
+    range[key] = $(id).value;
+    saveRange();
+    renderRange();
+    loadJournal();
+  });
+}
+
 async function loadJournal() {
   $('journal-refresh').disabled = true;
+  renderRange();
   $('journal-check').hidden = platform?.id !== 'tebbit';
   const notice = $('journal-notice');
   try {
-    const report = await window.bot.summary();
+    const report = await window.bot.summary(activeRange());
     const s = report.stats;
+    $('range-note').textContent = rangeNote(report);
+    $('trades-note').textContent = activeRange().from || activeRange().to
+      ? 'Semua posisi uji pada rentang waktu ini.' : '20 posisi uji terbaru.';
     notice.hidden = !report.warning;
     notice.className = 'notice';
     notice.textContent = platform?.id === 'tebbit'
@@ -804,10 +881,14 @@ async function loadJournal() {
     });
     $('analyses').replaceChildren(...(report.analyses?.length
       ? [...report.analyses].reverse().map(analysisItem)
-      : [el('li', { class: 'idle', textContent: 'Belum ada koin yang dinilai AI di platform ini.' })]));
+      : [el('li', { class: 'idle', textContent: activeRange().from || activeRange().to
+        ? 'Tidak ada koin yang dinilai AI pada rentang waktu ini.'
+        : 'Belum ada koin yang dinilai AI di platform ini.' })]));
 
     $('trades').replaceChildren(...(rows.length ? rows
-      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
+      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: activeRange().from || activeRange().to
+        ? 'Tidak ada posisi pada rentang waktu ini. Ubah filter waktu di atas.'
+        : 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
   } catch (err) {
     notice.hidden = false;
     notice.className = 'notice bad';

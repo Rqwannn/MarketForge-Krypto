@@ -342,7 +342,20 @@ handle('engine:stop', () => {
 });
 handle('engine:status', () => ({ running: proc.running, exchange }));
 handle('engine:checks', () => engine.runJson(['cek']));
-handle('engine:summary', () => engine.runJson(onExchange(['jurnal', '--json'])));
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+handle('engine:summary', (range) => {
+  // Filter waktu Hasil uji: hanya tanggal YYYY-MM-DD yang diteruskan ke engine.
+  const args = ['jurnal', '--json'];
+  if (range?.from) {
+    if (!DAY.test(String(range.from))) throw new Error('Tanggal awal tidak valid');
+    args.push('--dari', String(range.from));
+  }
+  if (range?.to) {
+    if (!DAY.test(String(range.to))) throw new Error('Tanggal akhir tidak valid');
+    args.push('--sampai', String(range.to));
+  }
+  return engine.runJson(onExchange(args));
+});
 handle('platform:set', (id) => {
   if (!engine.EXCHANGES.includes(id)) throw new Error('Platform tidak dikenal');
   if (!proc.running) exchange = id; // saat bot berjalan, platform mengikuti bot

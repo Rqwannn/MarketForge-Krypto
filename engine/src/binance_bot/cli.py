@@ -51,6 +51,7 @@ from binance_bot.workflows import (
     SopTrader,
     WindowSizeWorkflow,
     Workflow,
+    day_bounds,
 )
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.positions import ALL
@@ -223,6 +224,12 @@ def build_parser() -> argparse.ArgumentParser:
         "jurnal", parents=[sop], help="Nilai uji kertas dan rekap terhadap titik impas."
     )
     jurnal.add_argument("--json", action="store_true", help="Cetak rekap sebagai JSON di stdout")
+    jurnal.add_argument(
+        "--dari", metavar="YYYY-MM-DD", help="Hanya posisi yang masuk sejak tanggal ini"
+    )
+    jurnal.add_argument(
+        "--sampai", metavar="YYYY-MM-DD", help="Hanya posisi yang masuk sampai tanggal ini"
+    )
 
     positions = sub.add_parser(
         "posisi", parents=[sop], help="Posisi uji kertas terbuka (JSON); --tutup untuk Sell."
@@ -369,7 +376,10 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
-        return JournalWorkflow(params_from(args), journal, market, as_json=args.json)
+        since, until = day_bounds(args.dari, args.sampai)
+        return JournalWorkflow(
+            params_from(args), journal, market, as_json=args.json, since=since, until=until
+        )
     if args.command == "riwayat":
         return HistoryWorkflow(journal, delete_id=args.hapus, clear=args.bersihkan)
     if args.command == "contoh":

@@ -1049,3 +1049,63 @@ def test_real_fund_auto_sell_closes_on_the_exchange_or_keeps_the_position_open(
 
     assert trader.refresh_journal()[0].status == "target"
     assert nav.calls == ["close_position:SKDDUSDT"]
+
+
+# --------------------------------------------------------------------------- filter waktu
+
+
+def _dated(symbol: str, day: str, status: str = "target", pnl: float = 2.9) -> JournalEntry:
+    when = datetime.strptime(f"{day} 12:00", "%Y-%m-%d %H:%M").timestamp()
+    entry = open_trade(symbol, entry_price=1.0)
+    entry.id, entry.created_at, entry.status = f"d-{symbol}", when, status
+    entry.exit_price, entry.closed_at, entry.pnl_pct, entry.pnl_usdt = 0.97, when + 600, pnl, pnl
+    entry.verdict = "ok"
+    return entry
+
+
+def _report_for(tmp_path: Path, dari: str | None, sampai: str | None) -> dict[str, Any]:
+    from binance_bot.workflows import day_bounds
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    for symbol, day in (("AUSDT", "2026-10-13"), ("BUSDT", "2026-10-14"), ("CUSDT", "2026-10-15")):
+        journal.append(_dated(symbol, day))
+    since, until = day_bounds(dari, sampai)
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(),
+        journal,
+        FakeMarket(),
+        as_json=True,
+        since=since,
+        until=until,
+        output=out.append,
+        wall_clock=lambda: datetime(2026, 10, 16).timestamp(),
+    ).run()  # type: ignore[arg-type]
+    return json.loads(out[0])
+
+
+def test_the_date_filter_covers_the_whole_report_inclusively(tmp_path: Path) -> None:
+    everything = _report_for(tmp_path / "a", None, None)
+    assert everything["stats"]["closed"] == 3 and len(everything["trades"]) == 3
+
+    one_day = _report_for(tmp_path / "b", "2026-10-14", "2026-10-14")  # kedua ujung termasuk
+    assert [t["symbol"] for t in one_day["trades"]] == ["BUSDT"]
+    assert one_day["stats"]["closed"] == 1 and one_day["stats"]["targets"] == 1
+    assert [a["symbol"] for a in one_day["analyses"]] == ["BUSDT"]
+    assert one_day["stats"]["net_capital_pct"] == pytest.approx(2.9)
+
+    since_only = _report_for(tmp_path / "c", "2026-10-14", None)
+    assert [t["symbol"] for t in since_only["trades"]] == ["BUSDT", "CUSDT"]
+    until_only = _report_for(tmp_path / "d", None, "2026-10-13")
+    assert [t["symbol"] for t in until_only["trades"]] == ["AUSDT"]
+    empty = _report_for(tmp_path / "e", "2026-10-01", "2026-10-02")
+    assert empty["stats"]["closed"] == 0 and empty["trades"] == [] and empty["analyses"] == []
+
+
+def test_the_date_filter_rejects_bad_dates(tmp_path: Path) -> None:
+    from binance_bot.workflows import day_bounds
+
+    with pytest.raises(BotError, match="YYYY-MM-DD"):
+        day_bounds("15-10-2026", None)
+    with pytest.raises(BotError, match="tidak boleh setelah"):
+        day_bounds("2026-10-16", "2026-10-15")
