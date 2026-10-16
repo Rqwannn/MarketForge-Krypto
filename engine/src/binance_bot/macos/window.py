@@ -14,7 +14,7 @@ from typing import Protocol
 
 from binance_bot.exceptions import CommandError, WindowError
 from binance_bot.macos.app_controller import Runner, run_command
-from binance_bot.macos.keyboard import clear_field, select_all, type_number
+from binance_bot.macos.keyboard import clear_field, select_field, type_number
 from binance_bot.macos.mouse import click_at, scroll_down_at, scroll_up_at
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class WindowController(Protocol):
 
     def clear_field(self) -> None: ...
 
-    def select_all(self) -> None: ...
+    def select_field(self) -> None: ...
 
     def type_number(self, text: str) -> None: ...
 
@@ -81,16 +81,16 @@ class MacWindowController:
         mouse_scroll_up: Callable[[int, int], None] = scroll_up_at,
         mouse_scroll_down: Callable[[int, int, int], None] = scroll_down_at,
         keyboard_clear: Callable[[], None] = clear_field,
-        keyboard_select_all: Callable[[], None] = select_all,
         keyboard_type: Callable[[str], None] = type_number,
+        keyboard_select: Callable[[], None] = select_field,
     ) -> None:
         self._run = runner
         self._mouse_click = mouse_click
         self._mouse_scroll_up = mouse_scroll_up
         self._mouse_scroll_down = mouse_scroll_down
         self._keyboard_clear = keyboard_clear
-        self._keyboard_select_all = keyboard_select_all
         self._keyboard_type = keyboard_type
+        self._keyboard_select = keyboard_select
 
     def bounds(self, app_name: str) -> Rect:
         script = (
@@ -131,8 +131,8 @@ class MacWindowController:
     def clear_field(self) -> None:
         self._keyboard_clear()
 
-    def select_all(self) -> None:
-        self._keyboard_select_all()
+    def select_field(self) -> None:
+        self._keyboard_select()
 
     def type_number(self, text: str) -> None:
         logger.info("Ketik %s", text)

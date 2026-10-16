@@ -105,3 +105,67 @@ def test_header_harga_dan_perubahan_walau_ocr_menyisipkan_spasi() -> None:
     assert parse_header(texts) == (0.15384, 11.35)
     assert parse_header(["BTWUSDT Perpetual", "2.5528 +44.60%", "2.6047"]) == (2.5528, 44.6)
     assert parse_header(["1,234.5 -2.5%"]) == (1234.5, -2.5)
+
+
+def test_header_without_a_readable_price_still_gives_the_change() -> None:
+    import math
+
+    from binance_bot.tebbit_web.screen_text import parse_header
+
+    texts = ["24H Low", "16.98", "24H Volume(USDT)", "24H High", "+7.46%", "UVXYUSDT Perpetual"]
+    price, change = parse_header(texts)
+    assert change == 7.46 and math.isnan(price)  # harga header tidak dipakai SOP
+    with pytest.raises(Exception, match="tidak terbaca"):
+        parse_header(["24H Low", "16.98"])
+
+
+def test_a_gainer_whose_name_is_unreadable_is_clicked_inside_its_row() -> None:
+    """Bacaan nyata: nama Top 1 gagal terbaca. Klik harus di kolom nama, bukan margin kosong."""
+    from binance_bot.macos import TextLine
+    from binance_bot.tebbit_web.screen_text import parse_gainer_rows
+
+    area = lay.LIST_ROWS_AREA
+    lines = [
+        TextLine("+21.58%", 0.775, 0.331),
+        TextLine("S SKDDUSDT", 0.216, 0.393),
+        TextLine("+20.06%", 0.775, 0.395),
+        TextLine("S SQQQUSDT", 0.216, 0.456),
+        TextLine("+10.39%", 0.774, 0.458),
+    ]
+    rows = parse_gainer_rows(lines, area)
+    assert [row.symbol for row, _ in rows] == ["#1", "SKDDUSDT", "SQQQUSDT"]
+    (_, first), (_, second) = rows[0], rows[1]
+    assert first[0] == pytest.approx(second[0])  # kolom nama yang sama dengan baris lain
+    assert first[0] > lay.FUTURES_NAME_X[0] + 0.1
+
+
+def test_without_any_readable_name_the_row_is_clicked_on_its_change() -> None:
+    from binance_bot.macos import TextLine
+    from binance_bot.tebbit_web.screen_text import parse_gainer_rows
+
+    area = lay.LIST_ROWS_AREA
+    rows = parse_gainer_rows([TextLine("+21.58%", 0.775, 0.331)], area)
+    x0, _, x1, _ = area
+    assert rows[0][1][0] == pytest.approx(x0 + 0.775 * (x1 - x0))
+
+
+def test_typed_leverage_is_read_with_or_without_the_x() -> None:
+    from binance_bot.binance_desktop.navigator import _leverage_of
+
+    assert _leverage_of("2") == 2  # Tebbit: angka dan "X" bisa terbaca terpisah
+    assert _leverage_of("2X") == 2
+    assert _leverage_of("— 2x +") == 2
+    assert _leverage_of("11.500") is None  # harga order book bukan leverage
+
+
+def test_another_coins_price_is_reused_instead_of_reopening_its_page() -> None:
+    now = [0.0]
+    nav = _Nav("BTWUSDT")
+    market = ScreenMarket(nav, browse=True, clock=lambda: now[0])  # type: ignore[arg-type]
+    market.quote("TRUTHUSDT")
+    now[0] = 60.0
+    market.quote("TRUTHUSDT")  # cek slot berikutnya dalam putaran yang sama: tanpa buka halaman
+    assert nav.visits == ["TRUTHUSDT", "BTWUSDT"]
+    now[0] = 200.0
+    market.quote("TRUTHUSDT")
+    assert nav.visits == ["TRUTHUSDT", "BTWUSDT", "TRUTHUSDT", "BTWUSDT"]

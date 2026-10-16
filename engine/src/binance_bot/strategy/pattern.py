@@ -23,9 +23,11 @@ class MaPattern:
     below_count: int  # berapa kali (periode terpisah) garis cepat berada di bawah pembanding
     below_now: bool  # di ujung kanan, garis cepat di bawah pembanding
     below_recent: bool  # dalam beberapa jam terakhir garis cepat pernah di bawah pembanding
+    # SOP V3 (Binance): di ujung kanan garis cepat dan pembanding berdekatan. None = tidak dinilai.
+    lines_close: bool | None = None
 
     def as_dict(self) -> dict[str, int | bool]:
-        return asdict(self)
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 def _sma(values: Sequence[float], period: int, end: int) -> float:
@@ -48,6 +50,19 @@ def data_ma_pattern(
     below = [_sma(closes, fast, i) < _sma(closes, mid, i) for i in window]
     count = int(below[0]) + sum(1 for prev, now in pairwise(below) if now and not prev)
     return MaPattern(below_count=count, below_now=below[-1], below_recent=any(below[-recent:]))
+
+
+def ma_gap_pct(candles: Sequence[Candle], *, fast: int = 7, mid: int = 25) -> float:
+    """Jarak garis cepat di bawah pembanding pada lilin tertutup terakhir, dalam persen.
+
+    Positif = garis cepat di bawah (V3: MA7 sekitar 4,7% di bawah MA25 pada GTC dan RSR).
+    """
+    closes = [c.close for c in candles[:-1]]
+    if len(closes) < mid:
+        raise ValueError(f"Butuh minimal {mid} lilin tertutup, ada {len(closes)}")
+    end = len(closes) - 1
+    slow_ma = _sma(closes, mid, end)
+    return 100 * (slow_ma - _sma(closes, fast, end)) / slow_ma
 
 
 def candles_needed(lookback: int = LOOKBACK_CANDLES, mid: int = 25) -> int:

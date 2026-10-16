@@ -21,13 +21,21 @@ from binance_bot.hub import AnalysisStore, HubClient, HubServer
 from binance_bot.logging_setup import setup_logging
 from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.market import FuturesMarket, MarketData
-from binance_bot.strategy import DryRunOrderGate, Journal, SopParams
+from binance_bot.strategy import (
+    LIVE_ORDERS_ENABLED,
+    DryRunOrderGate,
+    Journal,
+    OrderGate,
+    ScreenOrderGate,
+    SopParams,
+)
 from binance_bot.strategy.params import SIGNAL_SOURCES
 from binance_bot.system import System, build_system
 from binance_bot.tebbit_web.chrome import Browser, ChromeController, ChromeWindowController
 from binance_bot.tebbit_web.market import ScreenMarket
 from binance_bot.tebbit_web.navigator import TebbitNavigator
 from binance_bot.tebbit_web.pattern_rules import TEBBIT
+from binance_bot.tebbit_web.visible import on_screen_windows
 from binance_bot.workflows import (
     ExampleWorkflow,
     FillTestWorkflow,
@@ -90,8 +98,12 @@ def _sop_options() -> argparse.ArgumentParser:
     )
     g.add_argument("--margin", type=float, default=d.margin_pct, help="Margin %% modal per posisi")
     g.add_argument("--leverage", type=int, default=d.leverage, help="Leverage")
-    g.add_argument("--sl", type=float, default=d.stop_pct, help="Stop-loss %% di atas harga masuk")
-    g.add_argument("--target", type=float, default=d.target_pct, help="Target %% turun (1-4)")
+    g.add_argument(
+        "--target",
+        type=float,
+        default=d.target_pct,
+        help="Jual otomatis saat harga turun %% (V3: 3-5)",
+    )
     g.add_argument(
         "--min-turun",
         type=int,
@@ -104,19 +116,12 @@ def _sop_options() -> argparse.ArgumentParser:
         default=d.min_gain_pct,
         help="Naik minimal 24 jam (%%); 0 = tidak disaring",
     )
-    g.add_argument("--batas-jam", type=float, default=d.max_hold_h, help="Tutup setelah N jam")
     g.add_argument("--biaya", type=float, default=d.fee_pct, help="Fee per putaran (%%)")
     g.add_argument(
         "--maks-spread", type=float, default=d.max_spread_pct, help="Spread maksimal (%%)"
     )
     g.add_argument(
         "--min-funding", type=float, default=d.min_funding_pct, help="Funding minimal (%%)"
-    )
-    g.add_argument(
-        "--maks-posisi",
-        type=int,
-        default=d.max_open_positions,
-        help="Posisi terbuka maksimal bersamaan",
     )
     g.add_argument(
         "--sinyal",
@@ -134,15 +139,12 @@ def params_from(args: argparse.Namespace) -> SopParams:
         order_usdt=args.jumlah,
         margin_pct=args.margin,
         leverage=args.leverage,
-        stop_pct=args.sl,
         target_pct=args.target,
         min_crosses=args.min_turun,
         min_gain_pct=args.min_naik,
-        max_hold_h=args.batas_jam,
         fee_pct=args.biaya,
         max_spread_pct=args.maks_spread,
         min_funding_pct=args.min_funding,
-        max_open_positions=args.maks_posisi,
         signal_source=args.sinyal,
     )
 
@@ -294,7 +296,13 @@ def build_tebbit(
         chrome = mac_chrome = ChromeController()
         window = ChromeWindowController(mac_chrome)
     navigator = TebbitNavigator(
-        settings, system.apps, window, system.reader, chrome, screens=system.screens
+        settings,
+        system.apps,
+        window,
+        system.reader,
+        chrome,
+        screens=system.screens,
+        windows=on_screen_windows,
     )
     return navigator, ScreenMarket(navigator, browse=browse)
 
@@ -364,7 +372,9 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         return PositionsWorkflow(params_from(args), journal, market, close=target)
 
     if not tebbit:
-        navigator = BinanceNavigator(settings, apps, window, system.reader, screens=system.screens)
+        navigator = BinanceNavigator(
+            settings, apps, window, system.reader, screens=system.screens, windows=on_screen_windows
+        )
     if args.command == "uji-isi":
         return FillTestWorkflow(navigator, rank=args.rank, quantity_text=args.jumlah)
     if args.command == "leader":
@@ -383,13 +393,20 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
 
     params = params_from(args)
+    # Order sungguhan hanya bila LIVE_ORDERS_ENABLED dibuka (sekarang terkunci): selain itu uji
+    # kertas, yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    gate: OrderGate = (
+        ScreenOrderGate(navigator)
+        if LIVE_ORDERS_ENABLED
+        else DryRunOrderGate(navigator.short_button)
+    )
     trader = SopTrader(
         settings,
         params,
         navigator,
         market,
         journal,
-        DryRunOrderGate(),
+        gate,
         fill_form=not args.no_fill,
         role="follower" if args.command == "follower" else "single",
         profile=profile,

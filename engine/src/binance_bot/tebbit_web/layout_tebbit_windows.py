@@ -40,26 +40,6 @@ ZOOM_STEPS_DOWN = zoom_steps_down(_display_scale())
 OCR_UPSCALE = 2
 OCR_QUOTE_VARIANTS = (("max", 3), ("max", 2), ("gray", 2))
 LEVERAGE_BOX_X = (0.47, 0.80)
-# Dialog "Modify leverage" (judul y 0,36; kolom nilai y 0,41; label slider 1X..25X y 0,49;
-# Confirm y 0,62; X di x 0,578) dan "Trading Mode" (judul y 0,28; Cross/Isolated y 0,36;
-# Confirm y 0,70; X di x 0,627). Keduanya modal di tengah (x 0,36..0,65), jauh dari tombol
-# Buy/Long dan Sell/Short (x >= 0,83).
-MARGIN_DIALOG_AREA = (0.34, 0.22, 0.68, 0.78)
-# Di dalam dialog, bacaan abu-abu 2x sering melewatkan kolom nilai dan Confirm; kanal terang 3x
-# membacanya. Beberapa varian digabung.
-OCR_DIALOG_VARIANTS = (("max", 3), ("max", 2), ("gray", 2))
-MARGIN_FIELD_BAND = (0.02, 0.09)
-LEVERAGE_CLICK = (0.944, 0.128)
-MODE_CLICK = (0.868, 0.128)
-LEVERAGE_CLOSE_X = 0.578
-MODE_CLOSE_X = 0.627
-# Angka leverage saja, tanpa ikon - dan + di kiri kanannya: potongan yang lebih lebar membuat OCR
-# menjatuhkan "2X" (diuji: 55 px terbaca, 105 px dan lebih tidak).
-VALUE_BOX_X = (0.485, 0.515)
-FIELD_X_RANGE = (
-    0.44,
-    0.56,
-)  # kolom nilai hanya dicari di tengah dialog; sumbu grafik ada di x>0,62
 OCR_LEGEND_VARIANTS = (("max", 2), ("max", 3), ("max", 4), ("gray", 2))
 
 # Menu atas situs: "Futures" di x 0,21 y 0,04 (jangkar zoom); bila login, email tampil di kanan.

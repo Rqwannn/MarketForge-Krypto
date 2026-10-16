@@ -7,7 +7,6 @@
 const $ = (id) => document.getElementById(id);
 const FORM_KEY = 'marketforge.form.v2';
 const RANKS = [1, 2, 3, 4, 5];
-const MAX_OPEN = 2; // SOP V2: maksimal 2 posisi bersamaan
 const MAX_FEED = 120;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const NUM = new Intl.NumberFormat('id-ID', { maximumSignificantDigits: 6 });
@@ -25,6 +24,8 @@ const VERDICT = {
 const STATUS = {
   open: ['Berjalan', 'open'],
   target: ['Target tercapai', 'target'],
+  likuidasi: ['Likuidasi', 'stop'],
+  // Catatan lama (SOP V2). V3 tanpa stop-loss dan tanpa batas waktu.
   stop: ['Kena batas rugi', 'stop'],
   timeout: ['Waktu habis', 'timeout'],
   manual: ['Ditutup (Sell)', 'manual'],
@@ -90,7 +91,6 @@ function plain(text) {
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
-    [/sudah (\d+) posisi terbuka/, (m) => `Sudah ${m[1]} posisi berjalan, batas tercapai`],
     [/sedang rugi/, 'Posisi pertama sedang rugi, koin berikutnya ditunda'],
     [/Leader tidak (memainkan|menilai) Top/, 'Pemimpin tidak menilai Top ini di putaran ini, tidak ada tindakan'],
     [/belum memulai putaran/, 'Pemimpin belum memulai putaran baru, tidak ada tindakan'],
@@ -110,12 +110,12 @@ function plain(text) {
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
     [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
-    [/Isolated/i, `Mode margin di ${site} belum Isolated (ubah sebelum memakai uang sungguhan)`],
-    [/stop-loss berturut-turut/, '3 kali kena batas rugi hari ini, bot berhenti untuk hari ini'],
+    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan (SOP V3)'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
     [/peringkat bergeser/, 'Peringkat bergeser saat membuka koin, tidak ada tindakan'],
+    [/sudah tidak di daftar|di luar Top 5/, 'Koin keluar dari Top 5 saat akan dibuka, tidak dinilai'],
     [/Hub belum punya|menunggu hasil/i, 'Hasil dari laptop pemimpin belum tersedia'],
     [/[Hh]ub .*(tidak bisa|menolak)|BOT_HUB/, 'Belum terhubung ke laptop pemimpin, hubungi admin'],
     [/VIKEY|Kunci AI|kunci API/i, 'Pengaturan AI di laptop ini belum lengkap, hubungi admin'],
@@ -146,13 +146,21 @@ function activity(entry) {
     return { text: `${e.symbol} dilewati: ${plain(e.reason).toLowerCase()}` };
   }
   if (e?.type === 'hub') return { text: 'Mulai membagikan hasil ke laptop pengikut', css: 'good' };
+  if (e?.type === 'sell') {
+    const why = e.status === 'target' ? 'target tercapai' : e.status;
+    return { text: `Jual otomatis ${e.symbol}: ${why} (${percent(e.pnl_pct)}), tombol tidak ditekan`, css: e.pnl_pct >= 0 ? 'good' : 'bad' };
+  }
+  if (e?.type === 'view') return { text: entry.message };  // "AI membaca grafik X", "Kembali ke Binance"
 
   const m = entry.message || '';
   const opened = m.match(/^Top gainer #(\d+): (\S+)/);
   if (opened) return { text: `Membuka top ${opened[1]}: ${opened[2]}` };
   if (/^(Tidak masuk putaran ini|Berhenti memantau): /.test(m)) return { text: plain(m), css: 'warn' };
   if (/^Tidak ada koin dengan pola OK/.test(m)) return { text: 'Belum ada koin yang layak, pantau lagi nanti' };
-  if (/tidak di depan/.test(m)) return { text: 'Binance tertutup jendela lain, dibawa ke depan lagi' };
+  if (/tidak di depan/.test(m)) return { text: `${platform?.name || 'Binance'} tertutup jendela lain, dibawa ke depan lagi` };
+  if (/^Tombol Jual\/Short ditemukan/.test(m)) return { text: 'Tombol Short ditemukan di layar, tidak ditekan (uji kertas)' };
+  if (/^Tombol Jual\/Short tidak ditemukan/.test(m)) return { text: 'Tombol Short tidak terbaca di layar (uji kertas tetap jalan)', css: 'warn' };
+  if (/^\[DRY RUN\] Tombol Jual\/Short TIDAK ditekan/.test(m)) return { text: 'Uji kertas: order dicatat, tombol Short tidak ditekan', css: 'good' };
   const waitingLeader = m.match(/^Menunggu leader menganalisis (Top \d+)/);
   if (waitingLeader) return { text: `Menunggu hasil AI dari pemimpin untuk ${waitingLeader[1]}` };
   const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
@@ -317,7 +325,7 @@ function setCounts() {
   $('seen-note').textContent = `dari ${watched} top gainers`;
   setBar('seen-bar', counts.seen / watched);
   setBar('ok-bar', counts.seen ? counts.ok / counts.seen : 0);
-  setBar('open-bar', counts.open / MAX_OPEN);
+  setBar('open-bar', counts.ok ? counts.open / counts.ok : 0);
 }
 
 function emptyCoins(text) {
@@ -380,7 +388,25 @@ function dips(count) {
   return el('span', { class: 'dips' }, ...blocks, el('span', { textContent: `${count}×` }));
 }
 
+/** Baris sementara selama AI membaca grafik koin ini; diganti hasilnya oleh addCoin. */
+function addPending(e) {
+  $('coins').querySelector('.empty-row')?.remove();
+  $('coins').querySelector(`tr[data-pending="${CSS.escape(e.symbol)}"]`)?.remove();
+  const row = el('tr', { class: 'pending-row' },
+    el('td', { class: 'rank' }, e.rank ? el('span', { class: 'rank-badge', textContent: String(e.rank) }) : null),
+    el('td', { class: 'sym', textContent: e.symbol }),
+    el('td', {}, el('span', { class: 'dips', textContent: '…' })),
+    el('td', {}, el('span', { class: 'tag reading', textContent: 'AI membaca…' })),
+    el('td', { class: 'why' },
+      el('strong', { class: 'act', textContent: 'Menunggu hasil AI' }),
+      el('span', { textContent: 'Grafik 15 menit yang sedang dibaca:' }),
+      chartThumb(e.chart, `${e.symbol} · sedang dibaca`)));
+  row.dataset.pending = e.symbol;
+  $('coins').append(row);
+}
+
 function addCoin(e) {
+  $('coins').querySelector(`tr[data-pending="${CSS.escape(e.symbol)}"]`)?.remove();
   counts.seen += 1;
   if (e.verdict === 'ok') counts.ok += 1;
   if (e.status === 'open') counts.open += 1;
@@ -414,7 +440,7 @@ function chartThumb(file, caption) {
 /** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
 function actionOf(e) {
   if (e.status === 'open') {
-    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · target ${price(e.target_price)} · batas rugi ${price(e.stop_price)}` };
+    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
   }
   if (e.status === 'analyzed') {
     return e.verdict === 'ok'
@@ -526,6 +552,7 @@ window.bot.onLog((entry) => {
     emptyCoins(flow.mode === 'follower' ? 'Menunggu hasil AI dari pemimpin…' : 'Membaca top gainers…');
     $('cycle-info').textContent = `Dimulai ${clock(entry.ts || Date.now() / 1000)}`;
   }
+  if (e?.type === 'view' && e.target === 'app' && e.symbol) addPending(e);
   if (e?.type === 'coin') addCoin(e);
   if (e?.type === 'hub') $('share').hidden = false;
   advanceFlow(entry);
@@ -622,12 +649,12 @@ function pnlChart(trades) {
   return svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': 'Hasil per trade' }, ...parts);
 }
 
-/** Donat akhir posisi: target, batas rugi, waktu habis, masih berjalan. */
+/** Donat akhir posisi: target, likuidasi, Sell, masih berjalan (dan catatan lama V2). */
 function donut(s) {
   const parts = [
     ['Target tercapai', s.targets, 'var(--green)'],
-    ['Kena batas rugi', s.stops, 'var(--red)'],
-    ['Waktu habis', s.timeouts, 'var(--amber)'],
+    ['Likuidasi', s.liquidations ?? 0, 'var(--red)'],
+    ['Stop/waktu habis (V2)', (s.stops ?? 0) + (s.timeouts ?? 0), 'var(--amber)'],
     ['Ditutup (Sell)', s.manual ?? 0, 'var(--accent)'],
     ['Masih berjalan', s.open, 'var(--accent-2)'],
   ];
@@ -680,8 +707,8 @@ async function loadJournal() {
         { bar: s.win_rate ?? 0, barClass: s.win_rate !== null && s.win_rate >= s.breakeven ? 'green' : 'red', mark: s.breakeven,
           css: s.win_rate === null ? '' : s.win_rate >= s.breakeven ? 'pos' : 'neg' }),
       kpi('Hasil bersih', percent(s.net_capital_pct), 'dari modal', { css: signClass(s.net_capital_pct) }),
-      kpi('Batas rugi beruntun', String(s.stop_streak), 'bot berhenti bila 3 dalam sehari',
-        { bar: s.stop_streak / 3, barClass: 'red', css: s.stop_streak >= 2 ? 'neg' : '' }),
+      kpi('Perlu ditinjau', String(s.needs_review), 'posisi ditahan lebih dari 1 hari',
+        { css: s.needs_review > 0 ? 'neg' : '' }),
     );
 
     $('pnl-chart').replaceChildren(pnlChart(report.trades));
@@ -813,7 +840,7 @@ async function loadOwnPositions(canSell) {
     el('td', { class: 'num', textContent: price(p.entry_price) }),
     el('td', { class: 'num', textContent: price(p.price) }),
     el('td', { class: `num ${signClass(p.pnl_capital_pct)}`, textContent: p.pnl_capital_pct === null ? '–' : `${percent(p.pnl_capital_pct)} modal` }),
-    el('td', { class: 'num', textContent: `${price(p.target_price)} / ${price(p.stop_price)}` }),
+    el('td', { class: 'num', textContent: price(p.target_price) }),
     el('td', { class: 'num' }, canSell
       ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol) })
       : el('span', { class: 'locked', textContent: 'Ditutup pemimpin' }))));
@@ -1308,9 +1335,52 @@ function renderPlatforms() {
   }));
 }
 
+// Tampilan putaran per platform (koin, aktivitas, angka, status, alur): Binance dan Tebbit tidak
+// saling menimpa saat platform diganti. Hanya di memori; riwayat AI tetap di jurnal masing-masing.
+const views = new Map();
+
+function saveView(id) {
+  views.set(id, {
+    coins: [...$('coins').childNodes],
+    feed: [...$('feed').childNodes],
+    counts: { ...counts },
+    cycle: $('cycle-info').textContent,
+    status: [$('status-title').textContent, $('status-sub').textContent],
+    flow: { ...flow, sub: $('flow-sub').textContent },
+  });
+}
+
+function restoreView(id) {
+  const view = views.get(id);
+  if (!view) {
+    Object.assign(counts, { seen: 0, ok: 0, open: 0 });
+    setCounts();
+    emptyCoins('Belum ada koin yang dinilai. Tekan Mulai memantau.');
+    emptyFeed('Aktivitas bot akan muncul di sini.');
+    $('cycle-info').textContent = 'Belum ada putaran.';
+    $('status-title').textContent = 'Belum berjalan';
+    $('status-sub').textContent = 'Tekan Mulai memantau.';
+    resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
+    return;
+  }
+  $('coins').replaceChildren(...view.coins);
+  $('feed').replaceChildren(...view.feed);
+  Object.assign(counts, view.counts);
+  setCounts();
+  $('cycle-info').textContent = view.cycle;
+  [$('status-title').textContent, $('status-sub').textContent] = view.status;
+  const { sub: flowSub, ...rest } = view.flow;
+  Object.assign(flow, rest);
+  setFlow(rest.step, flowSub, rest.done);
+}
+
 function choosePlatform(id) {
   const chosen = PLATFORMS.find((p) => p.id === id);
   if (!chosen?.ready) return; // bursa yang belum siap tidak pernah menjadi platform aktif
+  if (platform && platform.id !== chosen.id) {
+    saveView(platform.id);
+    restoreView(chosen.id);
+  }
   platform = chosen;
   window.bot.setPlatform(chosen.id).catch(() => {});
   $('platform-name').textContent = chosen.name;

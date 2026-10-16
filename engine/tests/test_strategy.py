@@ -16,20 +16,35 @@ from fakes import ma_candles
 
 
 @pytest.mark.parametrize(
-    ("stop", "expected"),
-    [(1.5, 0.46), (2, 0.53), (3, 0.62), (5, 0.73), (8, 0.81), (10, 0.84), (15, 0.89), (25, 0.93)],
+    ("target", "loss", "expected"),
+    [
+        (3, 5, 0.64),
+        (3, 10, 0.78),
+        (3, 21.8, 0.88),
+        (3, 25, 0.90),
+        (3, 50, 0.95),
+        (5, 5, 0.51),
+        (5, 10, 0.67),
+        (5, 21.8, 0.82),
+        (5, 25, 0.84),
+        (5, 50, 0.91),
+    ],
 )
-def test_breakeven_matches_the_v2_chart(stop: float, expected: float) -> None:
-    # PDF V2: target 2%, biaya 0,1% per trade; pada stop-loss 2% syaratnya sekitar 53%.
-    params = SopParams(capital_usdt=1, stop_pct=stop)
-    assert params.breakeven_win_rate == pytest.approx(expected, abs=0.006)
+def test_breakeven_matches_the_v3_chart(target: float, loss: float, expected: float) -> None:
+    # Grafik Titik impas V3: target 3%/5%, biaya 0,1%, rugi = kenaikan harga yang ditanggung.
+    params = SopParams(capital_usdt=1, target_pct=target)
+    assert params.breakeven_win_rate(loss) == pytest.approx(expected, abs=0.006)
 
 
-def test_v2_defaults_follow_the_pdf() -> None:
+def test_without_real_losses_the_breakeven_uses_the_strk_example() -> None:
+    assert SopParams(capital_usdt=1).breakeven_win_rate() == pytest.approx(0.88, abs=0.006)
+
+
+def test_v3_defaults_follow_the_pdf() -> None:
     p = SopParams()
-    assert (p.leverage, p.margin_pct, p.max_open_positions) == (2, 50.0, 2)
-    assert (p.target_pct, p.stop_pct, p.fee_pct, p.min_crosses) == (2.0, 2.0, 0.1, 2)
-    assert (p.max_hold_h, p.review_after_h, p.min_gain_pct) == (4.0, 1.0, 0.0)
+    assert (p.leverage, p.margin_pct) == (2, 50.0)
+    assert (p.target_pct, p.fee_pct, p.min_crosses) == (3.0, 0.1, 2)  # tanpa stop-loss
+    assert (p.review_after_h, p.min_gain_pct) == (24.0, 0.0)  # tanpa batas waktu
 
 
 def test_params_require_capital_or_quantity_and_sane_values() -> None:
@@ -47,13 +62,12 @@ def test_params_require_capital_or_quantity_and_sane_values() -> None:
 RULES = SymbolRules(step=0.1, min_qty=0.1, min_notional=5.0)
 
 
-def test_position_size_follows_the_v2_example() -> None:
-    # PDF: modal 10.000.000, margin 50% x 2x -> nilai posisi 10.000.000; SL 2% -> rugi 200.000.
+def test_position_size_follows_the_v3_example() -> None:
+    # PDF: modal 10.000.000, margin 50% x 2x -> nilai posisi 10.000.000, margin 5.000.000.
     sizing = size_position(SopParams(capital_usdt=10_000_000), 1.0, RULES)
     assert isinstance(sizing, Sizing)
     assert sizing.notional == pytest.approx(10_000_000)
     assert sizing.margin_usdt == pytest.approx(5_000_000)
-    assert sizing.loss_at_stop == pytest.approx(200_000)
 
 
 def test_order_size_is_typed_in_usdt_and_coins_are_estimated() -> None:
@@ -115,3 +129,12 @@ def test_data_counts_ma7_periods_below_ma25(drops: int, expected: MaPattern) -> 
 def test_data_pattern_needs_enough_candles() -> None:
     with pytest.raises(ValueError):
         data_ma_pattern(ma_candles(2)[:50])
+
+
+def test_ma_gap_is_how_far_the_fast_line_sits_below_the_slow_line() -> None:
+    from binance_bot.strategy import ma_gap_pct
+    from fakes import candle
+
+    closes = [100.0] * 18 + [90.0] * 7  # MA7 = 90, MA25 = 97,2
+    candles = [candle(c, c, c, c, 1, i) for i, c in enumerate([*closes, 0.0])]  # + lilin berjalan
+    assert ma_gap_pct(candles, fast=7, mid=25) == pytest.approx(100 * (97.2 - 90) / 97.2)

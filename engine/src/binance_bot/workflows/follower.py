@@ -78,14 +78,7 @@ class FollowerWorkflow:
         if uses_ai and self._client is None:
             raise ConfigError("SINYAL=ai butuh hub leader: isi --hub atau BOT_HUB_URL")
         assigned = list(self._ranks) if self._ranks is not None else list(range(1, MAX_RANK + 1))
-        if self._trader.halted(self._trader.refresh_journal()):
-            self._note_all(assigned, "3 stop-loss berturut-turut hari ini")
-            return
-        blocker = self._trader.slot_blocker()
-        if blocker:
-            logger.info("Tidak masuk: %s", blocker)
-            self._note_all(assigned, blocker)
-            return
+        self._trader.refresh_journal()  # jual otomatis posisi yang sudah mencapai target
         try:
             ranks = self._ranks_to_follow(uses_ai)
         except HubError as exc:
@@ -97,14 +90,7 @@ class FollowerWorkflow:
             return
 
         handled: set[str] = set()
-        for index, rank in enumerate(ranks):
-            blocker = self._trader.slot_blocker()
-            if blocker:
-                logger.info("Berhenti mengikuti: %s", blocker)
-                self._note_all(
-                    ranks[index:], blocker
-                )  # sisanya tidak diproses: tampilkan alasannya
-                break
+        for rank in ranks:
             outcome = self._follow(rank, uses_ai, handled)
             if outcome is not None:
                 self.result = outcome
@@ -186,6 +172,11 @@ class FollowerWorkflow:
             return self._trader.skip(
                 rank, record.symbol, f"pola garis kuning {verdict.upper()} (dari leader)", reading
             )
+        # Slot (SOP: posisi terbuka tidak sedang rugi) dicek sebelum membuka bursa. Keputusan
+        # leader tetap dicatat dan tampil di aplikasi walau koin ini tidak dimasuki.
+        blocker = self._trader.slot_blocker()
+        if blocker:
+            return self._trader.skip(rank, record.symbol, blocker, reading)
 
         self._nav.prepare()
         rows = self._nav.open_top_gainers()
@@ -215,10 +206,16 @@ class FollowerWorkflow:
         """Tunggu leader menilai Top ini; None bila leader selesai putaran tanpa menilainya."""
         assert self._client is not None
         deadline = self._clock() + self._settings.follower_wait_s
+        shown = False
         while True:
             shared = self._client.by_rank(rank)
             if shared is not None and shared.age_s <= self._settings.analysis_ttl_s:
                 return shared
+            if not shown:  # menunggu AI pemimpin: tampilkan MarketForge selama menunggu
+                self._nav.show_app(
+                    f"Menunggu AI pemimpin menilai Top {rank}", rank=rank, stage="ai"
+                )
+                shown = True
             plan = self._client.plan()
             if plan.done and plan.age_s <= _PLAN_FRESH_S:
                 return None  # leader sudah selesai putaran ini dan tidak menilai Top ini

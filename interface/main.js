@@ -223,9 +223,23 @@ function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
+/**
+ * Engine menyerahkan layar ke aplikasi selama AI membaca grafik (sama di macOS dan Windows).
+ * Engine membawa Binance/Tebbit ke depan lagi sendiri sebelum klik, ketik, atau tangkap layar.
+ */
+function showAppWindow() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  if (process.platform === 'darwin') app.focus({ steal: true });
+  win.moveTop();
+  win.focus();
+}
+
 proc.on('log', (entry) => {
   send('engine:log', entry);
   const e = entry.event;
+  if (e?.type === 'view' && e.target === 'app') showAppWindow();
   if (team && runningMode === 'leader' && e?.type === 'cycle' && e.phase === 'start') {
     team.startCycle(exchange); // pengikut ikut memulai putaran ini, di platform yang sama
     syncPresence();

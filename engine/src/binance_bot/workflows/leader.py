@@ -13,7 +13,7 @@ from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
 from binance_bot.hub import AnalysisStore, HubServer
 from binance_bot.logging_setup import event
-from binance_bot.market import MarketData
+from binance_bot.market import MarketData, is_futures_symbol
 from binance_bot.strategy import PatternProfile, SopParams
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import log_top_gainers
@@ -113,10 +113,14 @@ class LeaderWorkflow:
                 )
                 continue
             try:
-                if not on_list:
-                    self._nav.open_top_gainers()
+                # Buka lewat namanya (lihat SingleWorkflow): peringkat bergeser di tengah siklus.
+                if row is not None and is_futures_symbol(row.symbol):
+                    symbol = self._nav.open_symbol(row.symbol)
+                else:
+                    if not on_list:
+                        self._nav.open_top_gainers()
+                    symbol = self._nav.open_gainer(rank)
                 on_list = False
-                symbol = self._nav.open_gainer(rank)
                 if symbol in seen:
                     # Peringkat bergeser sehingga pair yang sama terbuka lagi.
                     logger.info("#%d sekarang %s: sudah dinilai di siklus ini", rank, symbol)
@@ -129,7 +133,20 @@ class LeaderWorkflow:
                         continue
                     ai_calls += 1
             except BotError as exc:
-                logger.error("Rank #%d dilewati: %s", rank, exc)
+                # Tetap tampil sebagai baris di aplikasi (bukan hanya log) dengan alasannya.
+                logger.warning(
+                    "Rank #%d dilewati: %s",
+                    rank,
+                    exc,
+                    extra=event(
+                        "coin",
+                        rank=rank,
+                        symbol=row.symbol if row is not None else f"Top {rank}",
+                        status="skipped",
+                        verdict=None,
+                        reason=str(exc),
+                    ),
+                )
                 continue
             self._store.put(record)
             records.append(record)
@@ -195,6 +212,9 @@ class LeaderWorkflow:
         self._nav.show_15m_chart()
         chart = self._nav.capture_chart(
             self._settings.screenshot_dir / f"{stamp}_rank{rank}_{symbol}_15m.png"
+        )
+        self._nav.show_app(
+            f"AI membaca grafik {symbol}", symbol=symbol, rank=rank, chart=str(chart), stage="ai"
         )
         started = time.monotonic()
         record = AnalysisRecord(symbol, rank, self._wall_clock(), self._analyzer.analyze(chart))

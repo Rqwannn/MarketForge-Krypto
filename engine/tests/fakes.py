@@ -8,7 +8,7 @@ from binance_bot.analysis import AnalysisRecord, PatternReading
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import DEFAULT_APP_ID
-from binance_bot.exceptions import BotError, ScreenReadError
+from binance_bot.exceptions import BotError
 from binance_bot.macos import Rect, TextLine
 from binance_bot.market import Candle, Quote, SymbolRules
 from binance_bot.strategy import MaPattern, OrderPlan, candles_needed
@@ -103,8 +103,8 @@ class FakeScreen:
     def clear_field(self) -> None:
         self.events.append(("clear", None))
 
-    def select_all(self) -> None:
-        self.events.append(("select_all", None))
+    def select_field(self) -> None:
+        self.events.append(("select", None))
 
     def type_number(self, text: str) -> None:
         self.events.append(("type", text))
@@ -199,8 +199,6 @@ class FakeNavigator:
         self.margin = margin
         self.calls: list[str] = []
         self.filled: list[str] = []
-        self.margin_applied: list[tuple[int, bool]] = []
-        self.margin_apply_fails = False
 
     def prepare(self) -> None:
         self.calls.append("prepare")
@@ -216,6 +214,24 @@ class FakeNavigator:
             raise symbol
         return symbol
 
+    def open_symbol(self, symbol: str) -> str:
+        self.calls.append(f"open_symbol:{symbol}")
+        rank = next(row.rank for row in self.rows if row.symbol == symbol)
+        symbol_opened = self.symbols[rank]
+        if isinstance(symbol_opened, BotError):
+            raise symbol_opened
+        return symbol_opened
+
+    def show_app(self, text: str, **fields: object) -> None:
+        self.calls.append(f"show_app:{fields.get('symbol') or fields.get('rank')}")
+
+    def short_button(self) -> tuple[float, float]:
+        self.calls.append("short_button")
+        return (0.9, 0.5)
+
+    def press_short(self, plan: object) -> None:
+        raise AssertionError("press_short tidak boleh dipanggil selama order dikunci")
+
     def show_15m_chart(self) -> None:
         self.calls.append("15m")
 
@@ -228,14 +244,14 @@ class FakeNavigator:
     def read_margin_settings(self) -> MarginSettings:
         return self.margin
 
-    def apply_margin(self, leverage: int, isolated: bool = True) -> bool:
-        self.margin_applied.append((leverage, isolated))
-        if self.margin_apply_fails:
-            raise ScreenReadError("dialog tidak terbuka")
-        self.margin = MarginSettings(isolated, leverage)
-        return True
+    def ensure_leverage(self, leverage: int) -> MarginSettings:
+        if self.margin.leverage != leverage:
+            self.calls.append(f"leverage:{leverage}")
+            self.margin = MarginSettings(self.margin.isolated, leverage)
+        return self.margin
 
     def fill_quantity(self, text: str) -> None:
+        self.calls.append(f"fill:{text}")
         self.filled.append(text)
 
     def _capture(self, path: Path) -> Path:

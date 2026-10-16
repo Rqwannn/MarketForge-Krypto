@@ -32,7 +32,7 @@ Lakukan sekali per laptop (langkah lengkap di bagian **Setup** pada [README](../
 
 | Perintah | Yang dilakukan |
 |---|---|
-| `make single MODAL=100` | Pantau top 5 sekali; masuk koin yang polanya OK, maksimal 2 posisi |
+| `make single MODAL=100` | Pantau top 5 sekali; masuk koin yang polanya OK |
 | `make single MODAL=100 INTERVAL=5` | Pantau ulang tiap 5 menit sampai dihentikan (Ctrl+C) |
 | `make single MODAL=100 RANKS=1,2` | Hanya top gainer #1 dan #2 (pilihan 1 sampai 5) |
 | `make single MODAL=100 MARGIN=25` | Tahap modal kecil di PDF (satu stop-loss sekitar 1% modal) |
@@ -49,7 +49,7 @@ mengetik sungguhan.
 ## 3. Apa yang dilakukan bot (satu putaran)
 
 1. Mengevaluasi posisi uji yang terbuka. Bila hari ini sudah 3 stop-loss berturut-turut, berhenti.
-2. **Cek slot**: bila sudah 2 posisi terbuka, atau posisi pertama sedang rugi, tidak memindai.
+2. **Cek slot**: bila ada posisi terbuka yang sedang rugi, koin baru tidak dibuka. Jumlah posisi tidak dibatasi.
 3. Membawa Binance ke depan dan memeriksa ukuran jendela.
 4. **Pasar → Futures**, urutkan "Perubahan 24jam" sampai OCR memastikan urutan dari kenaikan
    tertinggi; klik ulang tab Futures bila daftar belum tampil.
@@ -57,8 +57,8 @@ mengetik sungguhan.
 6. Saringan biaya: pair USDT, funding, spread (dan kenaikan minimal bila `MIN_NAIK` diisi).
 7. Klik "Grafik" dan "15 mnt" (dicari dengan OCR), tunggu grafik termuat, screenshot, lalu
    **Haiku menghitung berapa kali MA7 di bawah MA25** → JANGAN / TUNGGU / OK.
-8. Bila OK: ukuran posisi (margin × leverage), baca mode margin/leverage (peringatan bila bukan
-   2x / Isolated), isi kolom **Jumlah**, lalu **pintu order dry run** mencatat rencana short.
+8. Bila OK: ukuran posisi (margin × leverage), baca leverage (peringatan bila bukan
+   2x; mode margin memakai bawaan bursa), isi kolom **Jumlah**, lalu **pintu order dry run** mencatat rencana short.
 9. Mencatat ke jurnal; berhenti bila 2 slot sudah terisi.
 
 Contoh jawaban Haiku dari uji nyata (12 Okt 2026, tanpa API):
@@ -97,7 +97,6 @@ Belum cukup data: 12/50 trade uji selesai
 | `Parameter SOP tidak valid: isi MODAL (USDT) atau JUMLAH (USDT)` | Modal belum diisi | `make single MODAL=100` |
 | `Satuan kolom Jumlah bukan USDT` / `memakai Margin Awal` | Satuan kolom Jumlah di Binance masih koin atau Margin Awal | Klik satuan di kolom Jumlah, pilih **USDT** lalu **Ukuran Order** (sekali; Binance mengingatnya) |
 | `Data pasar Binance tidak bisa diambil: ... certificate ... internetpositif` | Jaringan memblokir domain Binance | Pakai jaringan yang tidak memblokir; engine tidak mengakali pemblokiran |
-| `Tidak masuk putaran ini: sudah 2 posisi terbuka` | Slot penuh (SOP) | Normal; tunggu posisi selesai (`make jurnal`) |
 | `posisi X sedang rugi; koin berikutnya belum boleh dibuka` | Aturan koin kedua (SOP) | Normal |
 | `pola garis kuning JANGAN/TUNGGU` | Pola belum OK | Normal; SOP: tidak masuk, pantau ulang |
 | `Tombol '15 mnt' tidak ditemukan` / `Grafik 15 menit belum termuat` | Halaman belum termuat atau tab lain terbuka | Naikkan `BOT_SETTLE_DELAY_S=3`; cek koneksi aplikasi |

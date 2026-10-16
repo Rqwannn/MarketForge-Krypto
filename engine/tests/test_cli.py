@@ -18,13 +18,13 @@ def test_parse_ranks_rejects_invalid(text: str) -> None:
         parse_ranks(text)
 
 
-def test_single_defaults_follow_sop_v2() -> None:
+def test_single_defaults_follow_sop_v3() -> None:
     args = build_parser().parse_args(["single"])
     params = params_from(args)
     assert args.ranks == [1, 2, 3, 4, 5]  # pantau top 5
-    assert (params.leverage, params.margin_pct, params.max_open_positions) == (2, 50.0, 2)
-    assert (params.target_pct, params.stop_pct, params.fee_pct) == (2.0, 2.0, 0.1)
-    assert (params.min_crosses, params.min_gain_pct, params.max_hold_h) == (2, 0.0, 4.0)
+    assert (params.leverage, params.margin_pct) == (2, 50.0)
+    assert (params.target_pct, params.fee_pct) == (3.0, 0.1)  # tanpa stop-loss dan batas waktu
+    assert (params.min_crosses, params.min_gain_pct) == (2, 0.0)
 
 
 def test_single_maps_sop_parameters() -> None:
@@ -39,8 +39,6 @@ def test_single_maps_sop_parameters() -> None:
             "25",
             "--leverage",
             "2",
-            "--sl",
-            "1.5",
             "--target",
             "1",
             "--min-turun",
@@ -56,12 +54,7 @@ def test_single_maps_sop_parameters() -> None:
     )
     params = params_from(args)
     assert args.ranks == [1, 2] and args.no_fill and args.interval == 5
-    assert (params.capital_usdt, params.margin_pct, params.stop_pct, params.target_pct) == (
-        1000,
-        25,
-        1.5,
-        1,
-    )
+    assert (params.capital_usdt, params.margin_pct, params.target_pct) == (1000, 25, 1)
     assert (params.min_crosses, params.order_usdt, params.signal_source) == (3, 75, "data")
 
 
@@ -118,28 +111,6 @@ def test_cleanups_run_when_the_workflow_ends_or_fails(
         monkeypatch.setattr(cli, "build_workflow", lambda args, settings, f=fail: Workflow(f))
         assert cli.main(["cek"]) == code
         assert called == ["tutup"] and cli._cleanups == []
-
-
-def test_auto_margin_is_chosen_per_platform() -> None:
-    from binance_bot.config import Settings
-
-    assert not Settings().auto_margin_for("tebbit")  # mati secara bawaan
-    only_tebbit = Settings(auto_margin="tebbit")
-    assert only_tebbit.auto_margin_for("tebbit") and not only_tebbit.auto_margin_for("binance")
-    both = Settings(auto_margin="Binance, Tebbit")
-    assert both.auto_margin_for("tebbit") and both.auto_margin_for("binance")
-    for everything in ("1", "true", "semua"):
-        assert Settings(auto_margin=everything).auto_margin_for("binance")
-    assert Settings.from_env({"BOT_ATUR_MARGIN": "tebbit"}).auto_margin_for("tebbit")
-
-
-def test_margin_mode_is_selected_separately_from_the_leverage() -> None:
-    from binance_bot.config import Settings
-
-    leverage_only = Settings(auto_margin="tebbit")
-    assert leverage_only.auto_margin_for("tebbit") and not leverage_only.auto_mode_for("tebbit")
-    assert Settings(auto_mode="tebbit").auto_mode_for("tebbit")
-    assert Settings.from_env({"BOT_ATUR_MODE_MARGIN": "semua"}).auto_mode_for("binance")
 
 
 def test_app_paths_in_dotenv_reach_the_os_layer_but_the_os_environment_wins(

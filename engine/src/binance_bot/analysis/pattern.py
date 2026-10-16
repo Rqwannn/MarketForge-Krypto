@@ -46,7 +46,10 @@ def pattern_from_dict(data: Any) -> PatternReading:
         or not summary
     ):
         raise AnalysisError(f"Jawaban pola garis kuning tidak sesuai skema: {str(data)[:200]}")
-    pattern = MaPattern(count, data["ma7_below_ma25_now"], data["ma7_below_ma25_recent"])
+    close = data.get("ma7_ma25_close")  # hanya prompt Binance (V3) yang menanyakannya
+    if close is not None and not isinstance(close, bool):
+        raise AnalysisError(f"Jawaban 'garis berdekatan' bukan true/false: {str(data)[:200]}")
+    pattern = MaPattern(count, data["ma7_below_ma25_now"], data["ma7_below_ma25_recent"], close)
     return PatternReading(pattern, summary)
 
 
@@ -80,7 +83,9 @@ class ConsensusAnalyzer:
         counts = sorted(r.pattern.below_count for r in readings)
         now = sum(r.pattern.below_now for r in readings) * 2 > len(readings)
         recent = sum(r.pattern.below_recent for r in readings) * 2 > len(readings)
-        pattern = MaPattern(counts[len(counts) // 2], now, recent)
+        judged = [r.pattern.lines_close for r in readings if r.pattern.lines_close is not None]
+        close = sum(judged) * 2 > len(judged) if judged else None
+        pattern = MaPattern(counts[len(counts) // 2], now, recent, close)
         same = [r for r in readings if r.pattern.below_recent == recent]
         summary = min(same, key=lambda r: abs(r.pattern.below_count - pattern.below_count)).summary
         votes = ", ".join(

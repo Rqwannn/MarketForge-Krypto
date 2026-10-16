@@ -122,7 +122,7 @@ Setiap follower punya jurnal sendiri; jalankan `make jurnal` di laptop masing-ma
 - Pengikut bisa ditugaskan ke **satu Top** (`--rank 2`), **beberapa Top** (`--ranks 2,4,5`), atau ke **semua Top**
   (`make follower` dengan `--semua`; di aplikasi pilihan "Semua top", yang menjadi bawaan). Dengan
   "semua", pengikut mengikuti Top mana pun yang dimainkan pemimpin di putaran itu, berurutan, dan
-  berhenti ketika slot posisi penuh (maksimal 2). Pemimpin mengumumkan rencana putarannya di hub
+  berhenti bila posisi terbuka sedang rugi (jumlah posisi tidak dibatasi). Pemimpin mengumumkan rencana putarannya di hub
   (Top mana yang dimainkan dan apakah sudah selesai), jadi pengikut tidak menunggu Top yang tidak
   dimainkan.
 

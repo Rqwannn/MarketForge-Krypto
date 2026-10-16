@@ -515,3 +515,9 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .hist-act { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 .hist-item small { display: block; margin-top: 4px; color: var(--faint); font-size: 12px; font-style: italic; }
 @media (max-width: 720px) { .hist-item { grid-template-columns: 1fr; } }
+
+/* Baris "AI sedang membaca" (sebelum hasilnya keluar) */
+.pending-row td { opacity: 0.85; }
+.tag.reading { color: var(--accent-2); background: var(--accent-soft); animation: reading-pulse 1.4s ease-in-out infinite; }
+@keyframes reading-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .tag.reading { animation: none; } }

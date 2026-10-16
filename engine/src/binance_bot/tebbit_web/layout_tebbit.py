@@ -19,6 +19,9 @@ NAV_FUTURES_AREA = (0.0, 0.10, 0.6, 0.17)
 NAV_FUTURES_X = 0.221
 NAV_FUTURES_TOLERANCE = 0.03
 
+# Margin kosong di kiri halaman (bukan tautan, bukan zona terlarang): klik mengaktifkan jendela.
+BLANK_MARGIN = (0.04, 0.55)
+
 # Area teks menu atas untuk memeriksa login ("Log in"/"Sign up" tampil bila belum masuk).
 LOGIN_AREA = (0.0, 0.10, 1.0, 0.17)
 
@@ -34,16 +37,6 @@ OCR_LEGEND_VARIANTS: tuple[tuple[str, int], ...] | None = None
 # Kotak leverage ("2X" dengan panah) di panel margin, sebagai pecahan lebar MARGIN_AREA. OCR Windows
 # menjatuhkan token dua karakter yang berdiri sendiri; potongan ini dibaca bersama kata pendamping.
 LEVERAGE_BOX_X: tuple[float, float] | None = None
-# Dialog ubah leverage dan Trading Mode (Cross/Isolated). None = tidak diotomatiskan.
-MARGIN_DIALOG_AREA: tuple[float, float, float, float] | None = None
-OCR_DIALOG_VARIANTS: tuple[tuple[str, int], ...] | None = None
-MARGIN_FIELD_BAND = (0.02, 0.09)
-LEVERAGE_CLICK = (0.944, 0.128)
-MODE_CLICK = (0.868, 0.128)
-LEVERAGE_CLOSE_X = 0.578
-MODE_CLOSE_X = 0.627
-VALUE_BOX_X: tuple[float, float] | None = None
-FIELD_X_RANGE: tuple[float, float] | None = None
 
 # Halaman depan: daftar Gainers (tab "Gainers", sub-tab "Futures") di bawah halaman.
 LIST_SEARCH_AREA = (0.0, 0.17, 0.75, 0.99)
@@ -66,6 +59,9 @@ ORDER_TAB_AREA = (0.84, 0.22, 1.0, 0.27)  # "Limit  Market  Plan"
 ORDER_FORM_AREA = (0.84, 0.22, 1.0, 0.45)  # kolom Quantity
 QTY_CLICK_X = 0.87  # bagian kiri kolom (satuan USDT ada di kanan)
 MA_DIALOG_AREA = (0.2, 0.35, 0.75, 0.8)  # dialog pengaturan "MA" (Length / Ok / Cancel)
+# Dialog "Modify leverage" (judul, - 2X +, slider, Confirm) di tengah, sempit agar order book di
+# kanan (x 0.665..) tidak ikut terbaca.
+LEVERAGE_DIALOG_AREA = (0.38, 0.36, 0.62, 0.74)
 
 # Zona terlarang: browser dan menu situs (selalu); tombol order, slider, Transfer, dan tab bawah
 # (hanya di halaman koin). Bot tidak pernah perlu mengklik apa pun di sana.

@@ -19,17 +19,14 @@ RANKS    ?= 1,2,3,4,5
 INTERVAL ?= 0
 HUB      ?=
 PORT     ?=
-# Parameter SOP V2 (default = angka di PDF; yang bertanda usulan perlu disepakati).
+# Parameter SOP V3 (tanpa stop-loss dan batas waktu; jual otomatis di TARGET %).
 MODAL       ?=
 JUMLAH      ?=
 MARGIN      ?= 50
 LEVERAGE    ?= 2
-SL          ?= 2
-TARGET      ?= 2
+TARGET      ?= 3
 MIN_TURUN   ?= 2
 MIN_NAIK    ?= 0
-BATAS_JAM   ?= 4
-MAKS_POSISI ?= 2
 SINYAL      ?= ai
 NO_FILL     ?=
 # Benchmark.
@@ -37,9 +34,9 @@ CASES  ?= 12
 MODELS ?=
 
 SOP_ARGS = $(if $(MODAL),--modal $(MODAL)) $(if $(JUMLAH),--jumlah $(JUMLAH)) \
-	--margin $(MARGIN) --leverage $(LEVERAGE) --sl $(SL) --target $(TARGET) \
-	--min-turun $(MIN_TURUN) --min-naik $(MIN_NAIK) --batas-jam $(BATAS_JAM) \
-	--maks-posisi $(MAKS_POSISI) --sinyal $(SINYAL) $(if $(NO_FILL),--no-fill)
+	--margin $(MARGIN) --leverage $(LEVERAGE) --target $(TARGET) \
+	--min-turun $(MIN_TURUN) --min-naik $(MIN_NAIK) \
+	--sinyal $(SINYAL) $(if $(NO_FILL),--no-fill)
 
 .DEFAULT_GOAL := help
 .PHONY: help install env token fix-hidden window-size hub-health \
@@ -47,12 +44,12 @@ SOP_ARGS = $(if $(MODAL),--modal $(MODAL)) $(if $(JUMLAH),--jumlah $(JUMLAH)) \
 	test lint format typecheck check bench-install bench-cases bench-smoke bench-run clean
 
 help: ## Tampilkan daftar perintah
-	@echo "Engine SOP V2 Short Top Gainers (Futures 2x) - perintah yang tersedia:"
+	@echo "Engine SOP V3 Short Top Gainers (Futures 2x) - perintah yang tersedia:"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
-	@echo "Parameter SOP V2: MODAL=$(MODAL) JUMLAH=$(JUMLAH) MARGIN=$(MARGIN) LEVERAGE=$(LEVERAGE) SL=$(SL) TARGET=$(TARGET)"
-	@echo "                  MIN_TURUN=$(MIN_TURUN) MIN_NAIK=$(MIN_NAIK) BATAS_JAM=$(BATAS_JAM) MAKS_POSISI=$(MAKS_POSISI) SINYAL=$(SINYAL)"
+	@echo "Parameter SOP V3: MODAL=$(MODAL) JUMLAH=$(JUMLAH) MARGIN=$(MARGIN) LEVERAGE=$(LEVERAGE) TARGET=$(TARGET)"
+	@echo "                  MIN_TURUN=$(MIN_TURUN) MIN_NAIK=$(MIN_NAIK) SINYAL=$(SINYAL)"
 	@echo "Mode (rank 1..5): RANK=$(RANK) RANKS=$(RANKS) INTERVAL=$(INTERVAL) HUB=$(HUB) PORT=$(PORT)"
 	@echo "Panduan: ../docs/SOP.md, ../docs/MODE_SINGLE.md, ../docs/MODE_BANYAK.md"
 

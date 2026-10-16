@@ -1,8 +1,9 @@
-"""Parameter SOP V2 "Short Top Gainers (Futures 2x)" (PDF 12 Okt 2026).
+"""Parameter SOP V3 "Short Top Gainers (Futures 2x)" (PDF 15 Okt 2026, revisi Sell).
 
-Default = angka di PDF. Short, leverage 2x, margin 50% per posisi, maksimal 2 posisi, chart
-15 menit, pantau top 5, filter garis kuning (MA7), dan target 1-4% berasal dari beliau. Angka
-pola "minimal 2 kali di bawah", stop-loss 2%, dan batas waktu ditandai usulan di PDF.
+Short, leverage 2x, margin 50% per posisi, chart 15 menit, pantau top 5, filter pola garis per
+platform, dan jual di 3-5% profit TANPA stop-loss dan tanpa batas waktu (atas permintaan beliau).
+Target memakai dasar harga dan dimulai di 3% (usulan V3). Angka pola "minimal 2 kali di bawah"
+masih usulan. Batas jumlah posisi (V3: maksimal 2) tidak dipakai atas keputusan 15 Okt.
 """
 
 from __future__ import annotations
@@ -14,7 +15,8 @@ from binance_bot.exceptions import ConfigError
 SIGNAL_SOURCES = ("ai", "data")
 REQUIRED_TEST_TRADES = 50  # fase uji di PDF
 PASS_MARGIN = 0.05  # "selisih yang jelas" di atas titik impas: tafsiran 5 poin persen
-MAX_HOLD_LIMIT_H = 16  # evaluasi memakai maksimal 1000 candle 1 menit
+# Contoh rugi V3 untuk titik impas sebelum ada rugi sungguhan: STRK, harga naik 21,8%.
+REFERENCE_LOSS_PCT = 21.8
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,19 +25,15 @@ class SopParams:
     order_usdt: float | None = None  # JUMLAH manual: ukuran order USDT (menimpa margin x leverage)
     margin_pct: float = 50.0  # beliau: margin 50% modal per posisi
     leverage: int = 2  # beliau: 2x (nilai posisi per koin = 100% modal)
-    target_pct: float = 2.0  # beliau: turun 1-4%; titik impas di PDF memakai 2%
-    stop_pct: float = 2.0  # riwayat dan usulan: sekitar 2% di atas harga masuk
+    target_pct: float = 3.0  # V3: jual saat untung 3-5%; dasar harga, mulai di 3% (usulan)
     min_crosses: int = 2  # usulan: MA7 minimal 2 kali di bawah MA25 = pola OK
     min_gain_pct: float = 0.0  # V2 tidak mensyaratkan kenaikan minimal; isi untuk menyaring
-    max_hold_h: float = 4.0  # usulan: tinjau di 1 jam, tutup di 4 jam
-    review_after_h: float = 1.0  # usulan: posisi lebih lama dari ini ditandai untuk ditinjau
+    review_after_h: float = 24.0  # V3: pantau posisi yang ditahan lebih dari satu hari
     fee_pct: float = 0.1  # riwayat: fee masuk + keluar per putaran
     # SOP V2 hanya menyebut "spread lebar" dan "funding sangat negatif", tanpa angka. Longgar dulu
     # sampai Pak Saputra menentukan batasnya: koin ETF (UVXY, SQQQ) spread-nya 0,1-0,25%.
     max_spread_pct: float = 0.3
     min_funding_pct: float = -0.1
-    max_open_positions: int = 2  # beliau: maksimal 2 koin pada saat yang sama
-    max_stop_streak: int = 3  # SOP: berhenti hari itu setelah 3 stop-loss berturut-turut
     signal_source: str = "ai"  # siapa yang membaca pola garis kuning: "ai" atau "data"
 
     def validate(self) -> None:
@@ -50,22 +48,23 @@ class SopParams:
             errors.append("MARGIN harus di antara 0 dan 100 persen")
         if not 1 <= self.leverage <= 10:
             errors.append("LEVERAGE harus 1..10")
-        if not 0 < self.stop_pct < 100 or not 0 < self.target_pct < 100:
-            errors.append("SL dan TARGET harus di antara 0 dan 100 persen")
+        if not 0 < self.target_pct < 100:
+            errors.append("TARGET harus di antara 0 dan 100 persen")
         if self.min_crosses < 1:
             errors.append("MIN_TURUN minimal 1")
-        if not 0 < self.max_hold_h <= MAX_HOLD_LIMIT_H:
-            errors.append(f"BATAS_JAM harus di antara 0 dan {MAX_HOLD_LIMIT_H}")
-        if self.fee_pct < 0 or self.max_open_positions < 1 or self.max_stop_streak < 1:
-            errors.append("BIAYA tidak boleh negatif; MAKS_POSISI dan batas stop minimal 1")
+        if self.fee_pct < 0:
+            errors.append("BIAYA tidak boleh negatif")
         if self.signal_source not in SIGNAL_SOURCES:
             errors.append(f"SINYAL harus salah satu dari {SIGNAL_SOURCES}")
         if errors:
             raise ConfigError("Parameter SOP tidak valid: " + "; ".join(errors))
 
-    @property
-    def breakeven_win_rate(self) -> float:
-        """Win rate minimal agar impas: rugi bersih / (untung bersih + rugi bersih)."""
+    def breakeven_win_rate(self, loss_pct: float = REFERENCE_LOSS_PCT) -> float:
+        """Win rate minimal agar impas (bagian Titik impas V3).
+
+        Tanpa stop-loss, rugi satu posisi tidak tetap: `loss_pct` = kenaikan harga yang
+        ditanggung posisi yang gagal (rata-rata rugi sungguhan, atau contoh STRK 21,8%).
+        """
         win = self.target_pct - self.fee_pct
-        loss = self.stop_pct + self.fee_pct
+        loss = loss_pct + self.fee_pct
         return loss / (win + loss)

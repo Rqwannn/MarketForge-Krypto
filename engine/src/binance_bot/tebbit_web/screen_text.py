@@ -58,10 +58,10 @@ def parse_gainer_rows(
         match = _PERCENT.match(line.text.strip())
         x = to_x(line.x)
         if match and lay.FUTURES_PERCENT_X[0] <= x <= lay.FUTURES_PERCENT_X[1]:
-            percents.append((to_y(line.y), float(match.group(1).replace(",", "."))))
+            percents.append((to_y(line.y), x, float(match.group(1).replace(",", "."))))
     percents.sort()
-    rows = []
-    for index, (y, change) in enumerate(percents[: lay.MAX_ROWS], start=1):
+    found = []
+    for y, percent_x, change in percents[: lay.MAX_ROWS]:
         names = [
             line
             for line in lines
@@ -70,9 +70,15 @@ def parse_gainer_rows(
             and "Perpetual" not in line.text
         ]
         names.sort(key=lambda line: abs(to_y(line.y) - y))
+        found.append((y, percent_x, change, names))
+    # Baris yang namanya tidak terbaca diklik di kolom nama baris lain (kolomnya sejajar);
+    # tanpa nama sama sekali, di persentasenya. Keduanya di dalam baris, bukan margin kosong.
+    name_x = next((to_x(names[0].x) for *_, names in found if names), None)
+    rows = []
+    for index, (y, percent_x, change, names) in enumerate(found, start=1):
         pair = next((m.group(1) for line in names if (m := _PAIR.search(line.text))), None)
-        click = (to_x(names[0].x) if names else lay.FUTURES_NAME_X[0] + 0.05, y)
-        rows.append((GainerRow(index, pair or f"#{index}", change), click))
+        x = to_x(names[0].x) if names else (name_x if name_x is not None else percent_x)
+        rows.append((GainerRow(index, pair or f"#{index}", change), (x, y)))
     return rows
 
 
@@ -83,10 +89,14 @@ def parse_header(texts: Sequence[str]) -> tuple[float, float]:
     # spasi setelah tanda: "+ 11.35%").
     # Harga header tidak dipakai SOP (bid/ask dari order book); titik desimalnya kadang hilang.
     found = re.search(r"(\d[\d,]*(?:\.\d+)?)\s*([+-])\s*(\d+(?:\.\d+)?)\s*(?:%|0/0)", joined)
-    if not found:
-        raise ScreenReadError(f"Harga atau perubahan 24 jam tidak terbaca di header: {texts}")
-    price, sign, change = found.groups()
-    return float(price.replace(",", "")), float(sign + change)
+    if found:
+        price, sign, change = found.groups()
+        return float(price.replace(",", "")), float(sign + change)
+    # Angka harga kadang tidak terbaca sama sekali; yang dibutuhkan SOP hanya persen perubahannya.
+    only = re.search(r"([+-])\s*(\d+(?:\.\d+)?)\s*(?:%|0/0)", joined)
+    if not only:
+        raise ScreenReadError(f"Perubahan 24 jam tidak terbaca di header: {texts}")
+    return float("nan"), float(only.group(1) + only.group(2))
 
 
 def parse_order_book(

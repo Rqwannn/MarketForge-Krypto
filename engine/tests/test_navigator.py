@@ -464,6 +464,40 @@ def test_trade_icon_follows_the_action_header_and_the_rows_read_on_screen(
     assert clicks(screen)[-1] == at((icon_x, layout.FUTURES_FIRST_ROW_Y + step))
 
 
+def test_open_symbol_follows_the_coin_when_the_list_reorders() -> None:
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav = make_nav()
+    lists = [
+        [GainerRow(1, "AAAUSDT", 50), GainerRow(2, "BBBUSDT", 40), GainerRow(3, "CCCUSDT", 30)],
+        # beberapa detik kemudian: BBB dan CCC bertukar tempat
+        [GainerRow(1, "AAAUSDT", 51), GainerRow(2, "CCCUSDT", 41), GainerRow(3, "BBBUSDT", 39)],
+        [GainerRow(1, "AAAUSDT", 52)],  # CCC sudah keluar dari daftar
+    ]
+    opened: list[int] = []
+    on_trade_page = {1: "AAAUSDT", 2: "CCCUSDT", 3: "BBBUSDT"}
+
+    def top() -> list[GainerRow]:
+        rows = lists.pop(0)
+        nav._list_rows, nav._on_list = rows, True
+        return rows
+
+    def gainer(rank: int) -> str:
+        opened.append(rank)
+        nav._on_list = False
+        return on_trade_page[rank]
+
+    nav.open_top_gainers = top  # type: ignore[method-assign]
+    nav.open_gainer = gainer  # type: ignore[method-assign]
+    top()  # putaran dimulai: daftar sudah terbuka
+    assert nav.open_symbol("AAAUSDT") == "AAAUSDT"  # memakai daftar yang sedang terbuka
+    assert nav.open_symbol("BBBUSDT") == "BBBUSDT"  # daftar dibaca ulang: BBB sekarang baris 3
+    assert opened == [1, 3]  # klik baris 2 akan membuka CCC, bukan BBB
+    nav._on_list = False
+    with pytest.raises(ScreenReadError, match="sudah tidak di daftar"):
+        nav.open_symbol("CCCUSDT")
+
+
 # --------------------------------------------------------------------------- satuan USDT otomatis
 
 UNIT_MENU_AREA = (0.60, 0.30, 1.0, 0.70)
@@ -588,6 +622,115 @@ def test_typing_is_refused_if_the_unit_is_still_not_usdt_after_the_menu(
     assert not any(kind in ("type", "clear") for kind, _ in screen.events)
 
 
+def test_open_symbol_skips_a_coin_that_slid_out_of_the_top_five() -> None:
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav = make_nav()
+    rows = [GainerRow(r, f"C{r}USDT", 50 - r) for r in range(1, 6)] + [GainerRow(6, "AKEUSDT", 8)]
+    nav._list_rows, nav._on_list = rows, True
+    with pytest.raises(ScreenReadError, match="di luar Top 5"):
+        nav.open_symbol("AKEUSDT")  # klik baris 6 tidak didukung layout: dilewati, bukan crash
+
+
+def _locked_order_nav(
+    monkeypatch: pytest.MonkeyPatch, shown: list[str]
+) -> tuple[BinanceNavigator, list[tuple[int, int]]]:
+    nav = make_nav()
+    nav._rect, nav._on_trade_page = WINDOW, True
+    pressed: list[tuple[int, int]] = []
+    monkeypatch.setattr(nav._window, "click", lambda x, y: pressed.append((x, y)))
+    monkeypatch.setattr(nav, "_read_texts", lambda area: shown)
+    monkeypatch.setattr(nav, "_ensure_front", lambda: None)
+    monkeypatch.setattr(nav, "short_button", lambda: (0.95, 0.51))
+    return nav, pressed
+
+
+def test_press_short_is_locked_even_when_called_directly(monkeypatch: pytest.MonkeyPatch) -> None:
+    from binance_bot.strategy.execution import OrderPlan
+
+    nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+    with pytest.raises(SafetyError, match="dinonaktifkan"):
+        nav.press_short(plan)
+    assert pressed == []
+
+
+def test_press_short_logic_when_unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Hanya di tes: kunci dibuka untuk membuktikan logikanya; aplikasi tetap terkunci.
+    from binance_bot.binance_desktop import navigator as nav_module
+    from binance_bot.strategy.execution import OrderPlan
+
+    monkeypatch.setattr(nav_module, "LIVE_ORDERS_ENABLED", True)
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+
+    nav, pressed = _locked_order_nav(monkeypatch, ["50", "USDT"])  # kolom jumlah tidak cocok
+    with pytest.raises(SafetyError, match="order dibatalkan"):
+        nav.press_short(plan)
+    assert pressed == []
+
+    nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
+    nav.press_short(plan)
+    assert pressed == [nav.rect.point_at(0.95, 0.51)]  # hanya tombol Short yang ditemukan
+
+    nav._on_trade_page = False
+    with pytest.raises(SafetyError, match="halaman koin"):
+        nav.press_short(plan)
+
+
+def test_short_button_is_searched_only_in_the_order_form_not_the_chart_widget() -> None:
+    nav = make_nav()
+    zones = nav._order_form_zones()
+    assert zones and all(
+        x0 >= 0.5 for x0, _, _, _ in zones
+    )  # widget melayang di grafik dikecualikan
+
+
+def test_exchange_window_covered_by_marketforge_is_detected_on_mac_and_windows() -> None:
+    from binance_bot.tebbit_web.visible import OnScreenWindow
+
+    nav = make_nav()
+    nav._rect = WINDOW
+    full = Rect(WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height)
+    for owner, covered in [
+        ("Electron", True),  # MarketForge memajukan jendelanya (show_app)
+        ("MarketForge.exe", True),
+        ("Binance", False),  # macOS
+        ("Binance.exe", False),  # Windows
+    ]:
+        nav._windows = lambda owner=owner: [OnScreenWindow(owner, full)]
+        assert nav._covered() is covered, owner
+    nav._windows = None  # tanpa daftar jendela (tes lain): tidak diperiksa
+    assert nav._covered() is False
+
+
+def test_open_symbol_retries_once_when_the_list_moves_between_read_and_click() -> None:
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav = make_nav()
+    first = [GainerRow(1, "AAAUSDT", 50), GainerRow(2, "BBBUSDT", 40)]
+    again = [GainerRow(1, "BBBUSDT", 51), GainerRow(2, "AAAUSDT", 49)]
+    reads = [again]
+    # Klik baris 2 (BBB menurut daftar) ternyata membuka AAA: daftar bergeser tepat saat diklik.
+    trade_pages = ["AAAUSDT", "BBBUSDT"]
+    clicked: list[int] = []
+
+    def top() -> list[GainerRow]:
+        rows = reads.pop(0)
+        nav._list_rows, nav._on_list = rows, True
+        return rows
+
+    def gainer(rank: int) -> str:
+        clicked.append(rank)
+        nav._on_list = False
+        return trade_pages.pop(0)
+
+    nav.open_top_gainers = top  # type: ignore[method-assign]
+    nav.open_gainer = gainer  # type: ignore[method-assign]
+    nav._list_rows, nav._on_list = first, True
+    assert nav.open_symbol("BBBUSDT") == "BBBUSDT"
+    assert clicked == [2, 1]  # klik pertama meleset, daftar dibaca ulang, BBB kini baris 1
+
+
 def test_market_menu_is_retried_when_ocr_misses_it_once(monkeypatch: pytest.MonkeyPatch) -> None:
     area = (0.0, 0.05, 0.14, 0.60)
     monkeypatch.setattr(layout, "SIDEBAR_AREA", area)
@@ -596,267 +739,3 @@ def test_market_menu_is_retried_when_ocr_misses_it_once(monkeypatch: pytest.Monk
     nav.prepare()
     found = (area[0] + 0.4 * (area[2] - area[0]), area[1] + 0.3 * (area[3] - area[1]))
     assert nav._market_menu_position() == pytest.approx(found)
-
-
-# ---------------------------------------------------------------------- leverage dan mode margin
-
-DIALOG_AREA = (0.36, 0.20, 0.70, 0.92)
-CROSS_20 = [TextLine("Cross", 0.2, 0.5), TextLine("20x", 0.6, 0.5)]
-CROSS_2 = [TextLine("Cross", 0.2, 0.5), TextLine("2x", 0.6, 0.5)]
-
-
-def leverage_dialog(value: str | None = "20x") -> list[TextLine]:
-    """Dialog "Sesuaikan Leverage": judul, kolom nilai, label slider (jebakan), dan Konfirmasi."""
-    lines = [
-        TextLine("Sesuaikan Leverage", 0.3, 0.1),
-        TextLine("20x", 0.5, 0.45),  # label slider: lebih jauh di bawah judul; BUKAN kolom nilai
-        TextLine("Konfirmasi", 0.5, 0.9),
-    ]
-    if value is not None:
-        lines.append(TextLine(value, 0.5, 0.25))  # kolom nilai
-    return lines
-
-
-def margin_nav(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    bar: list[list[TextLine]],
-    dialog: list[list[TextLine]],
-) -> tuple[BinanceNavigator, FakeScreen]:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(layout, "MARGIN_DIALOG_AREA", DIALOG_AREA)
-    monkeypatch.setattr(layout, "MARGIN_FIELD_BAND", (0.06, 0.16))
-    screen = FakeScreen(texts={layout.MARGIN_AREA: bar, DIALOG_AREA: dialog})
-    nav = make_nav(screen)
-    nav.prepare()
-    return nav, screen
-
-
-def dialog_point(x: float, y: float) -> tuple[int, int]:
-    x0, y0, x1, y1 = DIALOG_AREA
-    return at((x0 + x * (x1 - x0), y0 + y * (y1 - y0)))
-
-
-FIELD = dialog_point(0.5, 0.25)
-SLIDER_LABEL = dialog_point(0.5, 0.45)
-CONFIRM = dialog_point(0.5, 0.9)
-
-
-def test_apply_margin_types_the_leverage_and_confirms_only_after_checking_the_field(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    before, after = leverage_dialog("20x"), leverage_dialog("2x")
-    nav, screen = margin_nav(
-        monkeypatch,
-        tmp_path,
-        bar=[CROSS_20, CROSS_20, CROSS_2],  # sebelum, mencari tombol, sesudah
-        # dialog terbuka; kolom nilai sebelum; kolom nilai sesudah mengetik; Konfirmasi; tertutup
-        dialog=[before, before, after, after, []],
-    )
-    assert nav.apply_margin(2, isolated=False) is True
-    done = clicks(screen)
-    assert FIELD in done and CONFIRM in done and done.index(FIELD) < done.index(CONFIRM)
-    assert SLIDER_LABEL not in done  # label slider tidak pernah diklik
-    kinds = [kind for kind, _ in screen.events]
-    assert kinds.index("clear") < kinds.index("type") and ("type", "2") in screen.events
-
-
-def test_a_slider_label_is_never_mistaken_for_the_value_field(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Kasus nyata: OCR gagal membaca kolom nilai "2x", hanya label slider "20x" yang terbaca."""
-    nav, screen = margin_nav(
-        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(value=None)]
-    )
-    with pytest.raises(ScreenReadError, match="tidak terbaca pasti"):
-        nav.apply_margin(2, isolated=False)
-    assert SLIDER_LABEL not in clicks(screen) and CONFIRM not in clicks(screen)
-    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
-
-
-def test_confirm_is_refused_when_the_field_did_not_change_after_typing(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    nav, screen = margin_nav(
-        monkeypatch,
-        tmp_path,
-        bar=[CROSS_20],
-        dialog=[leverage_dialog("20x")],  # tetap 20x
-    )
-    with pytest.raises(SafetyError, match="kolom leverage 20x, bukan 2x"):
-        nav.apply_margin(2, isolated=False)
-    assert CONFIRM not in clicks(screen)
-
-
-def test_apply_margin_does_not_type_or_confirm_when_the_dialog_never_opens(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    nav, screen = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[[]])
-    with pytest.raises(ScreenReadError, match="tidak terbuka"):
-        nav.apply_margin(2, isolated=False)
-    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
-    assert CONFIRM not in clicks(screen)
-
-
-def test_apply_margin_cancels_instead_of_confirming_if_the_dialog_vanishes(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    before, after = leverage_dialog("20x"), leverage_dialog("2x")
-    nav, screen = margin_nav(
-        monkeypatch,
-        tmp_path,
-        bar=[CROSS_20],
-        dialog=[before, before, after, []],  # hilang sebelum Konfirmasi
-    )
-    with pytest.raises(SafetyError, match="tidak terbukti terbuka"):
-        nav.apply_margin(2, isolated=False)
-    assert CONFIRM not in clicks(screen)
-
-
-def test_apply_margin_cancels_with_x_when_the_leverage_is_already_right(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    nav, screen = margin_nav(
-        monkeypatch,
-        tmp_path,
-        bar=[CROSS_20, CROSS_20, CROSS_20],  # tombol di atas form membuat bot membuka dialog
-        dialog=[leverage_dialog("2x")],  # tetapi dialog menunjukkan nilai yang sudah 2x
-    )
-    nav.apply_margin(2, isolated=False)
-    assert not any(kind in ("type", "clear") for kind, _ in screen.events)
-    assert CONFIRM not in clicks(screen)  # Konfirmasi tidak ditekan
-    _, y0, _, y1 = DIALOG_AREA
-    assert at((layout.MARGIN_DIALOG_CLOSE_X, y0 + 0.1 * (y1 - y0))) in clicks(screen)  # X
-
-
-def test_margin_is_not_automated_without_a_dialog_profile() -> None:
-    assert make_nav().apply_margin(2) is False
-
-
-def test_leverage_field_is_read_while_being_edited_but_chart_axis_numbers_are_not(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from binance_bot.binance_desktop.margin_dialogs import MarginDialogs
-
-    editing = leverage_dialog("2")  # saat diedit kolomnya tampil "2" tanpa "x"
-    axis = [TextLine("44.00", 0.9, 0.25), TextLine("47", 0.9, 0.9)]  # sumbu grafik di balik dialog
-    nav, _screen = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[editing + axis])
-    dialogs = nav._margin_dialogs()
-    assert isinstance(dialogs, MarginDialogs)
-    field = nav._leverage_field(dialogs)
-    assert field is not None and field[1] == 2
-    cursor = leverage_dialog("2|")
-    nav2, _ = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[cursor])
-    assert (nav2._leverage_field(dialogs) or (None, None))[1] == 2
-
-
-def test_a_field_that_snaps_back_to_one_when_emptied_is_replaced_not_cleared(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Tebbit: Backspace membuat kolom kembali ke 1, lalu mengetik 2 menghasilkan 12."""
-    from dataclasses import replace
-
-    before, after = leverage_dialog("25x"), leverage_dialog("2")
-    nav, screen = margin_nav(
-        monkeypatch,
-        tmp_path,
-        bar=[CROSS_20, CROSS_20, CROSS_2],
-        dialog=[before, before, after, after, []],
-    )
-    original = nav._margin_dialogs
-    nav._margin_dialogs = lambda: replace(original(), replace_by_select_all=True)  # type: ignore[method-assign,arg-type]
-    assert nav.apply_margin(2, isolated=False) is True
-    kinds = [kind for kind, _ in screen.events]
-    assert "clear" not in kinds  # tidak ada Backspace yang membuat kolom menjadi 1
-    assert kinds.index("select_all") < kinds.index("type") and ("type", "2") in screen.events
-
-
-def test_a_lone_digit_in_the_leverage_field_is_read_with_a_companion_word(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from dataclasses import replace
-
-    nav, _screen = margin_nav(
-        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(value=None)]
-    )  # OCR tidak melihat kolom nilai sama sekali (angka tunggal dijatuhkan)
-    dialogs = replace(nav._margin_dialogs(), value_box_x=(0.46, 0.54))  # type: ignore[type-var]
-    nav._read_with_companion = lambda box, word="Leverage": ["Leverage 2"]  # type: ignore[method-assign]
-    field = nav._leverage_field(dialogs)
-    assert field is not None and field[1] == 2
-    nav._read_with_companion = lambda box, word="Leverage": ["Leverage 2", "Leverage 12"]  # type: ignore[method-assign]
-    assert nav._leverage_field(dialogs) is None  # bacaan bertentangan: tidak pasti, tolak
-    nav._read_with_companion = lambda box, word="Leverage": []  # type: ignore[method-assign]
-    assert nav._leverage_field(dialogs) is None
-
-
-def test_chart_axis_numbers_outside_the_dialog_centre_are_not_the_leverage_field(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from dataclasses import replace
-
-    x0, _, x1, _ = DIALOG_AREA
-    axis_x = (0.64 - x0) / (x1 - x0)  # sumbu harga di balik dialog (x 0,64 relatif jendela)
-    lines = [
-        *leverage_dialog("25x"),
-        TextLine("46", axis_x, 0.25),
-    ]  # sama tinggi dengan kolom nilai
-    nav, _screen = margin_nav(monkeypatch, tmp_path, bar=[CROSS_20], dialog=[lines])
-    open_profile = nav._margin_dialogs()
-    assert nav._leverage_field(open_profile) is None  # tanpa rentang x: 25 dan 46 bertentangan
-    centred = replace(open_profile, field_x_range=(0.40, 0.60))  # type: ignore[type-var]
-    field = nav._leverage_field(centred)
-    assert field is not None and field[1] == 25
-
-
-def test_companion_reading_accepts_the_word_and_the_digit_on_separate_lines(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from dataclasses import replace
-
-    nav, _screen = margin_nav(
-        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(value=None)]
-    )
-    dialogs = replace(nav._margin_dialogs(), value_box_x=(0.46, 0.54))  # type: ignore[type-var]
-    for raw, expected in ((["Leverage", "2", "2", "Leverage"], 2), (["Leverage", "50X"], 50)):
-        nav._read_with_companion = lambda box, word="Leverage", r=raw: r  # type: ignore[method-assign]
-        field = nav._leverage_field(dialogs)
-        assert field is not None and field[1] == expected
-    nav._read_with_companion = lambda box, word="Leverage": ["Leverage", "2", "21"]  # type: ignore[method-assign]
-    assert nav._leverage_field(dialogs) is None  # 2 dan 21 bertentangan: tolak
-
-
-def test_the_dialog_heading_is_clicked_after_typing_so_the_cursor_goes_away(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from dataclasses import replace
-
-    before, after = leverage_dialog("20x"), leverage_dialog("2")
-    nav, screen = margin_nav(
-        monkeypatch,
-        tmp_path,
-        bar=[CROSS_20, CROSS_20, CROSS_2],
-        dialog=[before, before, after, after, after, []],
-    )
-    original = nav._margin_dialogs
-    nav._margin_dialogs = lambda: replace(original(), blur_after_typing=True)  # type: ignore[method-assign,arg-type]
-    assert nav.apply_margin(2, isolated=False) is True
-    done = clicks(screen)
-    heading = dialog_point(0.3, 0.1)
-    assert heading in done and FIELD in done and CONFIRM in done
-    assert done.index(FIELD) < done.index(heading) < done.index(CONFIRM)
-
-
-def test_the_leverage_field_tolerates_letters_that_look_like_digits(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Kasus nyata: kolom "50X" terbaca "sox" oleh OCR."""
-    nav, _screen = margin_nav(
-        monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog("sox")]
-    )
-    field = nav._leverage_field(nav._margin_dialogs())  # type: ignore[arg-type]
-    assert field is not None and field[1] == 50
-    for chart_noise in ("37.50", "Modify", "Selecting"):  # bukan kolom nilai
-        nav2, _ = margin_nav(
-            monkeypatch, tmp_path, bar=[CROSS_20], dialog=[leverage_dialog(chart_noise)]
-        )
-        assert nav2._leverage_field(nav2._margin_dialogs()) is None  # type: ignore[arg-type]
