@@ -51,9 +51,23 @@ class SingleWorkflow:
                 extra=event("cycle", phase="done", opened=opened, next_in_s=self._interval_s),
             )
             if self._interval_s <= 0:
+                self._watch_real_positions()
                 return
             logger.info("Pantau ulang dalam %.0f menit", self._interval_s / 60)
             self._wait_and_watch(self._interval_s)
+
+    def _watch_real_positions(self) -> None:
+        """Mode Sekali dengan uang sungguhan: tetap menyala sampai semua posisi sungguhan terjual.
+
+        Posisi sungguhan tidak boleh ditinggal tanpa pengawas, jadi bot baru berhenti setelah
+        tidak ada posisi sungguhan yang terbuka. Uji kertas tetap selesai setelah satu putaran.
+        """
+        step = self._trader.watch_interval_s
+        while (open_count := self._trader.real_positions_open()) > 0:
+            logger.info("Mengawasi %d posisi uang sungguhan sampai terjual", open_count)
+            self._sleep(step)
+            self._trader.refresh_journal()
+        # (posisi uji kertas dinilai lagi di awal putaran berikutnya)
 
     def _wait_and_watch(self, seconds: float) -> None:
         """Tunggu putaran berikutnya sambil menjalankan jual otomatis posisi yang terbuka."""

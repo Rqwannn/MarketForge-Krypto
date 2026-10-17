@@ -136,9 +136,6 @@ function buildArgs(mode, params = {}) {
   if (real && (p.exchange || 'binance') !== 'binance') {
     throw new InputError('Real Fund Trading baru tersedia untuk Binance. Tebbit menyusul.');
   }
-  if (real && mode === 'single' && !(Number(p.interval) > 0)) {
-    throw new InputError('Real Fund Trading butuh "Ulangi pemantauan" (15/30/60 mnt) supaya posisi diawasi terus.');
-  }
   if (real) bursa.push('--uang-sungguhan');
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).

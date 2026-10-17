@@ -212,12 +212,12 @@ test('grafik hanya dibaca dari folder screenshots engine', () => {
   }
 });
 
-test('Real Fund Trading: --uang-sungguhan hanya untuk Binance dan mode Sendiri wajib Ulangi', () => {
+test('Real Fund Trading: --uang-sungguhan hanya untuk Binance (Sekali atau Ulangi)', () => {
   const single = buildArgs('single', { exchange: 'binance', ranks: [1], interval: 15, modal: 100, real: true });
   assert.ok(single.includes('--uang-sungguhan'));
   assert.ok(single.indexOf('--uang-sungguhan') < single.indexOf('--events'));  // opsi global
   assert.ok(!buildArgs('single', { ranks: [1], interval: 15, modal: 100 }).includes('--uang-sungguhan'));
-  assert.throws(() => buildArgs('single', { exchange: 'binance', ranks: [1], interval: 0, modal: 100, real: true }), /Ulangi/);
+  assert.ok(buildArgs('single', { exchange: 'binance', ranks: [1], interval: 0, modal: 100, real: true }).includes('--uang-sungguhan'));  // Sekali boleh: bot mengawasi sampai terjual
   assert.throws(() => buildArgs('single', { exchange: 'tebbit', ranks: [1], interval: 15, modal: 100, real: true }), /Binance/);
   const follower = buildArgs('follower', { exchange: 'binance', rank: '*', modal: 100, real: true });
   assert.ok(follower.includes('--uang-sungguhan'));

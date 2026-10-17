@@ -337,7 +337,7 @@ function renderReal() {
   $('real-note').textContent = !binance
     ? 'Belum tersedia untuk Tebbit.'
     : realOn
-      ? 'Uang sungguhan: bot membeli dan menjual sendiri di Binance.'
+      ? 'Uang sungguhan: bot membeli dan menjual sendiri di Binance, dan tetap menyala sampai posisinya terjual.'
       : 'Sekarang uji kertas: posisi hanya dicatat, tanpa uang sungguhan.';
   const real = state !== 'stopped' ? runningReal : realOn;
   $('paper').classList.toggle('real', real);

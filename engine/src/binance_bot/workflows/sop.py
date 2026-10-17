@@ -225,6 +225,12 @@ class SopTrader:
     def watch_interval_s(self) -> float:
         return WATCH_INTERVAL_S.get(self.profile.platform, 60.0)
 
+    def real_positions_open(self) -> int:
+        """Jumlah posisi uang sungguhan yang masih terbuka (yang wajib diawasi sampai terjual)."""
+        if not live_orders_enabled():
+            return 0
+        return sum(1 for e in self._journal.load() if e.status == "open" and e.real)
+
     def refresh_journal(self) -> list[JournalEntry]:
         """Jual otomatis: posisi yang sudah mencapai target ditutup dan dicatat.
 

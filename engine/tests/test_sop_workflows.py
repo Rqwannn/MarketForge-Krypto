@@ -1109,3 +1109,44 @@ def test_the_date_filter_rejects_bad_dates(tmp_path: Path) -> None:
         day_bounds("15-10-2026", None)
     with pytest.raises(BotError, match="tidak boleh setelah"):
         day_bounds("2026-10-16", "2026-10-15")
+
+
+def test_once_mode_with_real_money_keeps_watching_until_the_position_is_sold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.created_at, held.real = NOW.timestamp() - 600, True
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=20.0)
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 3:  # harga akhirnya turun ke target di pengecekan ketiga
+            market.quotes["SKDDUSDT"] = Quote(
+                bid=0.97, ask=0.975, funding_rate=0.0, change_pct=20.0
+            )
+
+    SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=sleep
+    ).run()  # type: ignore[arg-type]
+    assert len(sleeps) == 3  # mengawasi tiap menit sampai terjual, lalu berhenti sendiri
+    assert [e.status for e in journal.load() if e.symbol == "SKDDUSDT"] == ["target"]
+    assert nav.calls.count("close_position:SKDDUSDT") == 1
+
+
+def test_once_mode_on_paper_still_ends_after_one_round(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    journal.append(open_trade("CFXUSDT", entry_price=1.01))  # posisi uji kertas terbuka
+    slept: list[float] = []
+    SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=slept.append
+    ).run()  # type: ignore[arg-type]
+    assert slept == []
