@@ -70,6 +70,7 @@ def coin_event(entry: JournalEntry) -> dict[str, dict[str, Any]]:
         reason=entry.reason,
         entry_price=entry.entry_price,
         target_price=entry.target_price,
+        real=entry.real,
         chart=chart_of(entry),
     )
 

@@ -88,6 +88,14 @@ function plain(text) {
   const t = String(text || '');
   const site = platform?.name || 'Binance';
   const rules = [
+    // Pemberitahuan Real Fund Trading (bukan kendala): kalimat sederhana, tanpa detail teknis.
+    [/MODE UANG SUNGGUHAN/, 'Mode uang sungguhan menyala: bot menekan tombol di Binance'],
+    [/ORDER SUNGGUHAN: tekan Jual\/Short (\S+)/, (m) => `Uang sungguhan: bot menekan Jual/Short ${m[1]}`],
+    [/ORDER SUNGGUHAN: tutup posisi (\S+)/, (m) => `Uang sungguhan: bot menekan Market untuk menjual ${m[1]}`],
+    [/Posisi ditutup di bursa\. Jual otomatis (\S+)/, (m) => `${m[1]} terjual otomatis di Binance`],
+    [/Jual otomatis (\S+) GAGAL di bursa/, (m) => `Jual otomatis ${m[1]} gagal, posisi tetap terbuka dan dicoba lagi`],
+    [/Leverage tidak bisa diubah/, 'Leverage koin ini tidak bisa diubah ke 2x otomatis'],
+    [/belum terbaca untuk jual otomatis/, 'Harga posisi belum terbaca, jual otomatis dicoba lagi'],
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
@@ -142,7 +150,7 @@ function activity(entry) {
     return { text: `Putaran selesai: ${what}${next}` };
   }
   if (e?.type === 'coin') {
-    if (e.status === 'open') return { text: `${e.symbol} masuk posisi uji`, css: 'good' };
+    if (e.status === 'open') return { text: `${e.symbol} masuk posisi ${e.real ? 'sungguhan' : 'uji'}`, css: 'good' };
     if (e.status === 'analyzed') return { text: `${e.symbol}: ${(VERDICT[e.verdict] || ['dibaca'])[0].toLowerCase()}` };
     return { text: `${e.symbol} dilewati: ${plain(e.reason).toLowerCase()}` };
   }
@@ -516,7 +524,7 @@ function chartThumb(file, caption) {
 /** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
 function actionOf(e) {
   if (e.status === 'open') {
-    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
+    return { text: e.real ? 'Short sungguhan dibuka' : 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
   }
   if (e.status === 'analyzed') {
     return e.verdict === 'ok'
