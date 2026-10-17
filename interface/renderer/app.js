@@ -644,6 +644,12 @@ window.bot.onLog((entry) => {
     $('cycle-info').textContent = `Selesai ${clock(entry.ts || Date.now() / 1000)}`;
     if ($('coins').querySelector('.empty-row')) emptyCoins('Tidak ada koin yang bisa dinilai di putaran ini.');
   }
+  // Detak pengawasan uang sungguhan (tiap menit): tampil di kartu Status sebagai tanda masih hidup,
+  // tanpa memenuhi daftar aktivitas. Menggantikan pesan kegagalan sesaat yang sudah lewat.
+  const watching = String(entry.message || '').match(/^Mengawasi (\d+) posisi uang sungguhan/);
+  if (watching && state === 'running') {
+    $('status-sub').textContent = `Mengawasi ${watching[1]} posisi uang sungguhan, harga dicek tiap menit · terakhir ${clock(entry.ts || Date.now() / 1000)}`;
+  }
   const item = activity(entry);
   if (item) {
     addFeed(item, entry.ts || Date.now() / 1000);
