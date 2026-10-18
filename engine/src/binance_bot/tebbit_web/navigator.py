@@ -389,6 +389,9 @@ class TebbitNavigator(BinanceNavigator):
     def _quantity_area(self) -> tuple[float, float, float, float]:
         return lay.ORDER_FORM_AREA
 
+    def available_usdt(self) -> float | None:
+        return None  # belum tersedia untuk Tebbit (Real Fund Trading Binance dulu)
+
     def close_position(self, symbol: str) -> None:
         raise SafetyError("Tutup posisi sungguhan untuk Tebbit belum tersedia (Binance dulu)")
 

@@ -90,6 +90,9 @@ function plain(text) {
   const rules = [
     // Pemberitahuan Real Fund Trading (bukan kendala): kalimat sederhana, tanpa detail teknis.
     [/MODE UANG SUNGGUHAN/, 'Mode uang sungguhan menyala: bot menekan tombol di Binance'],
+    [/saldo tersedia ([\d.,]+) USDT kurang dari margin ([\d.,]+) USDT/, (m) => `Saldo tersedia ${m[1]} USDT kurang dari margin ${m[2]} USDT: tidak masuk`],
+    [/saldo tersedia tidak terbaca/, 'Saldo tersedia tidak terbaca di form order, tidak masuk demi keamanan'],
+    [/Cek ulang (\S+) sebelum menjual/, (m) => `Cek ulang harga ${m[1]} sebelum menjual`],
     [/ORDER SUNGGUHAN: tekan Jual\/Short (\S+)/, (m) => `Uang sungguhan: bot menekan Jual/Short ${m[1]}`],
     [/ORDER SUNGGUHAN: tutup posisi (\S+)/, (m) => `Uang sungguhan: bot menekan Market untuk menjual ${m[1]}`],
     [/Posisi ditutup di bursa\. Jual otomatis (\S+)/, (m) => `${m[1]} terjual otomatis di Binance`],

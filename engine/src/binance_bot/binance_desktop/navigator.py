@@ -18,6 +18,7 @@ from binance_bot.binance_desktop.screen_text import (
     GainerRow,
     MarginSettings,
     is_sorted_by_top_gain,
+    parse_amount,
     parse_futures_symbol,
     parse_gainer_rows,
     parse_margin,
@@ -72,6 +73,7 @@ _MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
+_AVAILABLE = re.compile(r"Tersedia\s*([\d.,]+)\s*USDT", re.IGNORECASE)
 _POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\(\d+\)", re.IGNORECASE)
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
@@ -411,6 +413,15 @@ class BinanceNavigator:
         x0, y0, x1, y1 = layout.CHART_AREA
         shift = self._chart_shift
         return self.rect.sub(x0, y0 + shift, x1, min(1.0, y1 + shift))
+
+    def available_usdt(self) -> float | None:
+        """Saldo "Tersedia" di form order (USDT), atau None bila tidak terbaca."""
+        for text in self._read_texts(self.rect.sub(*layout.ORDER_AVAILABLE_AREA)):
+            match = _AVAILABLE.search(text)
+            amount = parse_amount(match.group(1)) if match else None
+            if amount is not None:
+                return amount
+        return None
 
     def read_margin_settings(self) -> MarginSettings:
         return parse_margin(self._read_texts(self.rect.sub(*self._margin_area())))

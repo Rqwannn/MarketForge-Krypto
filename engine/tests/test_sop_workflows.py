@@ -1150,3 +1150,148 @@ def test_once_mode_on_paper_still_ends_after_one_round(tmp_path: Path) -> None:
         nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=slept.append
     ).run()  # type: ignore[arg-type]
     assert slept == []
+
+
+# ----------------------------------------------------- saldo dan jual bergiliran (uang sungguhan)
+
+
+@pytest.fixture
+def live_money(monkeypatch: pytest.MonkeyPatch) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+
+
+def test_real_entry_is_skipped_when_the_available_balance_cannot_cover_the_margin(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 8.0  # margin posisi 50 USDT (modal 100 x 50%)
+    trader, gate, journal, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert (
+        entry.status == "skipped" and "saldo tersedia 8.00 USDT kurang dari margin" in entry.reason
+    )
+    assert (
+        nav.filled == [] and gate.plans == []
+    )  # tidak ada klik Jual/Short, tidak ada posisi hantu
+    assert [e.status for e in journal.load()] == ["skipped"]
+
+
+def test_real_entry_is_skipped_when_the_balance_cannot_be_read(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = None
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "skipped" and "tidak terbaca" in entry.reason and gate.plans == []
+
+
+def test_real_entry_goes_ahead_when_the_balance_covers_the_margin(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 58.7  # seperti saldo setelah satu posisi: cukup untuk margin 50
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+    assert len(gate.plans) == 1
+
+
+def test_paper_trading_does_not_need_a_balance(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 0.0
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+
+
+def _real_position(symbol: str, entry: float = 1.0) -> JournalEntry:
+    held = open_trade(symbol, entry_price=entry)
+    held.created_at, held.real = NOW.timestamp() - 600, True
+    return held
+
+
+def test_two_positions_at_target_are_sold_one_after_the_other_with_a_fresh_price_check(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    trader, _, journal, _ = make_trader(tmp_path, FakeNavigator({}), market)
+    journal.append(_real_position("AUSDT"))
+    journal.append(_real_position("BUSDT"))
+    for symbol in ("AUSDT", "BUSDT"):  # keduanya sudah di target (0,98)
+        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+
+    order: list[str] = []
+
+    class Seller(FakeNavigator):
+        def close_position(self, symbol: str) -> None:
+            order.append(symbol)
+            # Sesudah posisi pertama dijual, harga posisi kedua memantul di atas target.
+            market.quotes["BUSDT"] = Quote(bid=0.995, ask=1.0, funding_rate=0.0, change_pct=1.0)
+
+    trader._nav = Seller({})  # type: ignore[assignment]
+    done = {e.symbol: e.status for e in trader.refresh_journal()}
+    assert order == ["AUSDT"]  # BUSDT tidak dijual: dibaca ulang, profit sudah tidak 3%
+    assert done == {"AUSDT": "target", "BUSDT": "open"}
+    assert {e.symbol: e.status for e in journal.load()} == done
+
+
+def test_a_second_position_still_at_target_is_sold_after_the_first_finishes(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    journal.append(_real_position("AUSDT"))
+    journal.append(_real_position("BUSDT"))
+    for symbol in ("AUSDT", "BUSDT"):
+        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    done = {e.symbol: e.status for e in trader.refresh_journal()}
+    assert done == {"AUSDT": "target", "BUSDT": "target"}
+    assert nav.calls.count("close_position:AUSDT") == nav.calls.count("close_position:BUSDT") == 1
+    assert nav.calls.index("close_position:AUSDT") < nav.calls.index("close_position:BUSDT")
+
+
+def test_a_position_another_bot_already_sold_is_not_sold_again(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    sold = _real_position("AUSDT")
+    sold.status, sold.exit_price, sold.closed_at, sold.pnl_pct = "target", 0.975, 1.0, 2.5
+    journal.append(sold)  # bot lain sudah menjual dan mencatatnya
+    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    trader.refresh_journal()
+    assert nav.calls == []  # tidak ada klik Market kedua untuk posisi yang sudah tertutup
+
+
+def test_a_bot_waits_for_another_bot_that_is_selling(tmp_path: Path) -> None:
+    import threading
+    import time
+
+    from binance_bot.exceptions import BotError
+    from binance_bot.filelock import exclusive
+
+    lock = tmp_path / "sop.sell.lock"
+    held, release = threading.Event(), threading.Event()
+
+    def other_bot() -> None:
+        with exclusive(lock):
+            held.set()
+            release.wait(5)
+
+    thread = threading.Thread(target=other_bot)
+    thread.start()
+    assert held.wait(5)
+    started = time.monotonic()
+    with (
+        pytest.raises(BotError, match="masih menjual"),  # bot kedua menunggu, lalu menyerah
+        exclusive(lock, timeout_s=0.6, poll_s=0.1),
+    ):
+        raise AssertionError("tidak boleh masuk selama bot lain memegang kunci")
+    assert time.monotonic() - started >= 0.5
+    release.set()
+    thread.join()
+    with exclusive(lock, timeout_s=1):  # setelah dilepas, bot kedua bisa masuk
+        pass

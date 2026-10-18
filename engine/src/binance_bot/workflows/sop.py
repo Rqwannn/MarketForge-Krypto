@@ -21,6 +21,7 @@ from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError, ScreenReadError
+from binance_bot.filelock import exclusive
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
 from binance_bot.strategy import (
@@ -98,16 +99,11 @@ WATCH_INTERVAL_S = {"binance": 60.0, "tebbit": 300.0}
 
 
 def refresh_journal(
-    journal: Journal,
-    market: MarketData,
-    fee_pct: float,
-    now_s: float,
-    closer: PositionCloser | None = None,
+    journal: Journal, market: MarketData, fee_pct: float, now_s: float
 ) -> list[JournalEntry]:
     """Langkah 6 SOP: nilai posisi uji yang masih terbuka dari candle sungguhan."""
     entries = journal.load()
-    updated = evaluate_open_trades(entries, market, now_s, fee_pct)
-    return record_changes(journal, entries, updated, closer)
+    return record_changes(journal, entries, evaluate_open_trades(entries, market, now_s, fee_pct))
 
 
 def refresh_by_price(
@@ -117,18 +113,13 @@ def refresh_by_price(
     now_s: float,
     closer: PositionCloser | None = None,
 ) -> list[JournalEntry]:
-    """Jual otomatis untuk bursa tanpa candle (Tebbit): harga ask terkini dari layar (OCR)."""
+    """Jual otomatis dari harga ask terkini (Tebbit dari layar OCR; Binance uang sungguhan)."""
+    if live_orders_enabled() and closer is not None:
+        return _sell_due_positions(journal, market, fee_pct, now_s, closer)
     entries = journal.load()
     updated = []
-    live = live_orders_enabled() and closer is not None
     for entry in entries:
-        # Posisi sungguhan hanya dinilai oleh proses mode real (yang bisa menutupnya di bursa).
-        if (
-            entry.status == "open"
-            and entry.entry_price
-            and entry.target_price
-            and (live or not entry.real)
-        ):
+        if entry.status == "open" and entry.entry_price and entry.target_price and not entry.real:
             try:
                 ask = market.quote(entry.symbol).ask
             except BotError as exc:
@@ -136,32 +127,69 @@ def refresh_by_price(
             else:
                 entry = evaluate_by_price(entry, ask, now_s, fee_pct)
         updated.append(entry)
-    return record_changes(journal, entries, updated, closer)
+    return record_changes(journal, entries, updated)
+
+
+def _sell_due_positions(
+    journal: Journal,
+    market: MarketData,
+    fee_pct: float,
+    now_s: float,
+    closer: PositionCloser,
+) -> list[JournalEntry]:
+    """Jual otomatis uang sungguhan, satu posisi pada satu waktu dan satu bot pada satu waktu.
+
+    Dua posisi bisa mencapai target bersamaan (atau dua bot menjalankan penjualan bersamaan),
+    sedangkan penjualan memakai layar bursa. Karena itu semuanya bergiliran: kunci antar-proses
+    menahan bot yang datang belakangan, lalu jurnal dibaca ulang (bot lain mungkin sudah menjual)
+    dan harga setiap posisi dibaca ulang tepat sebelum diputuskan. Posisi berikutnya baru
+    dijual bila harga SAAT ITU masih di target; kalau sudah memantul, posisinya tetap terbuka.
+    """
+    with exclusive(journal.path.with_suffix(".sell.lock")):
+        entries = journal.load()
+        updated = []
+        for entry in entries:
+            if not (entry.status == "open" and entry.entry_price and entry.target_price):
+                updated.append(entry)
+                continue
+            try:
+                ask = market.quote(entry.symbol).ask  # dibaca ulang sesudah menunggu giliran
+            except BotError as exc:
+                logger.warning("Harga %s belum terbaca untuk jual otomatis: %s", entry.symbol, exc)
+                updated.append(entry)
+                continue
+            result = evaluate_by_price(entry, ask, now_s, fee_pct)
+            if entry.real:
+                logger.info(
+                    "Cek ulang %s sebelum menjual: ask %g, target %g -> %s",
+                    entry.symbol,
+                    ask,
+                    entry.target_price,
+                    "jual" if result.is_closed else "tahan (target belum tercapai)",
+                )
+                if result.is_closed:
+                    try:
+                        closer.close_position(entry.symbol)
+                    except BotError as exc:
+                        logger.error(
+                            "Jual otomatis %s GAGAL di bursa, posisi tetap terbuka: %s",
+                            entry.symbol,
+                            exc,
+                        )
+                        result = entry
+            updated.append(result)
+        return record_changes(journal, entries, updated)
 
 
 def record_changes(
-    journal: Journal,
-    before: list[JournalEntry],
-    after: list[JournalEntry],
-    closer: PositionCloser | None = None,
+    journal: Journal, before: list[JournalEntry], after: list[JournalEntry]
 ) -> list[JournalEntry]:
-    """Simpan hasil penilaian posisi; posisi yang mencapai target dijual otomatis.
+    """Simpan hasil penilaian posisi dan catat posisi yang selesai (jual otomatis).
 
-    Real Fund Trading: posisi ditutup sungguhan di bursa lebih dulu. Bila gagal, posisi tetap
-    tercatat terbuka (dicoba lagi pada pengecekan berikutnya), tidak pernah tercatat terjual
-    padahal masih terbuka di bursa. Uji kertas: hanya dicatat, tombol tidak ditekan.
+    Uang sungguhan: posisi sudah ditutup di bursa oleh pemanggil sebelum sampai ke sini.
+    Uji kertas: hanya dicatat, tombol di bursa tidak ditekan.
     """
-    after = list(after)
-    live = live_orders_enabled() and closer is not None
-    for i, (old, new) in enumerate(zip(before, after, strict=True)):
-        if live and closer is not None and old.status == "open" and new.is_closed and new.real:
-            try:
-                closer.close_position(new.symbol)
-            except BotError as exc:
-                logger.error(
-                    "Jual otomatis %s GAGAL di bursa, posisi tetap terbuka: %s", new.symbol, exc
-                )
-                after[i] = old
+    live = live_orders_enabled()
     changed = [new for old, new in zip(before, after, strict=True) if old != new]
     for entry in changed:
         if entry.is_closed:
@@ -226,6 +254,21 @@ class SopTrader:
     def watch_interval_s(self) -> float:
         return WATCH_INTERVAL_S.get(self.profile.platform, 60.0)
 
+    def _require_balance(self, margin_usdt: float) -> None:
+        """Uang sungguhan: masuk hanya bila saldo tersedia di bursa cukup untuk margin posisi.
+
+        Tanpa ini Binance menolak order, sedangkan bot tidak tahu dan mencatat posisi hantu.
+        Saldo dibaca dari form order (baris "Tersedia"); tidak terbaca dianggap tidak cukup.
+        """
+        available = self._nav.available_usdt()
+        needed = margin_usdt * 1.01  # sedikit ruang untuk biaya transaksi
+        if available is None:
+            raise _Skip("saldo tersedia tidak terbaca di form order; tidak masuk demi keamanan")
+        if available < needed:
+            raise _Skip(
+                f"saldo tersedia {available:.2f} USDT kurang dari margin {margin_usdt:.2f} USDT"
+            )
+
     def real_positions_open(self) -> int:
         """Jumlah posisi uang sungguhan yang masih terbuka (yang wajib diawasi sampai terjual)."""
         if not live_orders_enabled():
@@ -242,7 +285,7 @@ class SopTrader:
             return self._refresh_by_price()
         try:
             return refresh_journal(
-                self._journal, self._market, self.params.fee_pct, self._wall_clock(), self._nav
+                self._journal, self._market, self.params.fee_pct, self._wall_clock()
             )
         except NoHistoryError:  # bursa tanpa candle (Tebbit): harga terkini dari layar
             return self._refresh_by_price()
@@ -451,6 +494,8 @@ class SopTrader:
         sizing = size_position(params, price, rules, self._settings.decimal_separator)
         if isinstance(sizing, str):
             raise _Skip(sizing)
+        if live_orders_enabled():
+            self._require_balance(sizing.margin_usdt)
 
         if self._fill_form:
             margin = self._ensure_leverage(params.leverage)

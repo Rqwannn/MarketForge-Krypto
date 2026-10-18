@@ -127,6 +127,8 @@ LEVERAGE_DIALOG_AREA = (0.30, 0.15, 0.75, 0.90)
 ORDER_TAB_MARKET = (0.8575, 0.1782)
 ORDER_QTY_FIELD = (0.85, 0.2939)
 ORDER_QTY_AREA = (0.812, 0.268, 0.992, 0.318)
+# Baris "Tersedia 58,70 USDT" (saldo yang bisa dipakai sebagai margin) di atas kolom Jumlah.
+ORDER_AVAILABLE_AREA = (0.80, 0.20, 1.0, 0.25)
 
 # Dropdown satuan kolom Jumlah (koin/USDT) dan menu "Preferensi Unit" yang terbuka darinya. Binance
 # mengembalikan satuan ke koin tiap pindah koin, jadi bot memilih USDT sendiri. None = tidak

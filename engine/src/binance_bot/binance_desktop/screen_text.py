@@ -152,6 +152,21 @@ def _readings(shown: str) -> set[float]:
     return values
 
 
+def parse_amount(text: str) -> float | None:
+    """Angka seperti di Binance ("58,70", "1.234,56", "58.70"); None bila bukan angka."""
+    s = text.strip().replace(" ", "")
+    if not re.fullmatch(r"\d[\d.,]*", s):
+        return None
+    if "," in s:  # koma = desimal, titik = pemisah ribuan
+        s = s.replace(".", "").replace(",", ".")
+    elif s.count(".") > 1 or re.fullmatch(r"\d{1,3}\.\d{3}", s):
+        s = s.replace(".", "")  # "1.234" / "1.234.567": ribuan
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 def same_number(shown: str, typed: str) -> bool:
     """Apakah teks di kolom bernilai sama dengan angka yang diketik.
 

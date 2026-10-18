@@ -77,3 +77,23 @@ def test_same_number_ignores_thousands_separator_and_trailing_zero() -> None:
     assert not same_number("184,4", "184,6")
     assert not same_number("", "1")
     assert not same_number("W", "1")
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("58,70", 58.7),
+        ("1.234,56", 1234.56),
+        ("58.70", 58.7),
+        ("1.234", 1234.0),
+        ("0,00", 0.0),
+        ("1.234.567", 1234567.0),
+        ("abc", None),
+        ("", None),
+        ("-5", None),
+    ],
+)
+def test_amounts_are_read_the_way_binance_prints_them(text: str, expected: float | None) -> None:
+    from binance_bot.binance_desktop.screen_text import parse_amount
+
+    assert parse_amount(text) == expected

@@ -63,6 +63,12 @@ MARGIN_AREA = (0.81, 0.118, 0.945, 0.155)
 ORDER_TAB_MARKET = (0.8547, 0.1892)
 ORDER_QTY_FIELD = (0.9010, 0.3088)
 ORDER_QTY_AREA = (0.80, 0.26, 1.0, 0.345)
+ORDER_AVAILABLE_AREA = (
+    0.80,
+    0.20,
+    1.0,
+    0.26,
+)  # belum diukur di Windows (perkiraan dari ORDER_QTY_AREA)
 
 # Dropdown satuan di kolom Jumlah (panah di ujung kanan, 1735, 315). Menunya "Preferensi Unit"
 # memuat kartu koin dan kartu USDT dengan pilihan "Ukuran Order"/"Margin Awal" (y 0,37..0,74), dan
