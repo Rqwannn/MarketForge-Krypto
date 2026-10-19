@@ -121,7 +121,9 @@ class TebbitNavigator(BinanceNavigator):
         self._sleep(1.0)
         self._rect = self._chrome.content_bounds(self._window_id)
         self._ensure_front()
-        self._chrome.set_zoom(lay.ZOOM_STEPS_DOWN, self._window_id)
+        steps = lay.zoom_steps_for(self._rect.width)
+        logger.info("Zoom Tebbit: %d kali zoom-out (isi halaman %d px)", steps, self._rect.width)
+        self._chrome.set_zoom(steps, self._window_id)
         self._sleep(1.0)
         self._on_contract = False
         if not opened:  # jendela baru sudah memuat halaman depan: jangan dimuat ulang

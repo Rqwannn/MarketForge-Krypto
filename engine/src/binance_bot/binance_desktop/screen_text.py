@@ -15,7 +15,8 @@ from binance_bot.macos import TextLine
 # Nama koin bisa satu huruf (mis. "SUSDT" untuk Sonic).
 FUTURES_SYMBOL_PATTERN = re.compile(r"\b([A-Z0-9]{1,20}USD[TC])\s*Perp")
 _PERCENT = re.compile(r"^([+-]?\d+(?:[.,]\d+)?)%$")
-_LEVERAGE = re.compile(r"^(\d{1,3})x$", re.IGNORECASE)
+# "2x" sendiri, atau "Leverage 2x" (kotak dibaca bersama kata pendamping bila "2x" dijatuhkan OCR).
+_LEVERAGE = re.compile(r"^(?:leverage\W*)?(\d{1,3})\s*x$", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)

@@ -14,6 +14,12 @@ EXPECTED_WINDOW = (1470, 863)
 MIN_WINDOW = (1400, 780)  # layar lebih kecil dari ini: tata letak Tebbit tidak muat
 ZOOM_STEPS_DOWN = 2  # Cmd+0 (100%) lalu dua kali Cmd+minus = 80%
 
+
+def zoom_steps_for(width_px: float) -> int:
+    """Jumlah zoom-out untuk isi halaman selebar `width_px`. macOS: tetap (layar sudah memadai)."""
+    return ZOOM_STEPS_DOWN
+
+
 # Jangkar zoom: tulisan "Futures" di menu atas berada di sekitar x ini pada zoom 80%.
 NAV_FUTURES_AREA = (0.0, 0.10, 0.6, 0.17)
 NAV_FUTURES_X = 0.221

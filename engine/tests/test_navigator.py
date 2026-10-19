@@ -902,3 +902,47 @@ def test_positions_tab_is_found_even_when_ocr_reads_zero_as_the_letter_o(label: 
     from binance_bot.binance_desktop.navigator import _POSITIONS_TAB
 
     assert _POSITIONS_TAB.search(label)
+
+
+# ----------------------------------------------------------------- profil layar 1366x768
+
+
+def test_the_layout_profile_follows_the_screen_width_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Laptop 1366x768 memakai profil 1366; layar 1920x1080 memakai profil 1920."""
+    monkeypatch.delenv("BOT_LAYOUT", raising=False)
+    monkeypatch.setattr(layout.sys, "platform", "win32")
+    for width, expected in ((1366, "windows-1366"), (1536, "windows-1366"), (1920, "windows")):
+        monkeypatch.setattr(layout, "_work_area_width", lambda w=width: w)
+        assert layout._profile() == expected
+    monkeypatch.setattr(layout, "_work_area_width", lambda: None)  # tak terbaca: profil 1920
+    assert layout._profile() == "windows"
+    monkeypatch.setattr(layout.sys, "platform", "darwin")
+    assert layout._profile() == "mac"
+    monkeypatch.setenv("BOT_LAYOUT", "windows-1366")  # dipaksa lewat variabel lingkungan
+    assert layout._profile() == "windows-1366"
+
+
+def test_the_1366_profile_is_internally_consistent() -> None:
+    """Pemeriksaan murah pada hasil ukur: area valid, ikon lima baris muat, menu satuan aman."""
+    from binance_bot.binance_desktop import layout_windows_1366 as small
+
+    areas = [
+        small.SIDEBAR_AREA, small.MARKET_TABS_AREA, small.FUTURES_HEADER_AREA,
+        small.FUTURES_LIST_AREA, small.FUTURES_ACTION_AREA, small.SYMBOL_AREA,
+        small.CHART_TOOLBAR_AREA, small.CHART_AREA, small.MARGIN_AREA, small.ORDER_QTY_AREA,
+        small.ORDER_AVAILABLE_AREA, small.ORDER_UNIT_MENU_AREA, *small.ORDER_BUTTON_ZONES,
+    ]  # fmt: skip
+    for x0, y0, x1, y1 in areas:
+        assert 0.0 <= x0 < x1 <= 1.0 and 0.0 <= y0 < y1 <= 1.0
+    last_row = small.FUTURES_FIRST_ROW_Y + (small.MAX_RANK - 1) * small.FUTURES_ROW_STEP
+    assert last_row < small.FUTURES_LIST_AREA[3]  # baris ke-5 ada di dalam area baca
+    assert small.EXPECTED_WINDOW == (1366, 720) and small.WINDOW_MAXIMIZED
+    # Titik yang diklik di form tidak boleh jatuh di zona tombol order.
+    for point in (small.ORDER_TAB_MARKET, small.ORDER_QTY_FIELD, small.ORDER_UNIT_BUTTON):
+        assert not any(
+            x0 <= point[0] <= x1 and y0 <= point[1] <= y1
+            for x0, y0, x1, y1 in small.ORDER_BUTTON_ZONES
+        )
+    assert small.ORDER_UNIT_MIN_Y >= 0.6 and small.OCR_UPSCALE == 2

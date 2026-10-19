@@ -97,3 +97,13 @@ def test_amounts_are_read_the_way_binance_prints_them(text: str, expected: float
     from binance_bot.binance_desktop.screen_text import parse_amount
 
     assert parse_amount(text) == expected
+
+
+def test_margin_leverage_is_read_from_the_companion_word_line() -> None:
+    """Kotak leverage dibaca bersama kata pendamping: "Leverage 2x" (uji nyata, layar 1366x768)."""
+    from binance_bot.binance_desktop.screen_text import parse_margin
+
+    assert parse_margin(["Cross", "Leverage 2x", "Leverage"]).leverage == 2
+    assert parse_margin(["Cross", "Leverage 20x"]).leverage == 20
+    assert parse_margin(["Cross", "25x"]).leverage == 25
+    assert parse_margin(["Cross", "Leverage"]).leverage is None

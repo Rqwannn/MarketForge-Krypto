@@ -949,6 +949,13 @@ class BinanceNavigator:
             image = Path(tmp) / "ocr.png"
             self._ensure_front()
             self._window.capture(area, image)
+            factor = layout.OCR_UPSCALE
+            if factor:  # layar kecil: teks 12-14 px diperbesar dulu agar OCR Windows membacanya
+                from PIL import Image
+
+                with Image.open(image) as raw:
+                    size = (raw.width * factor, raw.height * factor)
+                    raw.convert("RGB").resize(size, Image.Resampling.LANCZOS).save(image)
             return self._reader.read_lines(image)
 
     def _read_texts(self, area: Rect) -> list[str]:

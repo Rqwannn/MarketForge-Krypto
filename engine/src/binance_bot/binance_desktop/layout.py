@@ -121,6 +121,8 @@ CHART_TOOLBAR_AREA = (0.05, 0.15, 0.62, 0.40)
 CHART_AREA = (0.0485, 0.2725, 0.6015, 0.7815)
 # Label mode margin dan leverage di atas form (mis. "Cross", "20x").
 MARGIN_AREA = (0.81, 0.11, 0.95, 0.15)
+# Pembesaran gambar sebelum OCR (None = tidak). Layar kecil memakai teks 12-14 px yang dibaca buruk.
+OCR_UPSCALE: int | None = None
 # Kotak angka leverage ("2x") di dalam MARGIN_AREA, pecahan lebarnya. None = tidak dipakai.
 LEVERAGE_BOX_X: tuple[float, float] | None = None
 # Dialog "Sesuaikan Leverage" yang terbuka dari label leverage (di tengah jendela).
@@ -177,5 +179,41 @@ def rank_at(window_y: float) -> int:
     return round((window_y - FUTURES_FIRST_ROW_Y) / FUTURES_ROW_STEP) + 1
 
 
-if (os.environ.get("BOT_LAYOUT") or ("windows" if sys.platform == "win32" else "mac")) == "windows":
+def _work_area_width() -> int | None:
+    """Lebar area kerja layar utama Windows dalam piksel fisik (di luar taskbar), atau None."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        from binance_bot.windows import win32
+
+        win32.ensure_dpi_aware()
+        area = wintypes.RECT()
+        spi_getworkarea = 0x0030
+        if not ctypes.windll.user32.SystemParametersInfoW(
+            spi_getworkarea, 0, ctypes.byref(area), 0
+        ):
+            return None
+        return int(area.right - area.left)
+    except (AttributeError, ImportError, OSError):
+        return None
+
+
+def _profile() -> str:
+    """Profil posisi: `BOT_LAYOUT` memaksa (mac, windows, windows-1366); selain itu dipilih dari
+    sistem dan ukuran layar. Layar Windows yang lebih sempit dari 1700 px (mis. laptop 1366x768)
+    memakai profil 1366; yang lebih lebar memakai profil 1920x1080."""
+    forced = os.environ.get("BOT_LAYOUT")
+    if forced:
+        return forced
+    if sys.platform != "win32":
+        return "mac"
+    width = _work_area_width()
+    return "windows-1366" if width is not None and width < 1700 else "windows"
+
+
+PROFILE = _profile()
+if PROFILE == "windows":
     from binance_bot.binance_desktop.layout_windows import *  # noqa: F403
+elif PROFILE == "windows-1366":
+    from binance_bot.binance_desktop.layout_windows_1366 import *  # noqa: F403

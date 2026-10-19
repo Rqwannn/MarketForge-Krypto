@@ -44,8 +44,10 @@ diganti `python -c "import secrets; print(secrets.token_hex(16))"`.
 
 1. Binance Desktop untuk Windows (diuji v2.5.2), **bahasa Indonesia**, sudah login. Bila
    `binance-bot open` tidak menemukan aplikasinya, isi `BOT_APP_PATH` di `.env`.
-2. **Layar 1920x1080** dengan jendela Binance di-maximize (area 1920x1020). Atur lewat
-   `binance-bot window-size --atur`. Resolusi lain butuh ukur ulang `layout_windows.py`.
+2. **Layar 1920x1080 (skala 125%)** atau **1366x768 (skala 100%)** dengan jendela Binance
+   di-maximize (area 1920x1020 atau 1366x720). Atur lewat `binance-bot window-size --atur`. Profil
+   dipilih otomatis dari lebar area kerja layar utama (di bawah 1700 px = profil 1366). Resolusi atau
+   skala lain butuh ukur ulang.
 3. **Izinkan screenshot di Binance.** Secara bawaan Binance Desktop memblokir tangkapan layar
    (`WDA_EXCLUDEFROMCAPTURE`), sehingga bot hanya melihat jendela di belakangnya. Matikan
    pengaturan "perlindungan layar" di aplikasi (jangan klik "Aktifkan perlindungan layar" pada
@@ -59,8 +61,20 @@ diganti `python -c "import secrets; print(secrets.token_hex(16))"`.
 
 ## Kalibrasi
 
-Posisi klik Windows ada di `engine/src/binance_bot/binance_desktop/layout_windows.py` (menimpa `layout.py` yang diukur
-dari macOS). `BOT_LAYOUT=mac|windows` memaksa profil tertentu. Ukuran: piksel / (1920, 1020).
+Posisi klik Windows ada di `engine/src/binance_bot/binance_desktop/layout_windows.py` (layar 1920x1080;
+menimpa `layout.py` yang diukur dari macOS) dan `layout_windows_1366.py` (layar 1366x768).
+`BOT_LAYOUT=mac|windows|windows-1366` memaksa profil tertentu. Ukuran: piksel / (1920, 1020) atau
+piksel / (1366, 720).
+
+### Layar 1366x768
+
+Profil 1366 diukur 19 Okt 2026 pada laptop 1366x768 skala 100% (Binance Desktop 2.5.2). Bedanya dari
+profil 1920: teks Binance hanya 12-14 px, jadi semua bacaan OCR diperbesar 2x dulu (`OCR_UPSCALE`);
+baris daftar Futures lebih rapat (64 px); dan panel "Posisi" di bawah halaman trade tidak tampil di
+tinggi 720 px, sehingga tutup posisi sungguhan lewat tab Posisi tidak tersedia di layar ini (uji
+kertas tidak terpengaruh). Diuji: `uji-isi`, dua putaran `single` lima koin (daftar, grafik 15 menit,
+AI), dan bacaan leverage 2x. Belum diuji: koin berbanner di layar ini, dialog Sesuaikan Leverage
+sampai Konfirmasi, dan Tebbit (zoom Chrome otomatis 75%, tapi tata letaknya belum dikalibrasi).
 
 Alur Windows: Pasar > tab Futures > gulir 1 langkah (agar 5 baris terlihat) > pilih sub-tab
 Futures USD-M > urutkan "Perubahan 24jam" > klik ikon candle di kolom "Tindakan" > halaman trade.

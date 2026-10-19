@@ -13,7 +13,8 @@ from __future__ import annotations
 
 # Jendela Chrome mengisi area kerja layar (di luar taskbar).
 EXPECTED_WINDOW = (1920, 1040)
-MIN_WINDOW = (1400, 780)
+# Layar kecil (mis. 1366x768) dipakai dengan zoom-out lebih dalam, jadi batasnya lebih longgar.
+MIN_WINDOW = (1280, 600)
 
 _ZOOM_LEVELS = (100, 90, 80, 75, 67, 50, 33, 25)  # urutan Ctrl+minus di Chrome
 
@@ -36,6 +37,20 @@ def zoom_steps_down(scale: float) -> int:
 
 
 ZOOM_STEPS_DOWN = zoom_steps_down(_display_scale())
+
+# Lebar isi halaman (piksel) saat posisi diukur, dengan zoom x skala tampilan = 1,0.
+CALIBRATED_CONTENT_WIDTH = 1919
+
+
+def zoom_steps_for(width_px: float) -> int:
+    """Jumlah Ctrl+minus supaya isi halaman selebar `width_px` tampil seperti saat diukur.
+
+    Lebar tata letak situs (piksel CSS) = lebar piksel / (skala tampilan x zoom). Zoom dipilih agar
+    sama dengan lebar saat pengukuran: layar 1920 skala 125% -> 80%, layar 1366 skala 100% -> 75%.
+    """
+    wanted = 100.0 * width_px / (_display_scale() * CALIBRATED_CONTENT_WIDTH)
+    return min(range(len(_ZOOM_LEVELS)), key=lambda i: abs(_ZOOM_LEVELS[i] - wanted))
+
 
 OCR_UPSCALE = 2
 OCR_QUOTE_VARIANTS = (("max", 3), ("max", 2), ("gray", 2))
