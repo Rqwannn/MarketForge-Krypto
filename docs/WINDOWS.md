@@ -66,6 +66,16 @@ menimpa `layout.py` yang diukur dari macOS) dan `layout_windows_1366.py` (layar 
 `BOT_LAYOUT=mac|windows|windows-1366` memaksa profil tertentu. Ukuran: piksel / (1920, 1020) atau
 piksel / (1366, 720).
 
+### Tombol Beli/Long dan Jual/Short
+
+Tombolnya dicari lewat **warna** (persegi pekat hijau dan merah berdampingan di form order), lalu dipastikan
+dengan teksnya ("Beli/Long" di kiri, "Jual/Short" di kanan; pasangan yang tertukar ditolak). Sebelumnya hanya
+lewat OCR teks, yang menemukan Jual/Short di 7 dari 33 foto layar Full HD karena teks putih di atas warna
+pekat sulit dibaca. Sekarang ketemu di 54 dari 54 foto yang tombolnya tampil (Full HD dan 1366x768, termasuk
+halaman berbanner); yang tidak ketemu hanya foto saat belum login (form berisi "Daftar" dan "Masuk").
+Pencarian lewat teks tetap jadi cadangan, dan Tebbit memakainya saja. Kode: `binance_desktop/order_buttons.py`.
+Tombol hanya **dicari**; yang menekannya tetap hanya `press_short` saat Real Fund Trading menyala.
+
 ### Layar 1366x768
 
 Profil 1366 diukur 19 Okt 2026 pada laptop 1366x768 skala 100% (Binance Desktop 2.5.2). Bedanya dari

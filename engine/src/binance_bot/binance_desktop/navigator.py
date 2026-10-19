@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from binance_bot.binance_desktop import layout
+from binance_bot.binance_desktop.order_buttons import find_pair, text_image
 from binance_bot.binance_desktop.screen_text import (
     GainerRow,
     MarginSettings,
@@ -77,6 +78,9 @@ _CHART_LEGEND = re.compile(r"MA\s*[(\[{<C]?\s*(?:7|25|99)(?!\d)|\b7\)\s*[\d.,]+\
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
+# Teks di dalam tombol (dibaca dari kanal minimum): cukup salah satu kata, OCR sering memotong.
+_SHORT_TEXT = re.compile(r"(Jual|Sell)\s*/?\s*Short|Short|Jual", re.IGNORECASE)
+_LONG_TEXT = re.compile(r"(Beli|Buy)\s*/?\s*Long|Long|Beli", re.IGNORECASE)
 _AVAILABLE = re.compile(r"Tersedia\s*([\d.,]+)\s*USDT", re.IGNORECASE)
 _POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\([\dOo]+\)", re.IGNORECASE)  # "Posisi(O)"
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
@@ -828,15 +832,94 @@ class BinanceNavigator:
     def _quantity_area(self) -> tuple[float, float, float, float]:
         return self._form_area(layout.ORDER_QTY_AREA)
 
+    # Tombol dicari lewat warna pekatnya (hijau Long, merah Short), lalu dipastikan dengan teksnya.
+    # Tebbit memakai warna dan susunan lain: ia tetap mencari teksnya saja.
+    _COLOR_BUTTONS = True
+
     def short_button(self) -> tuple[float, float]:
-        """Posisi tombol Jual/Short di form order, dicari dengan OCR. Tidak mengklik apa pun."""
+        """Posisi tombol Jual/Short di form order. Tidak mengklik apa pun.
+
+        Utama: dua persegi pekat hijau dan merah berdampingan; yang kanan harus terbaca "Short"
+        (atau yang kiri "Long"), dan tidak boleh tertukar. Cadangan: teks "Jual/Short" lewat OCR.
+        """
         if not self._on_coin_page():
             raise SafetyError("Tombol Short hanya dicari di halaman koin")
+        if self._COLOR_BUTTONS:
+            located = self._locate_order_buttons()
+            if located is not None:
+                return located[1]
         for zone in self._order_form_zones():
             found = self._find_text(zone, _SHORT_BUTTON)
             if found is not None:
                 return found
         raise ScreenReadError("Tombol Jual/Short di form order tidak ditemukan")
+
+    def long_button(self) -> tuple[float, float]:
+        """Posisi tombol Beli/Long (untuk memastikan pasangan; bot tidak pernah menekannya)."""
+        if not self._on_coin_page():
+            raise SafetyError("Tombol Long hanya dicari di halaman koin")
+        if self._COLOR_BUTTONS:
+            located = self._locate_order_buttons()
+            if located is not None:
+                return located[0]
+        raise ScreenReadError("Tombol Beli/Long di form order tidak ditemukan")
+
+    def _locate_order_buttons(self) -> tuple[tuple[float, float], tuple[float, float]] | None:
+        """(tengah Long, tengah Short) relatif jendela, atau None bila pasangannya tak terbukti."""
+        for zone in self._order_form_zones():
+            found = self._buttons_in(zone)
+            if found is not None:
+                return found
+        return None
+
+    def _buttons_in(
+        self, zone: tuple[float, float, float, float]
+    ) -> tuple[tuple[float, float], tuple[float, float]] | None:
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "form.png"
+            self._ensure_front()
+            self._window.capture(self.rect.sub(*zone), path)
+            try:
+                with Image.open(path) as opened:
+                    image = opened.convert("RGB")
+            except (OSError, ValueError):
+                return None  # tanpa gambar (mis. tes): pencarian lewat teks yang dipakai
+            pair = find_pair(image)
+            if pair is None:
+                return None
+            left_text = self._button_text(image, pair.left, Path(tmp) / "kiri.png")
+            right_text = self._button_text(image, pair.right, Path(tmp) / "kanan.png")
+        if not self._pair_is_long_short(left_text, right_text):
+            logger.warning(
+                "Pasangan tombol order tidak terbukti (kiri %r, kanan %r): tidak dipakai",
+                left_text,
+                right_text,
+            )
+            return None
+        x0, y0, x1, y1 = zone
+
+        def center(box: object) -> tuple[float, float]:
+            cx, cy = box.center  # type: ignore[attr-defined]
+            return x0 + cx / image.width * (x1 - x0), y0 + cy / image.height * (y1 - y0)
+
+        return center(pair.left), center(pair.right)
+
+    def _button_text(self, image: Any, box: Any, path: Path) -> str:
+        text_image(image, box).save(path)
+        return " ".join(line.text for line in self._reader.read_lines(path))
+
+    @staticmethod
+    def _pair_is_long_short(left_text: str, right_text: str) -> bool:
+        """Kanan harus Short (atau kiri Long). Tertukar (kanan Long atau kiri Short) ditolak."""
+        short_right = bool(_SHORT_TEXT.search(right_text))
+        long_right = bool(_LONG_TEXT.search(right_text))
+        long_left = bool(_LONG_TEXT.search(left_text))
+        short_left = bool(_SHORT_TEXT.search(left_text))
+        if (long_right and not short_right) or (short_left and not long_left):
+            return False
+        return short_right or long_left
 
     def press_short(self, plan: OrderPlan) -> None:
         """Order sungguhan: tekan Jual/Short. Terkunci kecuali Real Fund Trading dinyalakan.

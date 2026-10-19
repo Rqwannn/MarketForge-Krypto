@@ -74,6 +74,8 @@ _LEGEND_RETRIES = 3
 
 
 class TebbitNavigator(BinanceNavigator):
+    _COLOR_BUTTONS = False  # warna tombol Tebbit berbeda: tombolnya dicari lewat teks saja
+
     def __init__(
         self,
         settings: Settings,
