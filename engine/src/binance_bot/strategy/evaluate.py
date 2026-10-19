@@ -70,13 +70,17 @@ def evaluate_by_price(
 
     Short ditutup dengan membeli kembali di harga ask. Target tercapai bila ask sudah di target
     atau lebih rendah; di antara dua pengecekan pergerakan harga tidak terlihat.
+
+    Posisi sungguhan (`real`) hanya dijual di target. Batas likuidasi kertas (1/leverage) tidak
+    berlaku: likuidasi sungguhan diatur bursa (Cross jauh lebih jauh), dan menutup posisi di batas
+    kertas akan menjadi stop-loss tersembunyi.
     """
     if entry.status != "open":
         return entry
     assert entry.entry_price and entry.target_price
     max_price = max(entry.max_price or entry.entry_price, ask)
     min_price = min(entry.min_price or entry.entry_price, ask)
-    if ask >= liquidation_price(entry):
+    if not entry.real and ask >= liquidation_price(entry):
         return _close(entry, "likuidasi", ask, now_s, max_price, min_price, (), fee_pct)
     if ask <= entry.target_price:
         return _close(entry, "target", ask, now_s, max_price, min_price, (), fee_pct)

@@ -1295,3 +1295,96 @@ def test_a_bot_waits_for_another_bot_that_is_selling(tmp_path: Path) -> None:
     thread.join()
     with exclusive(lock, timeout_s=1):  # setelah dilepas, bot kedua bisa masuk
         pass
+
+
+# ---------------------------------------------------------- putaran gagal tidak mematikan bot
+
+
+class _FlakyList(FakeNavigator):
+    """Daftar Futures tidak bisa dibaca (seperti 21.08: urutan di layar tidak mau berganti)."""
+
+    def open_top_gainers(self) -> list[Any]:
+        raise ScreenReadError("Daftar Futures tidak terurut dari kenaikan tertinggi")
+
+
+def test_a_failed_round_does_not_stop_the_repeat_loop(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    nav = _FlakyList({})
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 20:  # cukup untuk melewati dua putaran gagal (15 menit = 15 x 60 dtk)
+            raise KeyboardInterrupt
+
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=900, sleep=sleep
+    )  # type: ignore[arg-type]
+    with pytest.raises(KeyboardInterrupt):  # berhenti hanya karena tes menghentikannya
+        workflow.run()
+    assert nav.calls.count("prepare") >= 2  # putaran kedua tetap dicoba
+    assert "Putaran gagal: Daftar Futures tidak terurut" in caplog.text
+
+
+def test_after_too_many_failed_rounds_without_positions_the_bot_stops(tmp_path: Path) -> None:
+    nav = _FlakyList({})
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    workflow = SingleWorkflow(
+        nav,
+        trader,
+        FakePatternAnalyzer(WAIT),
+        ranks=[1],
+        interval_s=900,
+        sleep=lambda s: None,  # type: ignore[arg-type]
+    )
+    with pytest.raises(BotError, match="putaran berturut-turut gagal"):
+        workflow.run()
+    assert nav.calls.count("prepare") == 5
+
+
+def test_real_positions_keep_being_watched_even_when_every_round_fails(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    nav = _FlakyList({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    journal.append(_real_position("AUSDT"))
+    market.quotes["AUSDT"] = Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=1.0)
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 40:  # lebih dari 5 putaran gagal: bot tidak boleh berhenti sendiri
+            market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+        if len(sleeps) == 60:
+            raise KeyboardInterrupt
+
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=900, sleep=sleep
+    )  # type: ignore[arg-type]
+    with pytest.raises(KeyboardInterrupt):
+        workflow.run()
+    assert [e.status for e in journal.load()] == [
+        "target"
+    ]  # tetap terjual walau putaran gagal terus
+    assert nav.calls.count("close_position:AUSDT") == 1
+
+
+def test_once_mode_failure_is_reported_after_real_positions_are_safe(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    nav = _FlakyList({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    journal.append(_real_position("AUSDT"))
+    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=lambda s: None
+    )  # type: ignore[arg-type]
+    with pytest.raises(ScreenReadError, match="tidak terurut"):
+        workflow.run()
+    assert [e.status for e in journal.load()] == [
+        "target"
+    ]  # posisi dijual dulu, baru gagal dilaporkan

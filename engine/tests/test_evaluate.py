@@ -139,3 +139,14 @@ def test_summary_counts_agreement_between_ai_and_data() -> None:
         replace(ENTRY, status="skipped", pattern_ai=ok, pattern_data=wait),
     ]
     assert summarize(entries, SopParams(), 0).signal_agreement == (1, 2)
+
+
+def test_a_real_position_is_never_closed_at_the_paper_liquidation_price() -> None:
+    # Kertas 2x: likuidasi di +50% (150). Posisi sungguhan tidak boleh ditutup bot di sana: itu
+    # stop-loss tersembunyi, dan likuidasi sungguhan diatur bursa.
+    real = replace(ENTRY, real=True)
+    held = evaluate_by_price(real, ask=160.0, now_s=60, fee_pct=FEE)
+    assert held.status == "open" and held.max_price == 160.0
+    assert evaluate_by_price(ENTRY, ask=160.0, now_s=60, fee_pct=FEE).status == "likuidasi"
+    # Di target tetap dijual, termasuk setelah harga sempat naik jauh.
+    assert evaluate_by_price(held, ask=96.0, now_s=120, fee_pct=FEE).status == "target"

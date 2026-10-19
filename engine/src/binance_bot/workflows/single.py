@@ -14,6 +14,8 @@ from binance_bot.workflows.sop import ReadingSource, SopTrader, log_top_gainers
 
 logger = logging.getLogger(__name__)
 
+_MAX_FAILED_ROUNDS = 5  # putaran gagal berturut-turut (tanpa posisi sungguhan) sebelum bot berhenti
+
 
 class SingleWorkflow:
     """Mode single: satu laptop menjalankan SOP V2 penuh dan memanggil AI sendiri.
@@ -43,18 +45,43 @@ class SingleWorkflow:
         self._sleep = sleep
 
     def run(self) -> None:
+        failed_rounds = 0
         while True:
             logger.info("Putaran pemantauan dimulai", extra=event("cycle", phase="start"))
-            opened = self.run_cycle()
+            failure: BotError | None = None
+            try:
+                opened = self.run_cycle()
+                failed_rounds = 0
+            except BotError as exc:
+                # Satu putaran yang gagal (mis. daftar Futures di layar belum siap) tidak boleh
+                # mematikan bot: posisi uang sungguhan yang terbuka tetap harus diawasi sampai
+                # terjual, dan putaran berikutnya mencoba lagi.
+                failure, opened = exc, 0
+                failed_rounds += 1
+                logger.error("Putaran gagal: %s", exc)
             logger.info(
                 "Putaran selesai",
                 extra=event("cycle", phase="done", opened=opened, next_in_s=self._interval_s),
             )
             if self._interval_s <= 0:
                 self._watch_real_positions()
+                if failure is not None:
+                    raise failure  # mode Sekali: kegagalan tetap dilaporkan, setelah posisi aman
                 return
+            if failed_rounds >= _MAX_FAILED_ROUNDS and not self._trader.real_positions_open():
+                raise BotError(
+                    f"{failed_rounds} putaran berturut-turut gagal, bot berhenti. "
+                    f"Terakhir: {failure}"
+                )
             logger.info("Pantau ulang dalam %.0f menit", self._interval_s / 60)
             self._wait_and_watch(self._interval_s)
+
+    def _refresh_safely(self) -> None:
+        """Jual otomatis; satu pengecekan yang gagal dicoba lagi menit depan, bot tetap jalan."""
+        try:
+            self._trader.refresh_journal()
+        except BotError as exc:
+            logger.error("Pengecekan jual otomatis gagal, dicoba lagi: %s", exc)
 
     def _watch_real_positions(self) -> None:
         """Mode Sekali dengan uang sungguhan: tetap menyala sampai semua posisi sungguhan terjual.
@@ -66,7 +93,7 @@ class SingleWorkflow:
         while (open_count := self._trader.real_positions_open()) > 0:
             logger.info("Mengawasi %d posisi uang sungguhan sampai terjual", open_count)
             self._sleep(step)
-            self._trader.refresh_journal()
+            self._refresh_safely()
         # (posisi uji kertas dinilai lagi di awal putaran berikutnya)
 
     def _wait_and_watch(self, seconds: float) -> None:
@@ -78,7 +105,7 @@ class SingleWorkflow:
             self._sleep(wait)
             left -= wait
             if left > 0:  # putaran berikutnya memeriksanya sendiri di awal
-                self._trader.refresh_journal()
+                self._refresh_safely()
 
     def run_cycle(self) -> int:
         """Satu putaran pemantauan. Mengembalikan jumlah posisi uji baru."""
