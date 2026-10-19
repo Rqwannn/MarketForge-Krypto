@@ -559,6 +559,8 @@ class SopTrader:
         entry.entry_price = plan.entry_price
         entry.max_price = plan.entry_price
         entry.min_price = plan.entry_price
+        entry.last_price = quote.ask  # harga terakhir terbaca: bahan daftar Posisi tanpa layar
+        entry.last_price_at = self._wall_clock()
         entry.quantity = sizing.quantity
         entry.notional = sizing.notional
         entry.margin_usdt = sizing.margin_usdt

@@ -84,7 +84,9 @@ def evaluate_by_price(
         return _close(entry, "likuidasi", ask, now_s, max_price, min_price, (), fee_pct)
     if ask <= entry.target_price:
         return _close(entry, "target", ask, now_s, max_price, min_price, (), fee_pct)
-    return replace(entry, max_price=max_price, min_price=min_price)
+    return replace(
+        entry, max_price=max_price, min_price=min_price, last_price=ask, last_price_at=now_s
+    )
 
 
 def close_short_now(

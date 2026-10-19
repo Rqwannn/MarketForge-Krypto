@@ -184,16 +184,25 @@ class PositionsWorkflow:
             "real": entry.real,
             "notional": entry.notional,
             "price": None,
+            "price_at": None,  # kapan harga itu terbaca (detik epoch)
+            "price_stale": False,  # True = harga terakhir yang tersimpan, bukan bacaan sekarang
             "pnl_pct": None,
             "pnl_capital_pct": None,
         }
+        read_at: float | None = self._wall_clock()
         try:
             ask = self._market.quote(entry.symbol).ask
         except MarketDataError:
-            return data
+            # Tebbit: harga hanya terbaca dari layar. Pakai yang terakhir tersimpan (dibaca bot saat
+            # berjalan atau tombol Cek harga) dan tandai usianya.
+            if entry.last_price is None:
+                return data
+            ask, read_at = entry.last_price, entry.last_price_at
+            data["price_stale"] = True
         assert entry.entry_price
         pnl_pct = 100 * (entry.entry_price - ask) / entry.entry_price - self._params.fee_pct
         data["price"] = ask
+        data["price_at"] = read_at
         data["pnl_pct"] = pnl_pct
         if entry.notional and entry.capital_usdt:
             data["pnl_capital_pct"] = entry.notional * pnl_pct / entry.capital_usdt

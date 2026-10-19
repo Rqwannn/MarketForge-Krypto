@@ -50,6 +50,10 @@ class JournalEntry:
     deadline: float | None = None  # catatan lama (SOP V2)
     max_price: float | None = None  # harga tertinggi setelah masuk (melawan posisi short)
     min_price: float | None = None  # harga terendah setelah masuk (seberapa jauh harga turun)
+    # Harga ask terakhir yang terbaca untuk posisi ini dan kapan (detik epoch). Tebbit membaca
+    # harga dari layar, jadi daftar Posisi memakai angka ini saat layar tidak dibuka.
+    last_price: float | None = None
+    last_price_at: float | None = None
     ma_gap_pct: float | None = None  # jarak garis cepat ke garis pembanding saat masuk (%)
     checked_ms: int | None = None  # posisi sudah dinilai dari candle sampai waktu ini
     # Real Fund Trading: posisi sungguhan di bursa. Hanya ditutup oleh proses mode real yang

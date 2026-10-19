@@ -1490,3 +1490,62 @@ def test_journal_load_and_append_retry_a_locked_file(
     monkeypatch.setattr(journal_module.time, "sleep", lambda _s: None)
     assert [e.id for e in journal.load()] == ["a"]
     assert len(calls) == 2
+
+
+class ClosedScreenMarket(FakeMarket):
+    """Seperti Tebbit saat layar tidak dibuka: tanpa candle, dan harga tidak bisa dibaca."""
+
+    reachable = False
+
+    def quote(self, symbol: str) -> Quote:
+        if not self.reachable:
+            raise MarketDataError(f"{symbol} tidak sedang terbuka di Tebbit, harga tidak terbaca")
+        return super().quote(symbol)
+
+    def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
+        raise NoHistoryError("tidak punya sumber candle")
+
+
+def test_positions_list_uses_the_last_read_price_when_the_screen_is_not_open(
+    tmp_path: Path,
+) -> None:
+    """Uji nyata (Tebbit): daftar Posisi kosong untuk harga sekarang dan hasil sementara."""
+    journal = Journal(tmp_path / "sop.jsonl")
+    entry = open_trade("CKBUSDT", entry_price=1.0)
+    entry.last_price, entry.last_price_at = 0.98, NOW.timestamp()
+    journal.append(entry)
+    journal.append(open_trade("WUSDT"))  # belum pernah dicek
+    result = run_positions(journal, ClosedScreenMarket())
+    known, unknown = result["positions"]
+    assert known["price"] == 0.98 and known["price_stale"] is True
+    assert known["price_at"] == NOW.timestamp()
+    assert known["pnl_pct"] == pytest.approx(1.9)  # 2% turun - fee 0,1%
+    assert unknown["price"] is None and unknown["pnl_pct"] is None
+    assert unknown["price_stale"] is False
+
+
+def test_positions_list_marks_a_fresh_price_as_not_stale(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT"))
+    market = ClosedScreenMarket(quote=Quote(bid=0.97, ask=0.98, funding_rate=0.0, change_pct=1.0))
+    market.reachable = True
+    [position] = run_positions(journal, market)["positions"]
+    assert position["price"] == 0.98 and position["price_stale"] is False
+    assert position["price_at"] == NOW.timestamp() + 600
+
+
+def test_price_check_remembers_the_price_for_the_positions_list(tmp_path: Path) -> None:
+    """Tombol Cek harga Tebbit (atau bot yang berjalan) menyimpan harga yang dibaca dari layar."""
+    from binance_bot.workflows.sop import refresh_by_price
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("CKBUSDT", entry_price=1.0))
+    market = ClosedScreenMarket(quote=Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=1.0))
+    market.reachable = True
+    refresh_by_price(journal, market, 0.1, NOW.timestamp())  # type: ignore[arg-type]
+    saved = journal.load()[0]
+    assert saved.status == "open" and saved.last_price == 0.995
+    assert saved.last_price_at == NOW.timestamp()
+    market.reachable = False  # layar ditutup lagi: daftar Posisi memakai harga tersimpan
+    [position] = run_positions(journal, market)["positions"]
+    assert position["price"] == 0.995 and position["price_stale"] is True

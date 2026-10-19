@@ -1191,17 +1191,45 @@ loaders.positions = loadPositions;
 
 let ownRealOpen = false; // ada posisi uang sungguhan di daftar (Sell semua ikut menekan Market)
 
+/** Usia harga yang tersimpan ("dicek 3 menit lalu"); kosong bila harga baru dibaca. */
+function priceAge(p) {
+  if (!p.price_stale || !p.price_at) return null;
+  const minutes = Math.max(0, Math.round((Date.now() / 1000 - p.price_at) / 60));
+  const text = minutes < 1 ? 'dicek barusan' : minutes < 60 ? `dicek ${minutes} mnt lalu` : `dicek ${Math.round(minutes / 60)} jam lalu`;
+  return el('small', { class: 'price-age', textContent: text });
+}
+
+$('pos-check').addEventListener('click', async () => {
+  const button = $('pos-check');
+  button.disabled = true;
+  button.textContent = 'Membaca harga…';
+  try {
+    await window.bot.positions.check();
+  } catch (err) {
+    posNotice(err.message, 'bad');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Cek harga Tebbit';
+  }
+  await loadPositions();
+});
+
 async function loadOwnPositions(canSell) {
   const result = await window.bot.positions.list();
   posNotice(result.warning ? `Harga ${platform?.name || 'Binance'} belum bisa diambil; hasil sementara tidak tampil.` : '', 'warn');
   $('pos-close-all').disabled = !result.positions.length;
   ownRealOpen = result.positions.some((p) => p.real);
+  const tebbit = platform?.id === 'tebbit';
+  $('pos-check').hidden = !tebbit;
+  if (tebbit && !result.warning && result.positions.some((p) => p.price === null || p.price === undefined)) {
+    posNotice('Harga Tebbit dibaca dari layar: tekan Cek harga Tebbit, atau jalankan bot (otomatis tiap 5 menit).', 'warn');
+  }
   const rows = result.positions.map((p) => el('tr', {},
     el('td', {}, el('strong', { class: 'sym', textContent: p.symbol }),
       p.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null,
       el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
     el('td', { class: 'num', textContent: price(p.entry_price) }),
-    el('td', { class: 'num', textContent: price(p.price) }),
+    el('td', { class: 'num' }, price(p.price), priceAge(p)),
     el('td', { class: `num ${signClass(p.pnl_capital_pct)}`, textContent: p.pnl_capital_pct === null ? '–' : `${percent(p.pnl_capital_pct)} modal` }),
     el('td', { class: 'num', textContent: price(p.target_price) }),
     el('td', { class: 'num' }, canSell
