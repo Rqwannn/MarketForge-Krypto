@@ -649,19 +649,19 @@ def test_press_short_is_locked_even_when_called_directly(monkeypatch: pytest.Mon
     from binance_bot.strategy.execution import OrderPlan
 
     nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
-    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
-    with pytest.raises(SafetyError, match="dinonaktifkan"):
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 2)
+    with pytest.raises(SafetyError, match="terkunci"):
         nav.press_short(plan)
     assert pressed == []
 
 
 def test_press_short_logic_when_unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Hanya di tes: kunci dibuka untuk membuktikan logikanya; aplikasi tetap terkunci.
-    from binance_bot.binance_desktop import navigator as nav_module
+    # Hanya di tes: kunci dibuka (seperti --uang-sungguhan) untuk membuktikan logikanya.
+    from binance_bot.strategy import execution
     from binance_bot.strategy.execution import OrderPlan
 
-    monkeypatch.setattr(nav_module, "LIVE_ORDERS_ENABLED", True)
-    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+    monkeypatch.setattr(execution, "_live_orders", True)
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 2)
 
     nav, pressed = _locked_order_nav(monkeypatch, ["50", "USDT"])  # kolom jumlah tidak cocok
     with pytest.raises(SafetyError, match="order dibatalkan"):

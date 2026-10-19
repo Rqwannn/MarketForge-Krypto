@@ -15,7 +15,7 @@ from typing import Protocol
 from binance_bot.exceptions import CommandError, WindowError
 from binance_bot.macos.app_controller import Runner, run_command
 from binance_bot.macos.keyboard import clear_field, select_field, type_number
-from binance_bot.macos.mouse import click_at, scroll_down_at, scroll_up_at
+from binance_bot.macos.mouse import click_at, scroll_down_at, scroll_horizontal_at, scroll_up_at
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,8 @@ class WindowController(Protocol):
     def scroll_up(self, x: int, y: int) -> None: ...
 
     def scroll_down(self, x: int, y: int, notches: int) -> None: ...
+
+    def scroll_horizontal(self, x: int, y: int, notches: int) -> None: ...
 
     def clear_field(self) -> None: ...
 
@@ -127,6 +129,10 @@ class MacWindowController:
     def scroll_down(self, x: int, y: int, notches: int) -> None:
         logger.info("Gulir ke bawah %d langkah di (%d, %d)", notches, x, y)
         self._mouse_scroll_down(x, y, notches)
+
+    def scroll_horizontal(self, x: int, y: int, notches: int) -> None:
+        logger.info("Gulir mendatar %+d langkah di (%d, %d)", notches, x, y)
+        scroll_horizontal_at(x, y, notches)
 
     def clear_field(self) -> None:
         self._keyboard_clear()

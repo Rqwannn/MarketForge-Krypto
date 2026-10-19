@@ -897,11 +897,11 @@ def test_leader_shows_the_app_while_ai_reads(tmp_path: Path) -> None:
 
 
 def test_live_orders_are_locked_everywhere() -> None:
-    from binance_bot.strategy import LIVE_ORDERS_ENABLED, ScreenOrderGate
+    from binance_bot.strategy import ScreenOrderGate, live_orders_enabled
     from binance_bot.strategy.execution import OrderPlan
 
-    assert LIVE_ORDERS_ENABLED is False
-    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
+    assert live_orders_enabled() is False  # bawaan: uji kertas, tanpa --uang-sungguhan
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 2)
 
     class Presser:
         pressed = False
@@ -909,7 +909,7 @@ def test_live_orders_are_locked_everywhere() -> None:
         def press_short(self, plan: OrderPlan) -> None:
             Presser.pressed = True
 
-    with pytest.raises(SafetyError, match="dinonaktifkan"):
+    with pytest.raises(SafetyError, match="terkunci"):
         ScreenOrderGate(Presser()).submit(plan)
     assert Presser.pressed is False
 
@@ -1022,3 +1022,276 @@ def test_tebbit_auto_sells_from_the_screen_price_when_the_target_is_reached(
     assert (sold.status, sold.exit_price) == ("target", 0.976)
     assert journal.load()[0].status == "target"
     assert any("Tombol tutup posisi TIDAK ditekan" in r.getMessage() for r in caplog.records)
+
+
+def test_real_fund_auto_sell_closes_on_the_exchange_or_keeps_the_position_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.created_at = NOW.timestamp() - 600
+    held.real = True  # posisi sungguhan (tombol Short ditekan)
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, funding_rate=0.0, change_pct=20.0)
+
+    class Refusing(FakeNavigator):
+        def close_position(self, symbol: str) -> None:
+            raise ScreenReadError("Tombol Market tidak ditemukan")
+
+    failing, _, failing_journal, _ = make_trader(tmp_path / "gagal", Refusing({}), market)
+    failing_journal.append(held)
+    assert failing.refresh_journal()[0].status == "open"  # gagal di bursa: tetap terbuka
+
+    assert trader.refresh_journal()[0].status == "target"
+    assert nav.calls == ["close_position:SKDDUSDT"]
+
+
+# --------------------------------------------------------------------------- filter waktu
+
+
+def _dated(symbol: str, day: str, status: str = "target", pnl: float = 2.9) -> JournalEntry:
+    when = datetime.strptime(f"{day} 12:00", "%Y-%m-%d %H:%M").timestamp()
+    entry = open_trade(symbol, entry_price=1.0)
+    entry.id, entry.created_at, entry.status = f"d-{symbol}", when, status
+    entry.exit_price, entry.closed_at, entry.pnl_pct, entry.pnl_usdt = 0.97, when + 600, pnl, pnl
+    entry.verdict = "ok"
+    return entry
+
+
+def _report_for(tmp_path: Path, dari: str | None, sampai: str | None) -> dict[str, Any]:
+    from binance_bot.workflows import day_bounds
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    for symbol, day in (("AUSDT", "2026-10-13"), ("BUSDT", "2026-10-14"), ("CUSDT", "2026-10-15")):
+        journal.append(_dated(symbol, day))
+    since, until = day_bounds(dari, sampai)
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(),
+        journal,
+        FakeMarket(),
+        as_json=True,
+        since=since,
+        until=until,
+        output=out.append,
+        wall_clock=lambda: datetime(2026, 10, 16).timestamp(),
+    ).run()  # type: ignore[arg-type]
+    return json.loads(out[0])
+
+
+def test_the_date_filter_covers_the_whole_report_inclusively(tmp_path: Path) -> None:
+    everything = _report_for(tmp_path / "a", None, None)
+    assert everything["stats"]["closed"] == 3 and len(everything["trades"]) == 3
+
+    one_day = _report_for(tmp_path / "b", "2026-10-14", "2026-10-14")  # kedua ujung termasuk
+    assert [t["symbol"] for t in one_day["trades"]] == ["BUSDT"]
+    assert one_day["stats"]["closed"] == 1 and one_day["stats"]["targets"] == 1
+    assert [a["symbol"] for a in one_day["analyses"]] == ["BUSDT"]
+    assert one_day["stats"]["net_capital_pct"] == pytest.approx(2.9)
+
+    since_only = _report_for(tmp_path / "c", "2026-10-14", None)
+    assert [t["symbol"] for t in since_only["trades"]] == ["BUSDT", "CUSDT"]
+    until_only = _report_for(tmp_path / "d", None, "2026-10-13")
+    assert [t["symbol"] for t in until_only["trades"]] == ["AUSDT"]
+    empty = _report_for(tmp_path / "e", "2026-10-01", "2026-10-02")
+    assert empty["stats"]["closed"] == 0 and empty["trades"] == [] and empty["analyses"] == []
+
+
+def test_the_date_filter_rejects_bad_dates(tmp_path: Path) -> None:
+    from binance_bot.workflows import day_bounds
+
+    with pytest.raises(BotError, match="YYYY-MM-DD"):
+        day_bounds("15-10-2026", None)
+    with pytest.raises(BotError, match="tidak boleh setelah"):
+        day_bounds("2026-10-16", "2026-10-15")
+
+
+def test_once_mode_with_real_money_keeps_watching_until_the_position_is_sold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.created_at, held.real = NOW.timestamp() - 600, True
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=20.0)
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 3:  # harga akhirnya turun ke target di pengecekan ketiga
+            market.quotes["SKDDUSDT"] = Quote(
+                bid=0.97, ask=0.975, funding_rate=0.0, change_pct=20.0
+            )
+
+    SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=sleep
+    ).run()  # type: ignore[arg-type]
+    assert len(sleeps) == 3  # mengawasi tiap menit sampai terjual, lalu berhenti sendiri
+    assert [e.status for e in journal.load() if e.symbol == "SKDDUSDT"] == ["target"]
+    assert nav.calls.count("close_position:SKDDUSDT") == 1
+
+
+def test_once_mode_on_paper_still_ends_after_one_round(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    journal.append(open_trade("CFXUSDT", entry_price=1.01))  # posisi uji kertas terbuka
+    slept: list[float] = []
+    SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=slept.append
+    ).run()  # type: ignore[arg-type]
+    assert slept == []
+
+
+# ----------------------------------------------------- saldo dan jual bergiliran (uang sungguhan)
+
+
+@pytest.fixture
+def live_money(monkeypatch: pytest.MonkeyPatch) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+
+
+def test_real_entry_is_skipped_when_the_available_balance_cannot_cover_the_margin(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 8.0  # margin posisi 50 USDT (modal 100 x 50%)
+    trader, gate, journal, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert (
+        entry.status == "skipped" and "saldo tersedia 8.00 USDT kurang dari margin" in entry.reason
+    )
+    assert (
+        nav.filled == [] and gate.plans == []
+    )  # tidak ada klik Jual/Short, tidak ada posisi hantu
+    assert [e.status for e in journal.load()] == ["skipped"]
+
+
+def test_real_entry_is_skipped_when_the_balance_cannot_be_read(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = None
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "skipped" and "tidak terbaca" in entry.reason and gate.plans == []
+
+
+def test_real_entry_goes_ahead_when_the_balance_covers_the_margin(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 58.7  # seperti saldo setelah satu posisi: cukup untuk margin 50
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+    assert len(gate.plans) == 1
+
+
+def test_paper_trading_does_not_need_a_balance(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 0.0
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
+
+
+def _real_position(symbol: str, entry: float = 1.0) -> JournalEntry:
+    held = open_trade(symbol, entry_price=entry)
+    held.created_at, held.real = NOW.timestamp() - 600, True
+    return held
+
+
+def test_two_positions_at_target_are_sold_one_after_the_other_with_a_fresh_price_check(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    trader, _, journal, _ = make_trader(tmp_path, FakeNavigator({}), market)
+    journal.append(_real_position("AUSDT"))
+    journal.append(_real_position("BUSDT"))
+    for symbol in ("AUSDT", "BUSDT"):  # keduanya sudah di target (0,98)
+        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+
+    order: list[str] = []
+
+    class Seller(FakeNavigator):
+        def close_position(self, symbol: str) -> None:
+            order.append(symbol)
+            # Sesudah posisi pertama dijual, harga posisi kedua memantul di atas target.
+            market.quotes["BUSDT"] = Quote(bid=0.995, ask=1.0, funding_rate=0.0, change_pct=1.0)
+
+    trader._nav = Seller({})  # type: ignore[assignment]
+    done = {e.symbol: e.status for e in trader.refresh_journal()}
+    assert order == ["AUSDT"]  # BUSDT tidak dijual: dibaca ulang, profit sudah tidak 3%
+    assert done == {"AUSDT": "target", "BUSDT": "open"}
+    assert {e.symbol: e.status for e in journal.load()} == done
+
+
+def test_a_second_position_still_at_target_is_sold_after_the_first_finishes(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    journal.append(_real_position("AUSDT"))
+    journal.append(_real_position("BUSDT"))
+    for symbol in ("AUSDT", "BUSDT"):
+        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    done = {e.symbol: e.status for e in trader.refresh_journal()}
+    assert done == {"AUSDT": "target", "BUSDT": "target"}
+    assert nav.calls.count("close_position:AUSDT") == nav.calls.count("close_position:BUSDT") == 1
+    assert nav.calls.index("close_position:AUSDT") < nav.calls.index("close_position:BUSDT")
+
+
+def test_a_position_another_bot_already_sold_is_not_sold_again(
+    tmp_path: Path, live_money: None
+) -> None:
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    sold = _real_position("AUSDT")
+    sold.status, sold.exit_price, sold.closed_at, sold.pnl_pct = "target", 0.975, 1.0, 2.5
+    journal.append(sold)  # bot lain sudah menjual dan mencatatnya
+    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    trader.refresh_journal()
+    assert nav.calls == []  # tidak ada klik Market kedua untuk posisi yang sudah tertutup
+
+
+def test_a_bot_waits_for_another_bot_that_is_selling(tmp_path: Path) -> None:
+    import threading
+    import time
+
+    from binance_bot.exceptions import BotError
+    from binance_bot.filelock import exclusive
+
+    lock = tmp_path / "sop.sell.lock"
+    held, release = threading.Event(), threading.Event()
+
+    def other_bot() -> None:
+        with exclusive(lock):
+            held.set()
+            release.wait(5)
+
+    thread = threading.Thread(target=other_bot)
+    thread.start()
+    assert held.wait(5)
+    started = time.monotonic()
+    with (
+        pytest.raises(BotError, match="masih menjual"),  # bot kedua menunggu, lalu menyerah
+        exclusive(lock, timeout_s=0.6, poll_s=0.1),
+    ):
+        raise AssertionError("tidak boleh masuk selama bot lain memegang kunci")
+    assert time.monotonic() - started >= 0.5
+    release.set()
+    thread.join()
+    with exclusive(lock, timeout_s=1):  # setelah dilepas, bot kedua bisa masuk
+        pass

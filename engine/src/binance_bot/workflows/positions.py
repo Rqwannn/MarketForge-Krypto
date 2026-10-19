@@ -12,10 +12,17 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from binance_bot.exceptions import MarketDataError, NoHistoryError
+from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
 from binance_bot.market import MarketData
-from binance_bot.strategy import Journal, JournalEntry, SopParams, close_short_now
-from binance_bot.workflows.sop import refresh_journal
+from binance_bot.strategy import (
+    Journal,
+    JournalEntry,
+    PositionCloser,
+    SopParams,
+    close_short_now,
+    live_orders_enabled,
+)
+from binance_bot.workflows.sop import refresh_by_price, refresh_journal
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +39,10 @@ class PositionsWorkflow:
         market: MarketData,
         *,
         close: str | None = None,  # None = hanya daftar, "semua", atau nama pair
+        check: bool = False,  # Tebbit: baca harga dari layar sekarang (jual otomatis bila target)
+        closer: PositionCloser | None = None,  # Real Fund Trading: tutup posisi di bursa
+        watch_s: float = 0.0,  # >0: pantau terus (jual otomatis) sampai tidak ada posisi terbuka
+        sleep: Callable[[float], None] = time.sleep,
         output: Callable[[str], None] = print,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
@@ -39,16 +50,62 @@ class PositionsWorkflow:
         self._journal = journal
         self._market = market
         self._close = close
+        self._check = check
+        self._closer = closer
+        self._watch_s = watch_s
+        self._sleep = sleep
         self._output = output
         self._wall_clock = wall_clock
 
     def run(self) -> None:
+        if self._watch_s > 0:
+            self._watch()
+            return
+        self._run_once()
+
+    def _watch(self) -> None:
+        """Pantau posisi terbuka saja (tanpa membuka posisi baru): jual otomatis saat target."""
+        live = live_orders_enabled() and self._closer is not None
+        while True:
+            entries = (
+                refresh_by_price(
+                    self._journal,
+                    self._market,
+                    self._params.fee_pct,
+                    self._wall_clock(),
+                    self._closer,
+                )
+                if live
+                else refresh_journal(
+                    self._journal, self._market, self._params.fee_pct, self._wall_clock()
+                )
+            )
+            opened = [e for e in entries if e.status == "open"]
+            if not opened:
+                logger.info("Tidak ada posisi terbuka lagi: pemantauan selesai")
+                return
+            for entry in opened:
+                logger.info(
+                    "Pantau %s%s: masuk %g, jual otomatis di %g",
+                    entry.symbol,
+                    " (uang sungguhan)" if entry.real else "",
+                    entry.entry_price or 0,
+                    entry.target_price or 0,
+                )
+            self._sleep(self._watch_s)
+
+    def _run_once(self) -> None:
         now = self._wall_clock()
         warning = ""
         try:
             entries = refresh_journal(self._journal, self._market, self._params.fee_pct, now)
-        except NoHistoryError:
-            entries = self._journal.load()  # tanpa riwayat harga: tutup di harga terkini saja
+        except (
+            NoHistoryError
+        ):  # tanpa riwayat harga (Tebbit): harga terkini dari layar bila diminta
+            if self._check:
+                entries = refresh_by_price(self._journal, self._market, self._params.fee_pct, now)
+            else:
+                entries = self._journal.load()
         except MarketDataError as exc:
             warning = f"Harga Binance tidak bisa diambil: {exc}"
             entries = self._journal.load()
@@ -61,6 +118,10 @@ class PositionsWorkflow:
                 entries, closed = self._close_positions(entries, now)
             except MarketDataError as exc:
                 error = f"Harga tidak bisa diambil: {exc}"
+                self._output(json.dumps({"error": error, "closed": [], "positions": []}))
+                return
+            except BotError as exc:  # Real Fund Trading: tutup posisi di bursa gagal
+                error = f"Posisi belum ditutup di bursa: {exc}"
                 self._output(json.dumps({"error": error, "closed": [], "positions": []}))
                 return
         result = {
@@ -77,6 +138,14 @@ class PositionsWorkflow:
         updated, closed = [], []
         for entry in entries:
             if entry.status == "open" and wanted in (ALL, entry.symbol):
+                live = live_orders_enabled() and self._closer is not None
+                if entry.real and not live:
+                    raise BotError(
+                        f"{entry.symbol} posisi sungguhan: tutup lewat Real Fund Trading"
+                    )
+                if live and entry.real and self._closer is not None:
+                    # Posisi sungguhan: tutup dulu di bursa; gagal = posisi tetap tercatat terbuka.
+                    self._closer.close_position(entry.symbol)
                 ask = self._market.quote(entry.symbol).ask
                 try:
                     funding = self._market.funding_history(
@@ -87,8 +156,12 @@ class PositionsWorkflow:
                 entry = close_short_now(entry, ask, now, funding, self._params.fee_pct)
                 closed.append(entry)
                 logger.warning(
-                    "[DRY RUN] Tombol tutup posisi TIDAK ditekan. %s ditutup (uji kertas) di %g: "
-                    "%+.2f%% posisi (%+.2f%% modal)",
+                    (
+                        "Posisi ditutup di bursa (Market). "
+                        if live and entry.real
+                        else "[DRY RUN] Tombol tutup posisi TIDAK ditekan. "
+                    )
+                    + "%s ditutup di %g: %+.2f%% posisi (%+.2f%% modal)",
                     entry.symbol,
                     ask,
                     entry.pnl_pct or 0,
@@ -108,6 +181,7 @@ class PositionsWorkflow:
             "created_at": entry.created_at,
             "entry_price": entry.entry_price,
             "target_price": entry.target_price,
+            "real": entry.real,
             "notional": entry.notional,
             "price": None,
             "pnl_pct": None,

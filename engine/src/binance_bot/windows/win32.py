@@ -30,6 +30,7 @@ _MOUSEEVENTF_LEFTDOWN, _MOUSEEVENTF_LEFTUP, _MOUSEEVENTF_WHEEL = 0x0002, 0x0004,
 _KEYEVENTF_KEYUP, _KEYEVENTF_UNICODE = 0x0002, 0x0004
 _VK_BACK, _VK_CONTROL, _VK_MENU, _VK_A = 0x08, 0x11, 0x12, 0x41
 _WHEEL_DELTA = 120
+_MOUSEEVENTF_HWHEEL = 0x01000
 _KEY_DELAY_S = 0.03
 
 
@@ -256,6 +257,16 @@ def scroll_at(x: int, y: int, notches: int) -> None:
     delta = _WHEEL_DELTA if notches > 0 else -_WHEEL_DELTA
     for _ in range(abs(notches)):
         _send([_mouse(_MOUSEEVENTF_WHEEL, delta)])
+        time.sleep(0.02)
+
+
+def scroll_horizontal_at(x: int, y: int, notches: int) -> None:
+    """Gulir mendatar di (x, y): `notches` positif = ke kanan."""
+    user32.SetCursorPos(x, y)
+    time.sleep(0.15)
+    delta = _WHEEL_DELTA if notches > 0 else -_WHEEL_DELTA
+    for _ in range(abs(notches)):
+        _send([_mouse(_MOUSEEVENTF_HWHEEL, delta)])
         time.sleep(0.02)
 
 

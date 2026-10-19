@@ -1,9 +1,10 @@
-"""Langkah 5 SOP: menekan Jual/Short. DIKUNCI MATI pada tahap pengembangan.
+"""Langkah 5 SOP: menekan Jual/Short, dan menutup posisi saat jual. Bawaan: uji kertas.
 
-Pintu order yang dipakai adalah `DryRunOrderGate`: rencana dicatat dan posisi tombol Jual/Short
-dicari (tanpa klik). Logika order sungguhan sudah ada (`ScreenOrderGate` ->
-`navigator.press_short`) tetapi menolak selama `LIVE_ORDERS_ENABLED` False. Klik biasa navigator
-tetap menolak zona tombol order.
+Pintu order bawaan adalah `DryRunOrderGate`: rencana dicatat dan posisi tombol Jual/Short dicari
+(tanpa klik). Order sungguhan (`ScreenOrderGate` -> `navigator.press_short`, dan
+`navigator.close_position`) hanya jalan setelah `enable_live_orders()` dipanggil, yaitu saat
+engine dijalankan dengan `--uang-sungguhan` (tombol Real Fund Trading, setelah modal peringatan
+disetujui). Klik biasa navigator tetap menolak zona tombol order.
 """
 
 from __future__ import annotations
@@ -32,10 +33,24 @@ class OrderPlan:
     margin_mode: str = "?"  # mode margin yang terbaca di bursa (bawaan bursa, Cross/Isolated)
 
 
-# Kunci utama order sungguhan. Selama False, tidak ada jalur kode yang menekan Jual/Short:
-# ScreenOrderGate dan navigator.press_short menolak sebelum mencari atau mengklik apa pun.
-# Mengubahnya butuh keputusan sadar (fase uji 50 trade lulus, leverage 2x).
-LIVE_ORDERS_ENABLED = False
+# Kunci utama order sungguhan, per proses engine. Selama terkunci, tidak ada jalur kode yang
+# menekan Jual/Short atau menutup posisi: pemanggilnya menolak sebelum mencari atau mengklik.
+_live_orders = False
+
+
+def enable_live_orders() -> None:
+    """Buka kunci order sungguhan untuk proses ini (hanya dari CLI `--uang-sungguhan`)."""
+    global _live_orders
+    _live_orders = True
+    logger.warning("MODE UANG SUNGGUHAN: tombol order dan tutup posisi di bursa akan ditekan")
+
+
+def live_orders_enabled() -> bool:
+    return _live_orders
+
+
+class PositionCloser(Protocol):
+    def close_position(self, symbol: str) -> None: ...
 
 
 class OrderGate(Protocol):
@@ -53,8 +68,8 @@ class ScreenOrderGate:
         self._presser = presser
 
     def submit(self, plan: OrderPlan) -> None:
-        if not LIVE_ORDERS_ENABLED:
-            raise SafetyError("Order sungguhan dinonaktifkan (LIVE_ORDERS_ENABLED = False)")
+        if not live_orders_enabled():
+            raise SafetyError("Order sungguhan terkunci (Real Fund Trading belum dinyalakan)")
         self._presser.press_short(plan)
 
 

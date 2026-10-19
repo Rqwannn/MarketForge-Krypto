@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('bot', {
   stop: () => call('engine:stop'),
   status: () => call('engine:status'),
   checks: () => call('engine:checks'),
-  summary: () => call('engine:summary'),
+  summary: (range) => call('engine:summary', range),
   setPlatform: (id) => call('platform:set', id),
   chartImage: (file) => call('chart:image', file),
   history: {
@@ -35,7 +35,8 @@ contextBridge.exposeInMainWorld('bot', {
   reportActivity: (update) => call('presence:activity', update),
   positions: {
     list: () => call('positions:list'),
-    close: (symbol) => call('positions:close', symbol),
+    check: () => call('positions:check'),
+    close: (symbol, real = false) => call('positions:close', symbol, real),
     onChanged: (callback) => listen('positions:changed', callback),
   },
   onPeersChanged: (callback) => listen('peers:changed', callback),
@@ -54,6 +55,8 @@ contextBridge.exposeInMainWorld('bot', {
     onStarted: (callback) => listen('team:started', callback),
     onChanged: (callback) => listen('team:changed', callback),
     onError: (callback) => listen('team:error', callback),
+    onRealRequest: (callback) => listen('team:realRequest', callback),
+    realAnswer: (ok) => call('team:realAnswer', ok),
   },
   onLog: (callback) => listen('engine:log', callback),
   onExit: (callback) => listen('engine:exit', callback),

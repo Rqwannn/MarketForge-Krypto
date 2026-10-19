@@ -106,6 +106,9 @@ class FakeScreen:
     def select_field(self) -> None:
         self.events.append(("select", None))
 
+    def scroll_horizontal(self, x: int, y: int, notches: int) -> None:
+        self.events.append(("scroll_horizontal", (x, y, notches)))
+
     def type_number(self, text: str) -> None:
         self.events.append(("type", text))
 
@@ -197,6 +200,7 @@ class FakeNavigator:
             else [GainerRow(rank, s, 50.0) for rank, s in symbols.items() if isinstance(s, str)]
         )
         self.margin = margin
+        self.available: float | None = 1000.0  # saldo tersedia di form order
         self.calls: list[str] = []
         self.filled: list[str] = []
 
@@ -231,6 +235,12 @@ class FakeNavigator:
 
     def press_short(self, plan: object) -> None:
         raise AssertionError("press_short tidak boleh dipanggil selama order dikunci")
+
+    def close_position(self, symbol: str) -> None:
+        self.calls.append(f"close_position:{symbol}")
+
+    def available_usdt(self) -> float | None:
+        return self.available
 
     def show_15m_chart(self) -> None:
         self.calls.append("15m")

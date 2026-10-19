@@ -96,6 +96,12 @@ function followersStatus() {
 const followerNames = new Map(); // id pengikut -> nama, diingat sejak diajak (bila nanti terputus)
 
 const closeQueue = []; // perintah Sell pemimpin yang menunggu bot di laptop ini selesai
+// Real Fund Trading. runReal: bot yang sedang berjalan memakai uang sungguhan. followerRealOk:
+// laptop pengikut ini sudah menyetujui modal peringatan untuk pemimpinnya (sampai keluar kelompok
+// atau aplikasi ditutup). pendingRealStart: putaran pemimpin yang menunggu jawaban modal itu.
+let runReal = false;
+let followerRealOk = null; // id pemimpin yang sudah disetujui
+let pendingRealStart = null;
 
 /** Pengikut: jalankan perintah Sell dari pemimpin (uji kertas, tombol tidak ditekan). */
 async function closeForLeader({ leaderName, symbol }) {
@@ -105,10 +111,14 @@ async function closeForLeader({ leaderName, symbol }) {
   }
   let text;
   try {
-    const result = await engine.runJson(onExchange(['posisi', '--tutup', symbol === '*' ? 'semua' : symbol]));
+    // Posisi sungguhan pengikut hanya ditutup di bursa bila laptop ini menyetujui Real Fund Trading.
+    const real = followerRealOk && followerRealOk === team?.membership?.leaderId ? ['--uang-sungguhan'] : [];
+    const result = await engine.runJson(
+      onExchange([...real, 'posisi', '--tutup', symbol === '*' ? 'semua' : symbol]), { timeoutMs: 180000 },
+    );
     if (Array.isArray(result.positions)) ownPositions = result.positions;
     const done = (result.closed || []).map((c) => c.symbol).join(', ');
-    if (result.error) text = 'Gagal menutup posisi: harga Binance tidak bisa diambil';
+    if (result.error) text = `Gagal menutup posisi: ${result.error}`;
     else text = done ? `${leaderName} menutup posisi: ${done}` : `${leaderName} menutup posisi: tidak ada posisi terbuka`;
   } catch {
     text = 'Gagal menutup posisi';
@@ -155,20 +165,31 @@ function teamState() {
 }
 
 /** Pemimpin memulai putaran: pengikut yang sudah menerima ikut menjalankan bot. */
-function startFollower({ leaderName, rank, modal, hub, exchange: leaderExchange }) {
+function startFollower(start) {
+  const { leaderName, rank, modal, hub, exchange: leaderExchange, real = false } = start;
   if (proc.running) return;
   // Pengikut memakai platform pemimpin (Binance atau Tebbit); tanpa keterangan, platform laptop ini.
   const platform = engine.EXCHANGES.includes(leaderExchange) ? leaderExchange : exchange;
+  const leaderId = team?.membership?.leaderId;
+  if (real && platform === 'binance' && followerRealOk !== leaderId && start.answered === undefined) {
+    // Pemimpin memakai uang sungguhan: laptop ini menyetujui dulu lewat modal peringatan.
+    pendingRealStart = start;
+    send('team:realRequest', { leaderName, modal, exchange: platform });
+    showAppWindow();
+    return;
+  }
+  const useReal = real && platform === 'binance' && followerRealOk === leaderId;
   try {
-    proc.start(engine.buildArgs('follower', { rank, modal, hub, exchange: platform }));
+    proc.start(engine.buildArgs('follower', { rank, modal, hub, exchange: platform, real: useReal }));
   } catch (err) {
     send('team:error', `Gagal mengikuti ${leaderName}: ${err.message}`);
     return;
   }
   exchange = platform;
+  runReal = useReal;
   runningMode = 'follower';
   syncPresence();
-  send('team:started', { leaderName, rank, exchange: platform });
+  send('team:started', { leaderName, rank, exchange: platform, real: useReal });
   win?.minimize();
 }
 
@@ -198,6 +219,7 @@ async function startDiscovery() {
       send('team:invite', invite);
     });
     team.on('removed', (info) => {
+      followerRealOk = null; // persetujuan uang sungguhan berlaku per pemimpin
       syncPresence();
       send('team:changed', { ...teamState(), notice: `${info.leaderName} mengeluarkan laptop ini dari kelompok.` });
     });
@@ -241,12 +263,13 @@ proc.on('log', (entry) => {
   const e = entry.event;
   if (e?.type === 'view' && e.target === 'app') showAppWindow();
   if (team && runningMode === 'leader' && e?.type === 'cycle' && e.phase === 'start') {
-    team.startCycle(exchange); // pengikut ikut memulai putaran ini, di platform yang sama
+    team.startCycle(exchange, runReal); // pengikut ikut memulai putaran ini, di platform yang sama
     syncPresence();
   }
 });
 proc.on('exit', (info) => {
   send('engine:exit', info);
+  runReal = false;
   runningMode = null;
   syncPresence();
   refreshPositions();
@@ -305,6 +328,7 @@ handle('engine:start', (mode, params) => {
     : engine.buildArgs(mode, params);
   proc.start(args);
   exchange = params?.exchange || 'binance';
+  runReal = params?.real === true;
   runningMode = mode;
   uiRole = mode;
   syncPresence();
@@ -318,7 +342,20 @@ handle('engine:stop', () => {
 });
 handle('engine:status', () => ({ running: proc.running, exchange }));
 handle('engine:checks', () => engine.runJson(['cek']));
-handle('engine:summary', () => engine.runJson(onExchange(['jurnal', '--json'])));
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+handle('engine:summary', (range) => {
+  // Filter waktu Hasil uji: hanya tanggal YYYY-MM-DD yang diteruskan ke engine.
+  const args = ['jurnal', '--json'];
+  if (range?.from) {
+    if (!DAY.test(String(range.from))) throw new Error('Tanggal awal tidak valid');
+    args.push('--dari', String(range.from));
+  }
+  if (range?.to) {
+    if (!DAY.test(String(range.to))) throw new Error('Tanggal akhir tidak valid');
+    args.push('--sampai', String(range.to));
+  }
+  return engine.runJson(onExchange(args));
+});
 handle('platform:set', (id) => {
   if (!engine.EXCHANGES.includes(id)) throw new Error('Platform tidak dikenal');
   if (!proc.running) exchange = id; // saat bot berjalan, platform mengikuti bot
@@ -355,14 +392,33 @@ handle('positions:list', async () => {
   if (Array.isArray(result.positions)) ownPositions = result.positions;
   return result;
 });
-handle('positions:close', async (symbol) => {
+handle('positions:check', async () => {
+  // Tebbit: bot membuka Chrome sebentar untuk membaca harga tiap posisi (OCR), lalu jual otomatis
+  // bila sudah target. Tidak bersamaan dengan bot yang sedang memakai layar.
+  if (proc.running) throw new Error('Bot sedang berjalan dan sudah mengecek posisi tiap 5 menit.');
+  const result = await engine.runJson(onExchange(['posisi', '--cek']), { timeoutMs: 300000 });
+  if (Array.isArray(result.positions)) ownPositions = result.positions;
+  return result;
+});
+handle('team:realAnswer', (ok) => {
+  const start = pendingRealStart;
+  pendingRealStart = null;
+  if (!start) return false;
+  if (ok === true) followerRealOk = team?.membership?.leaderId ?? null;
+  startFollower({ ...start, answered: ok === true }); // ditolak: ikut sebagai uji kertas
+  return true;
+});
+handle('positions:close', async (symbol, real = false) => {
   // Hanya mode Sendiri; posisi pengikut hanya ditutup oleh pemimpinnya.
   if (team?.membership || uiRole !== 'single') {
     throw new Error('Hanya mode Sendiri yang bisa menutup posisinya sendiri. Posisi pengikut ditutup oleh pemimpin.');
   }
   if (symbol !== 'semua' && !PAIR.test(String(symbol))) throw new Error('Pair tidak valid');
-  const result = await engine.runJson(onExchange(['posisi', '--tutup', symbol]));
-  if (result.error) throw new Error('Harga Binance tidak bisa diambil, posisi belum ditutup.');
+  // Posisi sungguhan: bot membuka Binance dan menekan Market di tab Posisi (layar dipakai).
+  if (real === true && proc.running) throw new Error('Hentikan bot dulu: menutup posisi sungguhan memakai layar Binance.');
+  const live = real === true ? ['--uang-sungguhan'] : [];
+  const result = await engine.runJson(onExchange([...live, 'posisi', '--tutup', symbol]), { timeoutMs: 180000 });
+  if (result.error) throw new Error(`Posisi belum ditutup: ${result.error}`);
   if (Array.isArray(result.positions)) ownPositions = result.positions;
   syncPresence();
   return result;
@@ -429,6 +485,7 @@ handle('team:decline', (leaderId) => {
 });
 handle('team:leave', () => {
   team?.leave();
+  followerRealOk = null;
   syncPresence();
   return teamState();
 });

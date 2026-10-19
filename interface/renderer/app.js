@@ -30,6 +30,7 @@ const STATUS = {
   timeout: ['Waktu habis', 'timeout'],
   manual: ['Ditutup (Sell)', 'manual'],
 };
+let platform = null; // platform yang sedang dipakai
 // Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
 const PLATFORMS = [
   { id: 'binance', name: 'Binance', logo: 'img/binance.png', note: 'Futures · pantau top gainers', ready: true },
@@ -87,6 +88,17 @@ function plain(text) {
   const t = String(text || '');
   const site = platform?.name || 'Binance';
   const rules = [
+    // Pemberitahuan Real Fund Trading (bukan kendala): kalimat sederhana, tanpa detail teknis.
+    [/MODE UANG SUNGGUHAN/, 'Mode uang sungguhan menyala: bot menekan tombol di Binance'],
+    [/saldo tersedia ([\d.,]+) USDT kurang dari margin ([\d.,]+) USDT/, (m) => `Saldo tersedia ${m[1]} USDT kurang dari margin ${m[2]} USDT: tidak masuk`],
+    [/saldo tersedia tidak terbaca/, 'Saldo tersedia tidak terbaca di form order, tidak masuk demi keamanan'],
+    [/Cek ulang (\S+) sebelum menjual/, (m) => `Cek ulang harga ${m[1]} sebelum menjual`],
+    [/ORDER SUNGGUHAN: tekan Jual\/Short (\S+)/, (m) => `Uang sungguhan: bot menekan Jual/Short ${m[1]}`],
+    [/ORDER SUNGGUHAN: tutup posisi (\S+)/, (m) => `Uang sungguhan: bot menekan Market untuk menjual ${m[1]}`],
+    [/Posisi ditutup di bursa\. Jual otomatis (\S+)/, (m) => `${m[1]} terjual otomatis di Binance`],
+    [/Jual otomatis (\S+) GAGAL di bursa/, (m) => `Jual otomatis ${m[1]} gagal, posisi tetap terbuka dan dicoba lagi`],
+    [/Leverage tidak bisa diubah/, 'Leverage koin ini tidak bisa diubah ke 2x otomatis'],
+    [/belum terbaca untuk jual otomatis/, 'Harga posisi belum terbaca, jual otomatis dicoba lagi'],
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
@@ -141,7 +153,7 @@ function activity(entry) {
     return { text: `Putaran selesai: ${what}${next}` };
   }
   if (e?.type === 'coin') {
-    if (e.status === 'open') return { text: `${e.symbol} masuk posisi uji`, css: 'good' };
+    if (e.status === 'open') return { text: `${e.symbol} masuk posisi ${e.real ? 'sungguhan' : 'uji'}`, css: 'good' };
     if (e.status === 'analyzed') return { text: `${e.symbol}: ${(VERDICT[e.verdict] || ['dibaca'])[0].toLowerCase()}` };
     return { text: `${e.symbol} dilewati: ${plain(e.reason).toLowerCase()}` };
   }
@@ -315,7 +327,81 @@ function setState(next, title, sub) {
 
 function lockSetup() {
   $('setup').classList.toggle('locked', state !== 'stopped' || Boolean(teamInfo.membership));
+  renderReal();
 }
+
+// --------------------------------------------------------------------------- Real Fund Trading
+
+// Mati setiap aplikasi dibuka; hanya menyala lewat modal peringatan. Untuk Pemimpin, menyalakan
+// juga mengajak pengikut (tiap laptop pengikut menyetujui sendiri di modal yang sama).
+let realOn = false;
+let runningReal = false; // bot yang sedang berjalan memakai uang sungguhan
+
+function renderReal() {
+  const button = $('real-toggle');
+  const binance = (platform?.id || 'binance') === 'binance';
+  if (!binance) realOn = false;
+  button.disabled = state !== 'stopped' || !binance;
+  button.setAttribute('aria-checked', String(realOn));
+  $('real-card').classList.toggle('on', realOn);
+  $('real-state').textContent = realOn ? 'Aktif' : 'Mati';
+  $('real-note').textContent = !binance
+    ? 'Belum tersedia untuk Tebbit.'
+    : realOn
+      ? 'Uang sungguhan: bot membeli dan menjual sendiri di Binance, dan tetap menyala sampai posisinya terjual.'
+      : 'Sekarang uji kertas: posisi hanya dicatat, tanpa uang sungguhan.';
+  const real = state !== 'stopped' ? runningReal : realOn;
+  $('paper').classList.toggle('real', real);
+  $('paper-tag').className = real ? 'tag danger' : 'tag outline';
+  $('paper-tag').textContent = real ? 'Uang sungguhan' : 'Uji kertas';
+  $('paper-text').textContent = real
+    ? 'Bot menekan tombol Jual/Short dan tutup posisi di Binance dengan uangmu. Tanpa stop-loss.'
+    : 'Bot tidak pernah menekan tombol beli atau jual. Setiap posisi hanya dicatat.';
+}
+
+/** Modal peringatan uang sungguhan. Selesai dengan true hanya bila dicentang dan diketik SETUJU. */
+function askReal({ follower = false, leaderName = '', modal = '' } = {}) {
+  const dialog = $('real-dialog');
+  const ack = $('real-ack');
+  const word = $('real-word');
+  const confirm = $('real-confirm');
+  $('real-title').textContent = follower ? `${leaderName} memakai uang sungguhan` : 'Nyalakan Real Fund Trading?';
+  $('real-intro').textContent = follower
+    ? 'Laptop ini ikut memakai uang sungguhan hanya bila kamu setuju; bila ditolak, laptop ini mengikuti sebagai uji kertas. Tiap posisi:'
+    : 'Mulai putaran berikutnya, bot memakai uangmu di Binance. Tiap posisi:';
+  const capital = Number(String(modal || form.modal || '').replace(',', '.'));
+  const usdt = (v) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })} USDT`;
+  $('real-notional').textContent = capital > 0 ? usdt(capital) : '–';
+  $('real-margin').textContent = capital > 0 ? usdt(capital / 2) : '50% modal';
+  ack.checked = false;
+  word.value = '';
+  confirm.disabled = true;
+  dialog.hidden = false;
+  word.focus();
+  const valid = () => { confirm.disabled = !(ack.checked && word.value.trim().toUpperCase() === 'SETUJU'); };
+  return new Promise((resolve) => {
+    const done = (ok) => {
+      dialog.hidden = true;
+      ack.onchange = word.oninput = confirm.onclick = $('real-cancel').onclick = null;
+      resolve(ok);
+    };
+    ack.onchange = valid;
+    word.oninput = valid;
+    confirm.onclick = () => done(true);
+    $('real-cancel').onclick = () => done(false);
+  });
+}
+
+$('real-toggle').addEventListener('click', async () => {
+  if (state !== 'stopped') return;
+  realOn = realOn ? false : await askReal();
+  renderReal();
+});
+
+window.bot.team.onRealRequest(async (request) => {
+  const ok = await askReal({ follower: true, ...request });
+  window.bot.team.realAnswer(ok).catch(() => {});
+});
 
 function setCounts() {
   const watched = watchedCount();
@@ -343,9 +429,10 @@ async function toggleRun() {
     await window.bot.stop().catch(() => {});
     return;
   }
-  const params = { exchange: platform.id, modal: form.modal, ranks: form.ranks, rank: form.rank, interval: form.interval };
+  const params = { exchange: platform.id, modal: form.modal, ranks: form.ranks, rank: form.rank, interval: form.interval, real: realOn };
   try {
     await window.bot.start(form.mode, params);
+    runningReal = realOn;
   } catch (err) {
     $('run-error').textContent = err.message;
     return;
@@ -440,7 +527,7 @@ function chartThumb(file, caption) {
 /** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
 function actionOf(e) {
   if (e.status === 'open') {
-    return { text: 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
+    return { text: e.real ? 'Short sungguhan dibuka' : 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
   }
   if (e.status === 'analyzed') {
     return e.verdict === 'ok'
@@ -559,6 +646,12 @@ window.bot.onLog((entry) => {
   if (e?.type === 'cycle' && e.phase === 'done') {
     $('cycle-info').textContent = `Selesai ${clock(entry.ts || Date.now() / 1000)}`;
     if ($('coins').querySelector('.empty-row')) emptyCoins('Tidak ada koin yang bisa dinilai di putaran ini.');
+  }
+  // Detak pengawasan uang sungguhan (tiap menit): tampil di kartu Status sebagai tanda masih hidup,
+  // tanpa memenuhi daftar aktivitas. Menggantikan pesan kegagalan sesaat yang sudah lewat.
+  const watching = String(entry.message || '').match(/^Mengawasi (\d+) posisi uang sungguhan/);
+  if (watching && state === 'running') {
+    $('status-sub').textContent = `Mengawasi ${watching[1]} posisi uang sungguhan, harga dicek tiap menit · terakhir ${clock(entry.ts || Date.now() / 1000)}`;
   }
   const item = activity(entry);
   if (item) {
@@ -685,16 +778,94 @@ function donut(s) {
   return [chart, legend];
 }
 
+// --------------------------------------------------------------------------- filter waktu Hasil uji
+
+// Satu filter untuk seluruh halaman (angka, grafik, donat, tabel, analisis AI), berlaku per
+// tanggal masuk posisi. Pilihan diingat per laptop; kegagalan penyimpanan tidak masalah.
+const RANGE_KEY = 'marketforge.range.v1';
+const range = { preset: 'all', from: '', to: '' };
+
+try {
+  Object.assign(range, JSON.parse(localStorage.getItem(RANGE_KEY) || '{}'));
+} catch { /* bawaan: Semua */ }
+if (!['all', 'today', '7', '30', 'custom'].includes(range.preset)) range.preset = 'all';
+
+const dayText = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+const shiftDays = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return dayText(d); };
+
+/** Rentang tanggal {from, to} (YYYY-MM-DD, kedua ujung termasuk) dari pilihan sekarang. */
+function activeRange() {
+  switch (range.preset) {
+    case 'today': return { from: shiftDays(0), to: shiftDays(0) };
+    case '7': return { from: shiftDays(-6), to: shiftDays(0) };
+    case '30': return { from: shiftDays(-29), to: shiftDays(0) };
+    case 'custom': return { from: range.from || '', to: range.to || '' };
+    default: return {};
+  }
+}
+
+function renderRange() {
+  for (const btn of $('range-presets').children) btn.classList.toggle('on', btn.dataset.range === range.preset);
+  $('range-dates').hidden = range.preset !== 'custom';
+  $('range-from').value = range.from;
+  $('range-to').value = range.to;
+  $('range-from').max = range.to || '';
+  $('range-to').min = range.from || '';
+}
+
+const dayLabel = (text) => new Date(`${text}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function rangeNote(report) {
+  const { from, to } = activeRange();
+  if (!from && !to) return 'Menampilkan semua catatan.';
+  const span = from && to ? (from === to ? dayLabel(from) : `${dayLabel(from)} – ${dayLabel(to)}`)
+    : from ? `sejak ${dayLabel(from)}` : `sampai ${dayLabel(to)}`;
+  return `Posisi yang masuk ${span} · ${report.stats.closed} selesai, ${report.stats.open} berjalan`;
+}
+
+function saveRange() {
+  try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)); } catch { /* tidak masalah */ }
+}
+
+$('range-presets').addEventListener('click', (ev) => {
+  const value = ev.target.closest('button')?.dataset.range;
+  if (!value) return;
+  range.preset = value;
+  if (value === 'custom' && !range.from && !range.to) { // mulai dari 7 hari terakhir
+    range.from = shiftDays(-6);
+    range.to = shiftDays(0);
+  }
+  saveRange();
+  renderRange();
+  loadJournal();
+});
+for (const [id, key] of [['range-from', 'from'], ['range-to', 'to']]) {
+  $(id).addEventListener('change', () => {
+    range[key] = $(id).value;
+    saveRange();
+    renderRange();
+    loadJournal();
+  });
+}
+
 async function loadJournal() {
   $('journal-refresh').disabled = true;
+  renderRange();
+  $('journal-check').hidden = platform?.id !== 'tebbit';
   const notice = $('journal-notice');
   try {
-    const report = await window.bot.summary();
+    const report = await window.bot.summary(activeRange());
     const s = report.stats;
+    $('range-note').textContent = rangeNote(report);
+    $('trades-note').textContent = activeRange().from || activeRange().to
+      ? 'Semua posisi uji pada rentang waktu ini.' : '20 posisi uji terbaru.';
     notice.hidden = !report.warning;
     notice.className = 'notice';
     notice.textContent = platform?.id === 'tebbit'
-      ? 'Hasil posisi uji Tebbit belum bisa dinilai otomatis (tidak ada data candle); angka dari catatan terakhir.'
+      ? 'Posisi Tebbit dinilai dari harga di layar: otomatis tiap 5 menit saat bot berjalan, atau tekan Cek harga Tebbit.'
       : 'Data harga Binance belum bisa diambil di jaringan ini; angka di bawah dari catatan terakhir.';
 
     const enough = s.closed >= s.required_trades;
@@ -727,10 +898,14 @@ async function loadJournal() {
     });
     $('analyses').replaceChildren(...(report.analyses?.length
       ? [...report.analyses].reverse().map(analysisItem)
-      : [el('li', { class: 'idle', textContent: 'Belum ada koin yang dinilai AI di platform ini.' })]));
+      : [el('li', { class: 'idle', textContent: activeRange().from || activeRange().to
+        ? 'Tidak ada koin yang dinilai AI pada rentang waktu ini.'
+        : 'Belum ada koin yang dinilai AI di platform ini.' })]));
 
     $('trades').replaceChildren(...(rows.length ? rows
-      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
+      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: activeRange().from || activeRange().to
+        ? 'Tidak ada posisi pada rentang waktu ini. Ubah filter waktu di atas.'
+        : 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
   } catch (err) {
     notice.hidden = false;
     notice.className = 'notice bad';
@@ -794,6 +969,21 @@ $('history-clear').addEventListener('click', async () => {
   await editHistory(() => window.bot.history.clear());
 });
 $('journal-refresh').addEventListener('click', loadJournal);
+$('journal-check').addEventListener('click', async () => {
+  const button = $('journal-check');
+  button.disabled = true;
+  button.textContent = 'Membaca harga…';
+  try {
+    await window.bot.positions.check();
+  } catch (err) {
+    $('journal-notice').hidden = false;
+    $('journal-notice').textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Cek harga Tebbit';
+  }
+  await loadJournal();
+});
 
 // --------------------------------------------------------------------------- posisi (Sell)
 
@@ -831,28 +1021,38 @@ async function loadPositions() {
 }
 loaders.positions = loadPositions;
 
+let ownRealOpen = false; // ada posisi uang sungguhan di daftar (Sell semua ikut menekan Market)
+
 async function loadOwnPositions(canSell) {
   const result = await window.bot.positions.list();
   posNotice(result.warning ? `Harga ${platform?.name || 'Binance'} belum bisa diambil; hasil sementara tidak tampil.` : '', 'warn');
   $('pos-close-all').disabled = !result.positions.length;
+  ownRealOpen = result.positions.some((p) => p.real);
   const rows = result.positions.map((p) => el('tr', {},
-    el('td', {}, el('strong', { class: 'sym', textContent: p.symbol }), el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
+    el('td', {}, el('strong', { class: 'sym', textContent: p.symbol }),
+      p.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null,
+      el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
     el('td', { class: 'num', textContent: price(p.entry_price) }),
     el('td', { class: 'num', textContent: price(p.price) }),
     el('td', { class: `num ${signClass(p.pnl_capital_pct)}`, textContent: p.pnl_capital_pct === null ? '–' : `${percent(p.pnl_capital_pct)} modal` }),
     el('td', { class: 'num', textContent: price(p.target_price) }),
     el('td', { class: 'num' }, canSell
-      ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol) })
+      ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol, p.real === true) })
       : el('span', { class: 'locked', textContent: 'Ditutup pemimpin' }))));
   $('pos-table').replaceChildren(...(rows.length ? rows
     : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 6, textContent: 'Tidak ada posisi yang terbuka.' }))]));
 }
 
-async function sellOwn(symbol) {
+async function sellOwn(symbol, real = false) {
   const label = symbol === 'semua' ? 'semua posisi' : `posisi ${symbol}`;
-  if (!window.confirm(`Tutup ${label}? (uji kertas, tombol ${platform?.name || 'Binance'} tidak ditekan)`)) return;
+  const site = platform?.name || 'Binance';
+  const question = real
+    ? `Tutup ${label} SUNGGUHAN? Bot membuka ${site} dan menekan Market di tab Posisi (uang sungguhan).`
+    : `Tutup ${label}? (uji kertas, tombol ${site} tidak ditekan)`;
+  if (!window.confirm(question)) return;
+  if (real) posNotice(`Menutup posisi di ${site}… jangan pakai mouse.`, '');
   try {
-    const result = await window.bot.positions.close(symbol);
+    const result = await window.bot.positions.close(symbol, real);
     const text = result.closed.map((c) => `${c.symbol} ${percent(c.pnl_capital_pct)} modal`).join(', ');
     window.bot.reportActivity({ text: text ? `Sell: ${text}` : 'Sell: tidak ada posisi' }).catch(() => {});
     await loadOwnPositions(true);
@@ -907,7 +1107,7 @@ async function sellTeam(target, symbol, label) {
 $('pos-refresh').addEventListener('click', loadPositions);
 $('pos-close-all').addEventListener('click', () => {
   if (currentRole() === 'leader') sellTeam('*', '*', 'semua posisi semua pengikut');
-  else sellOwn('semua');
+  else sellOwn('semua', ownRealOpen);
 });
 window.bot.positions.onChanged(() => {
   if (!$('page-positions').hidden) loadPositions();
@@ -1278,7 +1478,8 @@ window.bot.team.onChanged((info) => {
   if (info.notice) addFeed({ text: info.notice, css: 'warn' }, Date.now() / 1000);
 });
 window.bot.team.onError((message) => addFeed({ text: message, css: 'bad' }, Date.now() / 1000));
-window.bot.team.onStarted(({ leaderName, rank, exchange }) => {
+window.bot.team.onStarted(({ leaderName, rank, exchange, real }) => {
+  runningReal = real === true;
   Object.assign(counts, { seen: 0, ok: 0, open: 0 });
   setCounts();
   // Tampilan pengikut berpindah ke platform pemimpin (jurnal dan posisi dibaca dari platform itu).
@@ -1309,7 +1510,6 @@ window.bot.status().then(({ running, exchange }) => {
 
 // --------------------------------------------------------------------------- pilih platform
 
-let platform = null; // platform yang sedang dipakai
 
 /** Logo platform. Logo gelap (Tebbit) ditaruh di kotak terang agar terlihat di tema gelap. */
 function platformMark(p) {
@@ -1386,6 +1586,7 @@ function choosePlatform(id) {
   $('platform-name').textContent = chosen.name;
   $('platform-logo').src = chosen.logo;
   $('platform-logo').parentElement.className = `plat-logo ${chosen.id}`;
+  renderReal(); // Real Fund Trading hanya untuk Binance
   $('chooser').hidden = true;
   $('app').inert = false;
   showPage('run');

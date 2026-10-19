@@ -234,3 +234,19 @@ test('platform di putaran tidak bisa dipalsukan: tanda tangan harus cocok', () =
   assert.equal(forged.team.verified, false);
   assert.equal(forged.team.exchange, '');
 });
+
+test('Real Fund Trading: pemimpin mengumumkan putaran uang sungguhan (bertanda tangan)', () => {
+  const leader = new Team({ myId: LEADER, token: TOKEN, now: () => NOW });
+  leader.startCycle('binance', true);
+  assert.equal(leader.fields('leader').rf, '1');
+  leader.startCycle('binance');
+  assert.equal(leader.fields('leader').rf, undefined);
+
+  const { team, events } = follower();
+  team.accept({ leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: 2, modal: '100' });
+  team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000), ex: 'binance', rf: '1' })]);
+  assert.equal(events.at(-1)[1].real, true);
+  // TXT palsu (tanda tangan token lain) tidak bisa menyalakan uang sungguhan.
+  const txt = { id: LEADER, name: 'Palsu', role: 'leader', cycle: String(NOW), rf: '1' };
+  assert.equal(teamFieldsFrom({ ...txt, sig: sign('token-lain', txt) }, TOKEN).real, false);
+});

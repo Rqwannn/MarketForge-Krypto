@@ -5,7 +5,7 @@ from binance_bot.workflows.example import ExampleWorkflow
 from binance_bot.workflows.fill_test import FillTestWorkflow
 from binance_bot.workflows.follower import FollowerWorkflow
 from binance_bot.workflows.history import HistoryWorkflow
-from binance_bot.workflows.journal_report import JournalWorkflow
+from binance_bot.workflows.journal_report import JournalWorkflow, day_bounds
 from binance_bot.workflows.leader import LeaderWorkflow
 from binance_bot.workflows.open_app import OpenBinanceWorkflow
 from binance_bot.workflows.positions import PositionsWorkflow
@@ -28,4 +28,5 @@ __all__ = [
     "SopTrader",
     "WindowSizeWorkflow",
     "Workflow",
+    "day_bounds",
 ]

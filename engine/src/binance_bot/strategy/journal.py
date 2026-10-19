@@ -48,6 +48,9 @@ class JournalEntry:
     min_price: float | None = None  # harga terendah setelah masuk (seberapa jauh harga turun)
     ma_gap_pct: float | None = None  # jarak garis cepat ke garis pembanding saat masuk (%)
     checked_ms: int | None = None  # posisi sudah dinilai dari candle sampai waktu ini
+    # Real Fund Trading: posisi sungguhan di bursa. Hanya ditutup oleh proses mode real yang
+    # menekan tombol tutup; penilaian uji kertas tidak pernah mengubahnya.
+    real: bool = False
     exit_price: float | None = None
     closed_at: float | None = None
     funding_pct: float | None = None

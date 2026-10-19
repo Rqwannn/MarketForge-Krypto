@@ -82,7 +82,7 @@ function decodeInvites(text) {
 /** Field kelompok dari TXT laptop lain; hanya bila tanda tangannya cocok dengan token kita. */
 function teamFieldsFrom(txt, token) {
   if (!isSigned(token, txt)) {
-    return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, exchange: '', close: null };
+    return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, exchange: '', real: false, close: null };
   }
   const rank = normalizeRank(txt.rank);
   const close = CLOSE.exec(txt.cls || '');
@@ -93,6 +93,7 @@ function teamFieldsFrom(txt, token) {
     rank,
     cycle: Number.isFinite(Number(txt.cycle)) ? Number(txt.cycle) : 0,
     exchange: EXCHANGES.includes(txt.ex) ? txt.ex : '',
+    real: txt.rf === '1', // Real Fund Trading: pengikut wajib menyetujui di laptopnya sendiri
     close: close ? { seq: Number(close[1]), target: close[2], symbol: close[3] } : null,
   };
 }
@@ -107,6 +108,7 @@ class Team extends EventEmitter {
     this.invites = new Map(); // pemimpin: id pengikut -> top
     this.cycle = 0; // pemimpin: waktu mulai putaran terakhir
     this.exchange = ''; // pemimpin: platform putaran itu (pengikut memakai platform yang sama)
+    this.real = false; // pemimpin: putaran itu memakai uang sungguhan
     this.closeCommand = null; // pemimpin: perintah Sell terakhir { seq, target, symbol }
     this.membership = null; // pengikut: { leaderId, leaderName, rank, modal }
     this.answered = new Set(); // ajakan yang sudah dijawab atau sedang ditampilkan
@@ -128,6 +130,7 @@ class Team extends EventEmitter {
     if (this.cycle) {
       fields.cycle = String(this.cycle);
       if (this.exchange) fields.ex = this.exchange;
+      if (this.real) fields.rf = '1';
     }
     const c = this.closeCommand;
     if (c) fields.cls = `${c.seq}:${c.target}:${c.symbol}`;
@@ -156,9 +159,10 @@ class Team extends EventEmitter {
     this.closeCommand = { seq: this.now(), target: target === '*' ? '*' : shortId(target), symbol };
   }
 
-  startCycle(exchange = '') {
+  startCycle(exchange = '', real = false) {
     this.cycle = this.now();
     this.exchange = EXCHANGES.includes(exchange) ? exchange : '';
+    this.real = real === true;
   }
 
   accept({ leaderId, leaderName, rank, modal }) {
@@ -221,6 +225,7 @@ class Team extends EventEmitter {
             modal: member.modal,
             hub: `http://${peer.address}:${HUB_PORT}`,
             ...(peer.team.exchange ? { exchange: peer.team.exchange } : {}),
+            ...(peer.team.real ? { real: true } : {}),
           });
         }
         const close = peer.team.close;

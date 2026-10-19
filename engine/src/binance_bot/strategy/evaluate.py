@@ -138,7 +138,7 @@ def evaluate_open_trades(
     updated = []
     end_ms = int(now_s * 1000)
     for entry in entries:
-        if entry.status == "open" and entry.entry_price and entry.target_price:
+        if entry.status == "open" and entry.entry_price and entry.target_price and not entry.real:
             # Mulai dari menit setelah masuk: pergerakan sebelum masuk tidak dihitung.
             first_ms = (int(entry.created_at * 1000) // _MINUTE_MS + 1) * _MINUTE_MS
             start_ms = max(first_ms, (entry.checked_ms or 0) + 1)

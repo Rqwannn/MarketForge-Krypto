@@ -81,3 +81,22 @@ def scroll_up_at(x: int, y: int, lines: int = 20) -> None:
         kCGHIDEventTap,
         CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitLine, 1, lines),
     )
+
+
+def scroll_horizontal_at(x: int, y: int, notches: int) -> None:
+    """Gulir mendatar di (x, y): `notches` positif = ke kanan (tabel lebar, mis. tab Posisi)."""
+    from Quartz import (
+        CGEventCreateScrollWheelEvent,
+        CGEventPost,
+        kCGHIDEventTap,
+        kCGScrollEventUnitLine,
+    )
+
+    _move_to((float(x), float(y)))
+    for _ in range(abs(notches)):
+        step = -10 if notches > 0 else 10
+        CGEventPost(
+            kCGHIDEventTap,
+            CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitLine, 2, 0, step),
+        )
+        time.sleep(0.05)

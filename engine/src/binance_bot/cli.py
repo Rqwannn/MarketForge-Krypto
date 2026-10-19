@@ -22,12 +22,13 @@ from binance_bot.logging_setup import setup_logging
 from binance_bot.macos.keyboard import NUMBER_PATTERN
 from binance_bot.market import FuturesMarket, MarketData
 from binance_bot.strategy import (
-    LIVE_ORDERS_ENABLED,
     DryRunOrderGate,
     Journal,
     OrderGate,
     ScreenOrderGate,
     SopParams,
+    enable_live_orders,
+    live_orders_enabled,
 )
 from binance_bot.strategy.params import SIGNAL_SOURCES
 from binance_bot.system import System, build_system
@@ -50,6 +51,7 @@ from binance_bot.workflows import (
     SopTrader,
     WindowSizeWorkflow,
     Workflow,
+    day_bounds,
 )
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.positions import ALL
@@ -166,6 +168,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="binance",
         help="Platform: binance (aplikasi desktop) atau tebbit (website di Chrome)",
     )
+    parser.add_argument(
+        "--uang-sungguhan",
+        action="store_true",
+        help="Real Fund Trading: tekan tombol order dan tutup posisi di bursa (bukan uji kertas)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     sop = _sop_options()
 
@@ -217,12 +224,28 @@ def build_parser() -> argparse.ArgumentParser:
         "jurnal", parents=[sop], help="Nilai uji kertas dan rekap terhadap titik impas."
     )
     jurnal.add_argument("--json", action="store_true", help="Cetak rekap sebagai JSON di stdout")
+    jurnal.add_argument(
+        "--dari", metavar="YYYY-MM-DD", help="Hanya posisi yang masuk sejak tanggal ini"
+    )
+    jurnal.add_argument(
+        "--sampai", metavar="YYYY-MM-DD", help="Hanya posisi yang masuk sampai tanggal ini"
+    )
 
     positions = sub.add_parser(
         "posisi", parents=[sop], help="Posisi uji kertas terbuka (JSON); --tutup untuk Sell."
     )
     positions.add_argument(
         "--tutup", help="Tutup (uji kertas) posisi pair ini, atau 'semua'", metavar="PAIR"
+    )
+    positions.add_argument(
+        "--pantau",
+        action="store_true",
+        help="Pantau posisi terbuka terus (tiap menit) dan jual otomatis saat target tercapai",
+    )
+    positions.add_argument(
+        "--cek",
+        action="store_true",
+        help="Tebbit: baca harga posisi dari layar sekarang dan jual otomatis bila sudah target",
     )
 
     sub.add_parser(
@@ -334,7 +357,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     if tebbit:
         # Membuka halaman koin lain untuk membaca harganya hanya saat bot bekerja atau Sell.
         browse = args.command in ("single", "leader", "follower") or (
-            args.command == "posisi" and args.tutup is not None
+            args.command == "posisi" and (args.tutup is not None or args.cek)
         )
         navigator, market = build_tebbit(settings, system, browse=browse)
         if args.command != "uji-isi":  # uji-isi: jendela dibiarkan agar angkanya bisa dilihat
@@ -353,7 +376,10 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
     journal = Journal(settings.journal_path)
     if args.command == "jurnal":
-        return JournalWorkflow(params_from(args), journal, market, as_json=args.json)
+        since, until = day_bounds(args.dari, args.sampai)
+        return JournalWorkflow(
+            params_from(args), journal, market, as_json=args.json, since=since, until=until
+        )
     if args.command == "riwayat":
         return HistoryWorkflow(journal, delete_id=args.hapus, clear=args.bersihkan)
     if args.command == "contoh":
@@ -369,7 +395,28 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
     if args.command == "posisi":
         target = args.tutup.upper() if args.tutup and args.tutup.lower() != ALL else args.tutup
-        return PositionsWorkflow(params_from(args), journal, market, close=target)
+        closer = None
+        if args.uang_sungguhan and (target is not None or args.pantau):  # Real Fund Trading
+            if tebbit:
+                raise BotError("Real Fund Trading untuk Tebbit belum tersedia (Binance dulu)")
+            enable_live_orders()
+            closer = BinanceNavigator(
+                settings,
+                apps,
+                window,
+                system.reader,
+                screens=system.screens,
+                windows=on_screen_windows,
+            )
+        return PositionsWorkflow(
+            params_from(args),
+            journal,
+            market,
+            close=target,
+            check=args.cek,
+            closer=closer,
+            watch_s=60.0 if args.pantau else 0.0,
+        )
 
     if not tebbit:
         navigator = BinanceNavigator(
@@ -393,11 +440,15 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         )
 
     params = params_from(args)
-    # Order sungguhan hanya bila LIVE_ORDERS_ENABLED dibuka (sekarang terkunci): selain itu uji
-    # kertas, yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    # Order sungguhan hanya dengan --uang-sungguhan (Real Fund Trading): selain itu uji kertas,
+    # yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    if args.uang_sungguhan:
+        if tebbit:
+            raise BotError("Real Fund Trading untuk Tebbit belum tersedia (Binance dulu)")
+        enable_live_orders()
     gate: OrderGate = (
         ScreenOrderGate(navigator)
-        if LIVE_ORDERS_ENABLED
+        if live_orders_enabled()
         else DryRunOrderGate(navigator.short_button)
     )
     trader = SopTrader(
