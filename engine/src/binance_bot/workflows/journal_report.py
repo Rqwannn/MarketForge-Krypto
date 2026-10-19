@@ -12,7 +12,7 @@ from binance_bot.exceptions import BotError, MarketDataError
 from binance_bot.market import MarketData
 from binance_bot.strategy import Journal, JournalEntry, SopParams, summarize
 from binance_bot.strategy.params import REQUIRED_TEST_TRADES
-from binance_bot.workflows.sop import chart_of, refresh_journal
+from binance_bot.workflows.sop import chart_of, decision_fields, refresh_journal
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,9 @@ class JournalWorkflow:
                 {**e.to_dict(), "pnl_capital_pct": e.pnl_capital_pct} for e in trades[-trade_limit:]
             ],
             # Riwayat setiap koin yang dinilai (termasuk yang dilewati) untuk aplikasi.
-            "analyses": [_analysis(e) for e in entries[-analysis_limit:] if e.verdict],
+            "analyses": [
+                _analysis(e, self._params) for e in entries[-analysis_limit:] if e.verdict
+            ],
         }
 
     def _report(self, entries: list[JournalEntry], now: float) -> None:
@@ -196,9 +198,13 @@ def _crosses(entry: JournalEntry) -> str:
     return f"{'-' if ai is None else ai}/{'-' if data is None else data}"
 
 
-def _analysis(entry: JournalEntry) -> dict[str, Any]:
+def _analysis(entry: JournalEntry, params: SopParams) -> dict[str, Any]:
     ai = entry.pattern_ai or {}
     return {
+        **decision_fields(entry, params),
+        "real": entry.real,
+        "entry_price": entry.entry_price,
+        "target_price": entry.target_price,
         "id": entry.id,
         "created_at": entry.created_at,
         "symbol": entry.symbol,

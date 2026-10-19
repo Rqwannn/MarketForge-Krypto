@@ -12,6 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import (
@@ -69,12 +70,15 @@ _UNIT_RADIO = re.compile(r"Ukuran\s*Order")
 _ACTION_HEADER = re.compile(r"Tindakan", re.IGNORECASE)
 _EXTRA_SCROLL_SHIFT = 0.05  # banner setinggi ini atau lebih: gulir satu langkah lagi
 _FIFTEEN_MINUTES = re.compile(r"\b15\s*mnt\b")
-_MA7_LABEL = re.compile(r"MA\s*\(\s*7\s*\)")
+# Legenda "MA(7) ... MA(25) ... MA(99)" menandakan grafik sudah termuat. OCR Windows sering salah
+# baca: kurung jadi huruf ("MAC7)"), atau garis MA99 yang melintasi label membuang awalannya
+# ("7) 0,026157 MA(25) ..."). Cukup salah satu garis terbaca; angka lain (MA(77)) tidak cocok.
+_CHART_LEGEND = re.compile(r"MA\s*[(\[{<C]?\s*(?:7|25|99)(?!\d)|\b7\)\s*[\d.,]+\s*MA")
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
 _AVAILABLE = re.compile(r"Tersedia\s*([\d.,]+)\s*USDT", re.IGNORECASE)
-_POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\(\d+\)", re.IGNORECASE)
+_POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\([\dOo]+\)", re.IGNORECASE)  # "Posisi(O)"
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
 # Angka leverage (label di atas form dan kolom dialog); OCR bisa menggabungkannya dengan
@@ -92,6 +96,16 @@ def _leverage_of(text: str) -> int | None:
 
 
 _CHART_LOAD_TIMEOUT_S = 25.0  # aplikasi bisa lambat memuat grafik
+_CHART_RETRY_TIMEOUT_S = 15.0  # tunggu sesudah klik "15 mnt" diulang
+_FORM_SHIFT_MIN = 0.02  # pergeseran lebih kecil dari ini dianggap galat ukur, bukan banner
+
+
+def _shifted(
+    area: tuple[float, float, float, float], shift: float
+) -> tuple[float, float, float, float]:
+    """`area` digeser `shift` (pecahan tinggi jendela) ke bawah, dipotong di tepi bawah jendela."""
+    x0, y0, x1, y1 = area
+    return x0, min(1.0, y0 + shift), x1, min(1.0, y1 + shift)
 
 
 class BinanceNavigator:
@@ -119,6 +133,7 @@ class BinanceNavigator:
         self._rect: Rect | None = None
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
+        self._positions_shift = 0.0  # pergeseran panel Posisi (diukur dari tab saat menutup posisi)
         self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
@@ -387,26 +402,39 @@ class BinanceNavigator:
         ke bawah, sehingga posisi tetap bisa mengenai tab lain. Pergeseran yang terdeteksi juga
         dipakai untuk memotong area grafik.
         """
-        chart_tab = self._find_text(layout.CHART_TOOLBAR_AREA, _CHART_TAB)
-        if chart_tab is not None:
-            self._click(chart_tab)
-        button = self._find_text(layout.CHART_TOOLBAR_AREA, _FIFTEEN_MINUTES)
-        if button is None:
-            raise ScreenReadError("Tombol '15 mnt' tidak ditemukan di halaman trade")
-        self._click(button)
-        self._chart_shift = button[1] - layout.TIMEFRAME_15M[1]
-        self._wait_for_chart()
+        timeout = _CHART_LOAD_TIMEOUT_S
+        for attempt in (1, 2):
+            chart_tab = self._find_text(layout.CHART_TOOLBAR_AREA, _CHART_TAB)
+            if chart_tab is not None:
+                self._click(chart_tab)
+            button = self._find_text(layout.CHART_TOOLBAR_AREA, _FIFTEEN_MINUTES)
+            if button is None:
+                shot = self._save_debug_shot("tombol-15-mnt")
+                raise ScreenReadError(
+                    f"Tombol '15 mnt' tidak ditemukan di halaman trade. Foto layar: {shot}"
+                )
+            self._click(button)
+            self._chart_shift = button[1] - layout.TIMEFRAME_15M[1]
+            try:
+                self._wait_for_chart(timeout)
+                return
+            except ScreenReadError as exc:
+                shot = self._save_debug_shot("grafik-15-menit")
+                if attempt == 2:
+                    raise ScreenReadError(f"{exc}. Foto layar: {shot}") from exc
+                # Klik bisa hilang saat halaman koin masih berpindah: ulangi sekali.
+                logger.warning("%s; klik tab Grafik dan 15 mnt diulang (foto: %s)", exc, shot)
+                timeout = _CHART_RETRY_TIMEOUT_S
 
-    def _wait_for_chart(self) -> None:
-        """Tunggu grafik selesai dimuat (label "MA(7)" terbaca), bukan animasi loading."""
-        deadline = self._clock() + _CHART_LOAD_TIMEOUT_S
+    def _wait_for_chart(self, timeout: float = _CHART_LOAD_TIMEOUT_S) -> None:
+        """Tunggu grafik selesai dimuat (legenda garis MA terbaca), bukan animasi loading."""
+        deadline = self._clock() + timeout
         while True:
-            if any(_MA7_LABEL.search(line.text) for line in self._read_lines(self._chart_area())):
+            lines = self._read_lines(self._chart_area())
+            if any(_CHART_LEGEND.search(line.text) for line in lines):
                 return
             if self._clock() >= deadline:
-                raise ScreenReadError(
-                    f"Grafik 15 menit belum termuat setelah {_CHART_LOAD_TIMEOUT_S:g} detik"
-                )
+                raise ScreenReadError(f"Grafik 15 menit belum termuat setelah {timeout:g} detik")
             self._sleep(1.0)
 
     def _chart_area(self) -> Rect:
@@ -414,9 +442,29 @@ class BinanceNavigator:
         shift = self._chart_shift
         return self.rect.sub(x0, y0 + shift, x1, min(1.0, y1 + shift))
 
+    @property
+    def _form_shift(self) -> float:
+        """Banner di halaman koin tertentu (uji nyata: BRUSDT, QUSDT) menggeser SELURUH isi halaman
+        ke bawah sama jauh: grafik, form order, dan tombolnya. Pergeseran yang diukur dari tombol
+        "15 mnt" dipakai juga untuk form; tanpa itu klik tetap mengenai tempat lama (mis. tombol
+        "Cross" di atas form, bukan tab Pasar)."""
+        return self._chart_shift if abs(self._chart_shift) >= _FORM_SHIFT_MIN else 0.0
+
+    def _form_area(
+        self, area: tuple[float, float, float, float]
+    ) -> tuple[float, float, float, float]:
+        return _shifted(area, self._form_shift)
+
+    def _form_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        return point[0], point[1] + self._form_shift
+
+    @property
+    def _unit_min_y(self) -> float:
+        return layout.ORDER_UNIT_MIN_Y + self._form_shift
+
     def available_usdt(self) -> float | None:
         """Saldo "Tersedia" di form order (USDT), atau None bila tidak terbaca."""
-        for text in self._read_texts(self.rect.sub(*layout.ORDER_AVAILABLE_AREA)):
+        for text in self._read_texts(self.rect.sub(*self._form_area(layout.ORDER_AVAILABLE_AREA))):
             match = _AVAILABLE.search(text)
             amount = parse_amount(match.group(1)) if match else None
             if amount is not None:
@@ -424,10 +472,63 @@ class BinanceNavigator:
         return None
 
     def read_margin_settings(self) -> MarginSettings:
-        return parse_margin(self._read_texts(self.rect.sub(*self._margin_area())))
+        texts = self._read_texts(self.rect.sub(*self._margin_area()))
+        margin = parse_margin(texts)
+        if margin.leverage is None and self._leverage_box_x() is not None:
+            # "2x" sependek itu sering dijatuhkan OCR: baca kotaknya bersama kata pendamping.
+            margin = parse_margin(texts + self._leverage_with_companion())
+        return margin
+
+    def _leverage_box_x(self) -> tuple[float, float] | None:
+        """Kotak angka leverage di area margin (pecahan lebar), atau None. Tebbit menimpanya."""
+        return layout.LEVERAGE_BOX_X
+
+    def _leverage_with_companion(self) -> list[str]:
+        """Teks kotak leverage, dibaca sebagai baris "Leverage 2x" (kata pendamping digambar).
+
+        OCR sering menjatuhkan teks sependek "2x" yang berdiri sendiri; dengan kata di sebelahnya
+        ia terbaca. Kotak dipotong sempit supaya tombol di kiri kanannya tidak ikut terbaca.
+        """
+        from PIL import Image, ImageChops, ImageDraw, ImageFont
+
+        box_x = self._leverage_box_x()
+        assert box_x is not None
+        left, right = box_x
+        found: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            raw, composed = Path(tmp) / "m.png", Path(tmp) / "m_c.png"
+            self._ensure_front()
+            self._window.capture(self.rect.sub(*self._margin_area()), raw)
+            with Image.open(raw) as image:
+                r, g, b = image.convert("RGB").split()
+                box = ImageChops.lighter(ImageChops.lighter(r, g), b)
+                box = box.crop((int(box.width * left), 0, int(box.width * right), box.height))
+            for scale in (4, 3):
+                big = box.resize((box.width * scale, box.height * scale), Image.Resampling.LANCZOS)
+                font: Any
+                try:
+                    font = ImageFont.truetype("arial.ttf", int(big.height * 0.42))
+                except OSError:
+                    font = ImageFont.load_default()
+                canvas = Image.new("L", (big.width + 900, big.height + 40), 0)
+                draw = ImageDraw.Draw(canvas)
+                draw.text((20, 20 + int(big.height * 0.18)), "Leverage", fill=235, font=font)
+                canvas.paste(big, (20 + int(draw.textlength("Leverage  ", font=font)), 20))
+                canvas.save(composed)
+                found += [line.text for line in self._reader.read_lines(composed)]
+        return found
+
+    def _leverage_button(self) -> tuple[float, float] | None:
+        """Tengah tombol leverage (relatif jendela) dari tata letak tetap; hanya bila angkanya
+        sudah terbaca di tempat itu (OCR gagal menemukan posisi barisnya, bukan tombolnya)."""
+        box_x = self._leverage_box_x()
+        if box_x is None:
+            return None
+        x0, y0, x1, y1 = self._margin_area()
+        return x0 + (box_x[0] + box_x[1]) / 2 * (x1 - x0), (y0 + y1) / 2
 
     def _margin_area(self) -> tuple[float, float, float, float]:
-        return layout.MARGIN_AREA
+        return self._form_area(layout.MARGIN_AREA)
 
     def _leverage_dialog_area(self) -> tuple[float, float, float, float]:
         return layout.LEVERAGE_DIALOG_AREA
@@ -444,8 +545,13 @@ class BinanceNavigator:
         if not self._on_coin_page():
             raise SafetyError("Leverage hanya diubah di halaman koin")
         label = self._find_text(self._margin_area(), _LEVERAGE_VALUE)
+        if label is None and margin.leverage is not None:
+            label = self._leverage_button()
         if label is None:
-            raise ScreenReadError("Tombol leverage di atas form order tidak ditemukan")
+            shot = self._save_debug_shot("tombol-leverage")
+            raise ScreenReadError(
+                f"Tombol leverage di atas form order tidak ditemukan. Foto layar: {shot}"
+            )
         self._click(label)
         dialog = self._leverage_dialog_area()
         if self._find_text(dialog, _LEVERAGE_TITLE) is None:
@@ -514,17 +620,17 @@ class BinanceNavigator:
         """
         if not self._on_trade_page:
             raise SafetyError("Kolom Jumlah hanya diisi di halaman trade")
-        self._click(layout.ORDER_TAB_MARKET)
+        self._click(self._form_point(layout.ORDER_TAB_MARKET))
         self._ensure_usdt_unit()
         self._check_order_unit()
-        self._click(layout.ORDER_QTY_FIELD)
+        self._click(self._form_point(layout.ORDER_QTY_FIELD))
         self._ensure_front()  # ketikan angka hanya boleh masuk ke Binance
         self._window.clear_field()
         self._window.type_number(text)
         self._sleep(self._settings.settle_delay_s / 2)
         shown: list[str] = []
         for attempt in range(_VERIFY_ATTEMPTS):
-            shown = self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA))
+            shown = self._read_texts(self.rect.sub(*self._quantity_area()))
             if any(same_number(value, text) for value in shown):
                 break
             if attempt + 1 < _VERIFY_ATTEMPTS:
@@ -538,24 +644,24 @@ class BinanceNavigator:
         """Pastikan satuan kolom Jumlah USDT (Ukuran Order); bila bukan, pilih lewat menu satuan."""
         if layout.ORDER_UNIT_BUTTON is None or layout.ORDER_UNIT_MENU_AREA is None:
             return  # tidak diotomatiskan: _check_order_unit akan berhenti dan meminta pengguna
-        joined = " ".join(self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA)))
+        joined = " ".join(self._read_texts(self.rect.sub(*self._quantity_area())))
         if _USDT_UNIT.search(joined) and not _MARGIN_MODE.search(joined):
             return
         logger.info("Satuan kolom Jumlah bukan USDT: memilih USDT lewat menu satuan")
         if not self._unit_menu_open():
-            self._click(layout.ORDER_UNIT_BUTTON)
+            self._click(self._form_point(layout.ORDER_UNIT_BUTTON))
             if not self._unit_menu_open():
                 shot = self._save_debug_shot("menu-satuan")
                 raise ScreenReadError(f"Menu satuan Jumlah tidak terbuka. Foto layar: {shot}")
-        area = layout.ORDER_UNIT_MENU_AREA
+        area = self._form_area(layout.ORDER_UNIT_MENU_AREA)
         radio = self._find_text(area, _UNIT_RADIO)
-        if radio is None or radio[1] < layout.ORDER_UNIT_MIN_Y:
+        if radio is None or radio[1] < self._unit_min_y:
             shot = self._save_debug_shot("menu-satuan")
             raise ScreenReadError(
                 f"Pilihan 'Ukuran Order' di menu satuan tidak ada di tempat aman. Foto: {shot}"
             )
         self._click_in_unit_menu(radio)
-        shown = " ".join(self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA)))
+        shown = " ".join(self._read_texts(self.rect.sub(*self._quantity_area())))
         if not _USDT_UNIT.search(shown) or _MARGIN_MODE.search(shown):
             shot = self._save_debug_shot("menu-satuan")
             raise ScreenReadError(
@@ -564,8 +670,8 @@ class BinanceNavigator:
 
     def _unit_menu_open(self) -> bool:
         """Menu "Preferensi Unit" tampil: judulnya dan keterangan USDT-nya sama-sama terbaca."""
-        area = layout.ORDER_UNIT_MENU_AREA
-        assert area is not None
+        assert layout.ORDER_UNIT_MENU_AREA is not None
+        area = self._form_area(layout.ORDER_UNIT_MENU_AREA)
         texts = self._read_texts(self.rect.sub(*area))
         return any(_UNIT_MENU_TITLE.search(t) for t in texts) and any(
             _UNIT_MENU_USDT.search(t) for t in texts
@@ -577,7 +683,7 @@ class BinanceNavigator:
         Hanya lewat jalur ini, dan hanya bila menu terbukti masih terbuka tepat sebelum klik dan
         titiknya di bawah garis ORDER_UNIT_MIN_Y (di bawah tombol Beli/Long dan Jual/Short).
         """
-        if target[1] < layout.ORDER_UNIT_MIN_Y or not self._unit_menu_open():
+        if target[1] < self._unit_min_y or not self._unit_menu_open():
             raise SafetyError("Klik di menu satuan dibatalkan: menu tidak terbukti terbuka")
         self._unit_menu_click = True
         try:
@@ -591,7 +697,7 @@ class BinanceNavigator:
         Ukuran posisi dihitung dalam USDT; angka yang sama dalam satuan koin atau sebagai margin
         akan menghasilkan posisi yang jauh berbeda.
         """
-        shown = self._read_texts(self.rect.sub(*layout.ORDER_QTY_AREA))
+        shown = self._read_texts(self.rect.sub(*self._quantity_area()))
         joined = " ".join(shown)
         fix = "Di Binance klik satuan di kolom Jumlah, lalu pilih USDT > Ukuran Order."
         if _MARGIN_MODE.search(joined):
@@ -637,9 +743,14 @@ class BinanceNavigator:
 
     def _forbidden(self, target: tuple[float, float]) -> bool:
         """Titik yang tidak boleh diklik (tombol order). Platform lain menimpanya."""
-        if self._unit_menu_click and target[1] >= layout.ORDER_UNIT_MIN_Y:
+        if self._unit_menu_click and target[1] >= self._unit_min_y:
             return False
-        return self._on_trade_page and layout.in_order_button_zone(target)
+        if not self._on_trade_page:
+            return False
+        shift = self._form_shift
+        return layout.in_order_button_zone(target) or (
+            shift != 0.0 and layout.in_order_button_zone((target[0], target[1] - shift))
+        )
 
     def _ensure_front(self) -> None:
         """Pastikan Binance jendela aktif. Klik, ketikan, dan tangkapan layar hanya berarti bila
@@ -712,10 +823,10 @@ class BinanceNavigator:
 
     def _order_form_zones(self) -> list[tuple[float, float, float, float]]:
         """Zona tombol order di panel form (kanan), bukan widget melayang di atas grafik."""
-        return [zone for zone in layout.ORDER_BUTTON_ZONES if zone[0] >= 0.5]
+        return [self._form_area(zone) for zone in layout.ORDER_BUTTON_ZONES if zone[0] >= 0.5]
 
     def _quantity_area(self) -> tuple[float, float, float, float]:
-        return layout.ORDER_QTY_AREA
+        return self._form_area(layout.ORDER_QTY_AREA)
 
     def short_button(self) -> tuple[float, float]:
         """Posisi tombol Jual/Short di form order, dicari dengan OCR. Tidak mengklik apa pun."""
@@ -763,15 +874,21 @@ class BinanceNavigator:
         tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
         if tab is None:
             raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
+        self._positions_shift = self._measure_positions_shift(tab)
         self._click(tab)
         # Tabel bisa masih tergeser ke kanan (kolom nama koin tersembunyi): kembalikan ke kiri.
-        x0, y0, x1, y1 = layout.POSITIONS_TABLE_AREA
+        x0, y0, x1, y1 = self._positions_table()
         center = self.rect.point_at((x0 + x1) / 2, (y0 + y1) / 2)
         self._ensure_front()
         self._window.scroll_horizontal(*center, -layout.POSITIONS_SCROLL_NOTCHES)
         self._sleep(0.5)
         row_y = self._position_row(symbol)
         if row_y is None:
+            if self._positions_shift >= _FORM_SHIFT_MIN * 1.5:
+                raise ScreenReadError(
+                    f"Baris posisi {symbol} tidak terlihat: banner di halaman koin ini mendorong "
+                    "panel Posisi keluar jendela. Buka halaman koin tanpa banner dan coba lagi."
+                )
             raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
         middle = self.rect.point_at((x0 + x1) / 2, row_y)
         self._ensure_front()
@@ -779,7 +896,7 @@ class BinanceNavigator:
         self._sleep(0.8)
         try:
             target = None
-            for line in self._read_lines(self.rect.sub(*layout.POSITIONS_TABLE_AREA)):
+            for line in self._read_lines(self.rect.sub(*self._positions_table())):
                 match = _MARKET_CLOSE.search(line.text)
                 y = y0 + line.y * (y1 - y0)
                 if match and abs(y - row_y) < 0.02:
@@ -802,10 +919,20 @@ class BinanceNavigator:
             raise ScreenReadError(f"Posisi {symbol} masih terlihat di tab Posisi setelah ditutup")
         logger.info("Posisi %s sudah tertutup di Binance", symbol)
 
+    def _measure_positions_shift(self, tab: tuple[float, float]) -> float:
+        """Banner mendorong panel Posisi ke bawah: selisih tinggi tab dari tinggi normalnya."""
+        if layout.POSITIONS_TAB_Y is None:
+            return 0.0
+        shift = tab[1] - layout.POSITIONS_TAB_Y
+        return shift if abs(shift) >= _FORM_SHIFT_MIN else 0.0
+
+    def _positions_table(self) -> tuple[float, float, float, float]:
+        return _shifted(layout.POSITIONS_TABLE_AREA, self._positions_shift)
+
     def _position_row(self, symbol: str) -> float | None:
         """Tinggi baris posisi `symbol` (relatif jendela) di tabel Posisi, atau None."""
-        _, y0, _, y1 = layout.POSITIONS_TABLE_AREA
-        for line in self._read_lines(self.rect.sub(*layout.POSITIONS_TABLE_AREA)):
+        _, y0, _, y1 = self._positions_table()
+        for line in self._read_lines(self.rect.sub(*self._positions_table())):
             if symbol in line.text.replace(" ", "").upper():
                 return y0 + line.y * (y1 - y0)
         return None

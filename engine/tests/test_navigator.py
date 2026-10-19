@@ -321,6 +321,26 @@ def test_chart_capture_waits_until_the_chart_has_loaded() -> None:
     nav.show_15m_chart()  # tidak error: menunggu sampai MA(7) terbaca
 
 
+def test_chart_click_is_repeated_once_when_the_chart_does_not_load() -> None:
+    # Uji nyata (ZEREBROUSDT, Windows): MA(7) tak pernah muncul sesudah klik "15 mnt" pertama.
+    loading, ready = text_lines("Beli/Long", "Jual/Short"), text_lines("v MA(7) 0,0287")
+    nav, screen = trade_page_nav(
+        toolbar(("15 mnt", 0.1265, 0.2416)), chart=[loading] * 40 + [ready]
+    )
+    before = len(clicks(screen))
+    nav.show_15m_chart()
+    assert clicks(screen)[before:].count(at((0.1265, 0.2416))) == 2
+
+
+def test_windows_toolbar_area_reaches_a_banner_shifted_15m_button() -> None:
+    """Uji nyata (QUSDT, BRUSDT): banner menggeser toolbar ~0,06; area sempit melewatkannya."""
+    from binance_bot.binance_desktop import layout_windows as lw
+
+    for shift in (0.04, 0.06, 0.065):
+        y = lw.TIMEFRAME_15M[1] + shift
+        assert lw.CHART_TOOLBAR_AREA[1] < y < lw.CHART_TOOLBAR_AREA[3] - 0.02
+
+
 def test_chart_that_never_loads_is_an_error() -> None:
     loading = text_lines("Beli/Long", "Jual/Short")
     nav, _ = trade_page_nav(toolbar(("15 mnt", 0.1265, 0.2416)), chart=[loading])
@@ -739,3 +759,146 @@ def test_market_menu_is_retried_when_ocr_misses_it_once(monkeypatch: pytest.Monk
     nav.prepare()
     found = (area[0] + 0.4 * (area[2] - area[0]), area[1] + 0.3 * (area[3] - area[1]))
     assert nav._market_menu_position() == pytest.approx(found)
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "MA(7) 0,46097",
+        "v MAC7) 0,46097 MA(25) 0,45520",
+        "MA[7) 0,1",
+        "MA 7 0,1",
+        "7) 0,026157 MA(25) 0,024945 MA(99) 0,023298",  # MA99 melintasi awal label
+        "MA(25) 0,455",
+    ],
+)
+def test_chart_legend_is_recognised_even_when_ocr_garbles_the_start(label: str) -> None:
+    """Uji nyata (BRUSDT, ZEREBROUSDT, Windows): "MA(7)" terbaca "MAC7)" atau "7) 0,02..."."""
+    from binance_bot.binance_desktop.navigator import _CHART_LEGEND
+
+    assert _CHART_LEGEND.search(label)
+
+
+@pytest.mark.parametrize(
+    "label", ["MA(77) 1", "MA(70) 1", "Beli/Long", "Jumlah (USDT)", "0,026157"]
+)
+def test_chart_legend_does_not_match_other_lines(label: str) -> None:
+    from binance_bot.binance_desktop.navigator import _CHART_LEGEND
+
+    assert not _CHART_LEGEND.search(label)
+
+
+def test_a_banner_shifts_the_order_form_and_every_click_follows_it() -> None:
+    """Uji nyata (BRUSDT): banner menggeser form ~0,065; klik di posisi lama mengenai "Cross"."""
+    shift = 0.065
+    qty = layout.ORDER_QTY_AREA
+    shifted_qty = (qty[0], qty[1] + shift, qty[2], qty[3] + shift)
+    screen = FakeScreen(
+        texts={
+            layout.SYMBOL_AREA: [text_lines("BRUSDT Perp")],
+            shifted_qty: [text_lines("USDT"), text_lines("100", "USDT")],
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    nav.open_gainer(1)
+    nav._chart_shift = shift
+    nav.fill_quantity("100")
+
+    tab = (layout.ORDER_TAB_MARKET[0], layout.ORDER_TAB_MARKET[1] + shift)
+    field = (layout.ORDER_QTY_FIELD[0], layout.ORDER_QTY_FIELD[1] + shift)
+    assert screen.events[-4:] == [
+        ("click", at(tab)),
+        ("click", at(field)),
+        ("clear", None),
+        ("type", "100"),
+    ]
+    # Zona tombol order ikut bergeser: titik di zona lama maupun zona baru tetap terlarang.
+    x0, y0, _x1, y1 = layout.ORDER_BUTTON_ZONES[0]
+    assert nav._forbidden((x0 + 0.01, y0 + 0.01))
+    assert nav._forbidden((x0 + 0.01, y1 + shift - 0.01))
+    assert not nav._forbidden(tab) and not nav._forbidden(field)
+
+
+def test_a_tiny_measurement_error_does_not_shift_the_form() -> None:
+    screen = FakeScreen(texts={layout.SYMBOL_AREA: [text_lines("BRUSDT Perp")]})
+    nav = make_nav(screen)
+    nav.prepare()
+    nav.open_gainer(1)
+    nav._chart_shift = 0.006  # kesalahan ukur OCR, bukan banner
+    assert nav._form_shift == 0.0
+    assert nav._form_point(layout.ORDER_QTY_FIELD) == layout.ORDER_QTY_FIELD
+
+
+def leverage_nav(
+    monkeypatch: pytest.MonkeyPatch, plain: list[TextLine], companion: list[str]
+) -> tuple[BinanceNavigator, FakeScreen]:
+    monkeypatch.setattr(layout, "LEVERAGE_BOX_X", (0.37, 0.47), raising=False)
+    screen = FakeScreen(
+        texts={layout.SYMBOL_AREA: [text_lines("BRUSDT Perp")], layout.MARGIN_AREA: [plain]}
+    )
+    nav = make_nav(screen)
+    monkeypatch.setattr(nav, "_leverage_with_companion", lambda: companion)
+    nav.prepare()
+    nav.open_gainer(1)
+    return nav, screen
+
+
+def test_leverage_dropped_by_ocr_is_read_with_the_companion_word(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Uji nyata (BRUSDT, Windows): "2x" hilang dari bacaan biasa, lalu terbaca dengan kata."""
+    nav, _ = leverage_nav(monkeypatch, text_lines("Cross"), ["Leverage", "2x"])
+    assert nav.read_margin_settings().leverage == 2
+
+
+def test_companion_is_not_used_when_the_plain_read_already_has_the_leverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, _ = leverage_nav(monkeypatch, text_lines("Cross", "20x"), ["Leverage", "2x"])
+    assert nav.read_margin_settings().leverage == 20
+
+
+def test_leverage_button_is_clicked_by_layout_when_ocr_cannot_place_its_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, screen = leverage_nav(monkeypatch, text_lines("Cross"), ["Leverage", "20x"])
+    x0, y0, x1, y1 = layout.MARGIN_AREA
+    button = (x0 + 0.42 * (x1 - x0), (y0 + y1) / 2)
+    with pytest.raises(ScreenReadError, match="Dialog leverage tidak terbuka"):
+        nav.ensure_leverage(2)
+    assert clicks(screen)[-1] == at(button)  # klik hanya setelah angkanya terbukti terbaca
+
+
+def test_leverage_is_not_clicked_blindly_when_nothing_could_be_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, screen = leverage_nav(monkeypatch, text_lines("Cross"), [])
+    before = len(clicks(screen))
+    with pytest.raises(ScreenReadError, match="Tombol leverage"):
+        nav.ensure_leverage(2)
+    assert len(clicks(screen)) == before
+
+
+def test_positions_panel_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uji nyata (BRUSDT): banner menggeser panel Posisi ~0,065 sampai barisnya keluar jendela."""
+    monkeypatch.setattr(layout, "POSITIONS_TAB_Y", 0.857, raising=False)
+    nav = make_nav()
+    nav.prepare()
+    assert nav._measure_positions_shift((0.1, 0.857 + 0.003)) == 0.0  # galat ukur
+    shift = nav._measure_positions_shift((0.1, 0.920))
+    assert shift == pytest.approx(0.063)
+    nav._positions_shift = shift
+    x0, y0, x1, _y1 = layout.POSITIONS_TABLE_AREA
+    assert nav._positions_table() == (x0, pytest.approx(min(1.0, y0 + shift)), x1, 1.0)
+    monkeypatch.setattr(layout, "POSITIONS_TAB_Y", None)
+    assert nav._measure_positions_shift((0.1, 0.9)) == 0.0  # profil tanpa kalibrasi: tidak digeser
+
+
+@pytest.mark.parametrize(
+    "label", ["Posisi(0)", "Posisi(O) Transaksi terbuka(O) Riwayat Order", "Positions(2)"]
+)
+def test_positions_tab_is_found_even_when_ocr_reads_zero_as_the_letter_o(label: str) -> None:
+    from binance_bot.binance_desktop.navigator import _POSITIONS_TAB
+
+    assert _POSITIONS_TAB.search(label)

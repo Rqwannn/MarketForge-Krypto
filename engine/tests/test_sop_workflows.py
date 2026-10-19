@@ -1388,3 +1388,105 @@ def test_once_mode_failure_is_reported_after_real_positions_are_safe(
     assert [e.status for e in journal.load()] == [
         "target"
     ]  # posisi dijual dulu, baru gagal dilaporkan
+
+
+def test_coin_events_and_the_history_carry_the_figures_behind_the_decision(tmp_path: Path) -> None:
+    """Kartu "kenapa" di aplikasi memakai angka ini: kenaikan, funding, spread, jarak MA, batas."""
+    journal = Journal(tmp_path / "sop.jsonl")
+    entry = JournalEntry(
+        id="g",
+        created_at=0.0,
+        symbol="GTCUSDT",
+        rank=2,
+        verdict="ok",
+        reason="funding -0.3277% terlalu negatif (short membayar)",
+        change_pct=20.5,
+        funding_rate=-0.00327726,
+        spread_pct=0.02,
+        ma_gap_pct=-6.9,
+        pattern_ai={"below_count": 3, "below_now": False, "below_recent": True},
+        pattern_data={"below_count": 3},
+        leverage=2,
+    )
+    journal.append(entry)
+    params = SopParams(min_funding_pct=-0.2)
+
+    live = coin_event(entry, params)["event"]
+    assert live["change_pct"] == 20.5 and live["funding_rate"] == -0.00327726
+    assert live["spread_pct"] == 0.02 and live["ma_gap_pct"] == -6.9
+    assert live["ai"] == {"below_count": 3, "below_now": False, "below_recent": True}
+    assert live["limits"]["min_funding_pct"] == -0.2 and live["limits"]["min_crosses"] == 2
+    assert "limits" not in coin_event(entry)["event"]  # tanpa params: aplikasi pakai bawaan
+
+    out: list[str] = []
+    JournalWorkflow(
+        params, journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
+    ).run()  # type: ignore[arg-type]
+    (analysis,) = json.loads(out[0])["analyses"]
+    assert analysis["funding_rate"] == -0.00327726 and analysis["ma_gap_pct"] == -6.9
+    assert analysis["limits"]["max_spread_pct"] == params.max_spread_pct
+    assert analysis["data"] == {"below_count": 3}
+
+
+def test_journal_rewrite_retries_while_windows_holds_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Uji nyata: WinError 32 saat halaman Hasil uji menulis ulang jurnal yang sedang dibuka bot."""
+    import binance_bot.strategy.journal as journal_module
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(JournalEntry(id="a", created_at=0.0, symbol="AUSDT", rank=1))
+    real_replace = journal_module.os.replace
+    attempts: list[int] = []
+
+    def flaky(src: Path, dst: Path) -> None:
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise PermissionError(32, "being used by another process")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(journal_module.os, "replace", flaky)
+    monkeypatch.setattr(journal_module.time, "sleep", lambda _s: None)
+    journal.save([JournalEntry(id="b", created_at=1.0, symbol="BUSDT", rank=2)])
+    assert len(attempts) == 3
+    assert [e.id for e in journal.load()] == ["b"]
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_journal_rewrite_gives_up_after_many_attempts_and_cleans_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import binance_bot.strategy.journal as journal_module
+
+    journal = Journal(tmp_path / "sop.jsonl")
+
+    def locked(src: Path, dst: Path) -> None:
+        raise PermissionError(32, "locked")
+
+    monkeypatch.setattr(journal_module.os, "replace", locked)
+    monkeypatch.setattr(journal_module.time, "sleep", lambda _s: None)
+    with pytest.raises(PermissionError):
+        journal.save([JournalEntry(id="b", created_at=1.0, symbol="BUSDT", rank=2)])
+    assert not list(tmp_path.glob("*.tmp"))  # berkas sementara tidak tertinggal
+
+
+def test_journal_load_and_append_retry_a_locked_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import binance_bot.strategy.journal as journal_module
+
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(JournalEntry(id="a", created_at=0.0, symbol="AUSDT", rank=1))
+    real_read = Path.read_text
+    calls: list[int] = []
+
+    def flaky_read(self: Path, *args: object, **kwargs: object) -> str:
+        calls.append(1)
+        if len(calls) == 1:
+            raise PermissionError(32, "locked")
+        return real_read(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", flaky_read)
+    monkeypatch.setattr(journal_module.time, "sleep", lambda _s: None)
+    assert [e.id for e in journal.load()] == ["a"]
+    assert len(calls) == 2

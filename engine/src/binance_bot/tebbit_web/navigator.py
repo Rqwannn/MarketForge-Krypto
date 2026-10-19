@@ -398,6 +398,9 @@ class TebbitNavigator(BinanceNavigator):
     def _margin_area(self) -> tuple[float, float, float, float]:
         return lay.MARGIN_AREA
 
+    def _leverage_box_x(self) -> tuple[float, float] | None:
+        return None  # Tebbit membaca kotaknya sendiri (read_margin_settings) dan tidak menebak klik
+
     def _leverage_dialog_area(self) -> tuple[float, float, float, float]:
         return lay.LEVERAGE_DIALOG_AREA
 

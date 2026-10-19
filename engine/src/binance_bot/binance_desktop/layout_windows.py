@@ -54,11 +54,18 @@ SYMBOL_AREA = (0.05, 0.05, 0.25, 0.17)
 # Tombol timeframe "15 mnt" (233, 260).
 TIMEFRAME_15M = (0.1214, 0.2549)
 # Toolbar grafik: tab "Grafik" (y=213) dan baris timeframe "Waktu 1 dtk 15 mnt ..." (y=260).
-CHART_TOOLBAR_AREA = (0.047, 0.19, 0.642, 0.29)
+# Dibuat tinggi karena banner di halaman koin tertentu (uji nyata: QUSDT, BRUSDT) menggeser toolbar
+# sekitar 60 px (0,06) ke bawah; area sempit membuat tombol "15 mnt" tidak ditemukan.
+CHART_TOOLBAR_AREA = (0.047, 0.15, 0.642, 0.40)
 # Grafik: dari baris OHLC/MA sampai sumbu waktu, termasuk panel volume (x 90..1232, y 285..845).
 CHART_AREA = (0.047, 0.28, 0.642, 0.828)
-# Label "Cross" dan "20x" di atas form (x 1563..1800, y 120..158).
-MARGIN_AREA = (0.81, 0.118, 0.945, 0.155)
+# Tombol "Cross", leverage ("2x"/"20x"), dan "M" di atas form (x 1563..1800, y 120..158). Area
+# dibuat lebar: OCR melewatkan "2x" pada potongan yang sempit (diuji pada foto jendela Binance:
+# potongan sempit terbaca 8 dari 43, potongan lebar 29 dari 43; sisanya halaman berbanner).
+MARGIN_AREA = (0.80, 0.11, 1.0, 0.17)
+# Angka leverage saja (x 1678..1716 dari area 1536..1920): potongan sempit ini dibaca bersama kata
+# pendamping bila "2x" dijatuhkan OCR (uji pada foto BRUSDT: 2x terbaca di semua).
+LEVERAGE_BOX_X = (0.37, 0.47)
 # Tab "Pasar" (1641, 193), lalu kolom "Jumlah" pada tab itu (1730, 315).
 ORDER_TAB_MARKET = (0.8547, 0.1892)
 ORDER_QTY_FIELD = (0.9010, 0.3088)
@@ -84,3 +91,10 @@ ORDER_BUTTON_ZONES = (
     (0.80, 0.50, 1.00, 0.85),
     (0.05, 0.38, 0.30, 0.45),  # widget melayang di atas grafik (jaga-jaga, sama seperti macOS)
 )
+
+# Panel Posisi di bawah halaman trade (jendela 1920x1020): tab "Posisi(n)" di y 874 (0,857), judul
+# kolom 922, baris posisi di bawahnya. Banner di halaman koin menggesernya ~65 px ke bawah, sampai
+# barisnya keluar jendela: tab dicari lebar, lalu tabel digeser sesuai posisi tab.
+POSITIONS_TAB_AREA = (0.05, 0.78, 0.60, 0.99)
+POSITIONS_TAB_Y = 0.857
+POSITIONS_TABLE_AREA = (0.05, 0.88, 0.82, 1.0)

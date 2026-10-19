@@ -55,12 +55,41 @@ _VERDICT_TEXT = {
 }
 
 
-def coin_event(entry: JournalEntry) -> dict[str, dict[str, Any]]:
+def limits_of(params: SopParams) -> dict[str, float]:
+    """Batas SOP untuk menilai koin; kartu alasan di aplikasi membandingkan angka dengannya."""
+    return {
+        "min_crosses": params.min_crosses,
+        "min_funding_pct": params.min_funding_pct,
+        "max_spread_pct": params.max_spread_pct,
+        "min_gain_pct": params.min_gain_pct,
+    }
+
+
+def decision_fields(entry: JournalEntry, params: SopParams | None = None) -> dict[str, Any]:
+    """Angka di balik keputusan satu koin: bahan kartu "kenapa" di aplikasi."""
+    fields: dict[str, Any] = {
+        "change_pct": entry.change_pct,
+        "funding_rate": entry.funding_rate,  # pecahan (0,0001 = 0,01%)
+        "spread_pct": entry.spread_pct,
+        "ma_gap_pct": entry.ma_gap_pct,  # positif = garis cepat di bawah pembanding
+        "ai": entry.pattern_ai,
+        "data": entry.pattern_data,
+        "leverage": entry.leverage,
+        "margin_usdt": entry.margin_usdt,
+        "notional": entry.notional,
+    }
+    if params is not None:
+        fields["limits"] = limits_of(params)
+    return fields
+
+
+def coin_event(entry: JournalEntry, params: SopParams | None = None) -> dict[str, dict[str, Any]]:
     """Hasil penilaian satu koin untuk aplikasi desktop (lihat logging_setup.event)."""
     ai = entry.pattern_ai or {}
     data = entry.pattern_data or {}
     return event(
         "coin",
+        **decision_fields(entry, params),
         rank=entry.rank,
         symbol=entry.symbol,
         status=entry.status,
@@ -384,7 +413,7 @@ class SopTrader:
             reason=reason,
             role=self._role,
         )
-        logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry))
+        logger.info("#%d tidak diproses: %s", rank, reason, extra=coin_event(entry, self.params))
 
     def _finish(self, entry: JournalEntry) -> JournalEntry:
         rank, symbol = entry.rank, entry.symbol
@@ -394,11 +423,15 @@ class SopTrader:
                 "#%d %s dicatat di jurnal: posisi uji terbuka",
                 rank,
                 symbol,
-                extra=coin_event(entry),
+                extra=coin_event(entry, self.params),
             )
         else:
             logger.info(
-                "#%d %s tidak masuk: %s", rank, symbol, entry.reason, extra=coin_event(entry)
+                "#%d %s tidak masuk: %s",
+                rank,
+                symbol,
+                entry.reason,
+                extra=coin_event(entry, self.params),
             )
         return entry
 

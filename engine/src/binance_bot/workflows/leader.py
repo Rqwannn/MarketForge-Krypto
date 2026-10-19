@@ -16,7 +16,7 @@ from binance_bot.logging_setup import event
 from binance_bot.market import MarketData, is_futures_symbol
 from binance_bot.strategy import PatternProfile, SopParams
 from binance_bot.workflows.base import TradingNavigator
-from binance_bot.workflows.sop import log_top_gainers
+from binance_bot.workflows.sop import limits_of, log_top_gainers
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +167,8 @@ class LeaderWorkflow:
                     status="analyzed",
                     verdict=verdict,
                     count_ai=pattern.below_count,
+                    ai=pattern.as_dict(),
+                    limits=limits_of(self._params),
                     summary=record.reading.summary,
                     chart=self._charts.get(symbol),
                 ),

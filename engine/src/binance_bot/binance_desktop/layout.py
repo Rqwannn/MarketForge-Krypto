@@ -121,6 +121,8 @@ CHART_TOOLBAR_AREA = (0.05, 0.15, 0.62, 0.40)
 CHART_AREA = (0.0485, 0.2725, 0.6015, 0.7815)
 # Label mode margin dan leverage di atas form (mis. "Cross", "20x").
 MARGIN_AREA = (0.81, 0.11, 0.95, 0.15)
+# Kotak angka leverage ("2x") di dalam MARGIN_AREA, pecahan lebarnya. None = tidak dipakai.
+LEVERAGE_BOX_X: tuple[float, float] | None = None
 # Dialog "Sesuaikan Leverage" yang terbuka dari label leverage (di tengah jendela).
 LEVERAGE_DIALOG_AREA = (0.30, 0.15, 0.75, 0.90)
 # Tab "Pasar" (market order) di form, lalu kolom "Jumlah" pada tab itu.
@@ -144,6 +146,9 @@ ORDER_UNIT_MIN_Y = 1.0
 POSITIONS_TAB_AREA = (0.05, 0.79, 0.60, 0.85)
 POSITIONS_TABLE_AREA = (0.05, 0.85, 0.82, 1.0)
 POSITIONS_SCROLL_NOTCHES = 12
+
+# Tinggi tab "Posisi(n)" saat halaman tanpa banner; None = pergeseran panel tidak diukur.
+POSITIONS_TAB_Y: float | None = None
 
 # Zona tombol order di halaman trade (x0, y0, x1, y1). Klik ke sini SELALU ditolak oleh
 # navigator: beli/short belum boleh dijalankan oleh bot.

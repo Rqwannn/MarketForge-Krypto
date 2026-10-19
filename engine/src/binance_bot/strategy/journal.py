@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import json
 import os
+import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+_T = TypeVar("_T")
 
 # stop dan timeout hanya ada di catatan lama (SOP V2); V3 tanpa stop-loss dan batas waktu.
 CLOSED_STATUSES = ("target", "likuidasi", "manual", "stop", "timeout")
@@ -78,6 +82,24 @@ class JournalEntry:
         return cls(**{k: v for k, v in data.items() if k in names})
 
 
+# Windows menolak mengganti atau membuka file yang sedang dipakai proses lain (WinError 32/5): bot
+# dan perintah jurnal dari aplikasi bisa menyentuh file yang sama bersamaan. Kuncinya singkat, jadi
+# cukup diulang beberapa kali (uji nyata: halaman Hasil uji crash saat bot menulis jurnal).
+_LOCK_ATTEMPTS = 20
+_LOCK_DELAY_S = 0.25
+
+
+def _retry_locked(action: Callable[[], _T]) -> _T:
+    for attempt in range(_LOCK_ATTEMPTS):
+        try:
+            return action()
+        except PermissionError:
+            if attempt + 1 == _LOCK_ATTEMPTS:
+                raise
+            time.sleep(_LOCK_DELAY_S)
+    raise AssertionError("tidak tercapai")  # pragma: no cover
+
+
 class Journal:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -85,20 +107,30 @@ class Journal:
     def load(self) -> list[JournalEntry]:
         if not self.path.exists():
             return []
-        lines = self.path.read_text(encoding="utf-8").splitlines()
+        lines = _retry_locked(lambda: self.path.read_text(encoding="utf-8")).splitlines()
         return [JournalEntry.from_dict(json.loads(line)) for line in lines if line.strip()]
 
     def append(self, entry: JournalEntry) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry.to_dict(), ensure_ascii=False) + "\n")
+        line = json.dumps(entry.to_dict(), ensure_ascii=False) + "\n"
+
+        def write() -> None:
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+
+        _retry_locked(write)
 
     def save(self, entries: list[JournalEntry]) -> None:
         """Tulis ulang seluruh jurnal secara atomik (aman bila proses terhenti di tengah)."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
+        # Nama sementara per proses: dua proses menulis bersamaan tidak saling menimpa.
+        tmp = self.path.with_name(f"{self.path.stem}.{os.getpid()}.tmp")
         tmp.write_text(
             "".join(json.dumps(e.to_dict(), ensure_ascii=False) + "\n" for e in entries),
             encoding="utf-8",
         )
-        os.replace(tmp, self.path)
+        try:
+            _retry_locked(lambda: os.replace(tmp, self.path))
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
