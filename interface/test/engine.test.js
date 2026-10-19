@@ -222,3 +222,15 @@ test('Real Fund Trading: --uang-sungguhan hanya untuk Binance (Sekali atau Ulang
   const follower = buildArgs('follower', { exchange: 'binance', rank: '*', modal: 100, real: true });
   assert.ok(follower.includes('--uang-sungguhan'));
 });
+
+test('exitNotice: selesai normal, dihentikan pengguna, dan kendala dibedakan', () => {
+  const { exitNotice } = require('../engine');
+  assert.equal(exitNotice({ code: 0, signal: null, stopped: false }).kind, 'done');
+  assert.match(exitNotice({ code: 0 }).body, /Hasil uji/);
+  // Hentikan di Windows keluar dengan kode 1: tetap "dihentikan", bukan kendala.
+  assert.equal(exitNotice({ code: 1, signal: null, stopped: true }).kind, 'stopped');
+  assert.equal(exitNotice({ code: 130 }).kind, 'stopped');
+  assert.equal(exitNotice({ code: null, signal: 'SIGTERM' }).kind, 'stopped');
+  assert.equal(exitNotice({ code: 1, signal: null, stopped: false }).kind, 'error');
+  assert.equal(exitNotice().kind, 'error');
+});

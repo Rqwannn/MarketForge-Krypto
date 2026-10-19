@@ -100,6 +100,7 @@ function plain(text) {
     [/Leverage tidak bisa diubah/, 'Leverage koin ini tidak bisa diubah ke 2x otomatis'],
     [/belum terbaca untuk jual otomatis/, 'Harga posisi belum terbaca, jual otomatis dicoba lagi'],
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
+    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan (SOP V3)'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
@@ -114,6 +115,7 @@ function plain(text) {
     [/spread/i, 'Selisih harga beli dan jual terlalu lebar'],
     [/naik .*dalam 24 jam|naik [\d.]+% </, 'Kenaikan 24 jam belum cukup'],
     [/bukan pair USDT/, 'Bukan pasangan USDT'],
+    [/Tombol '15 mnt'/, 'Tombol 15 menit tidak terlihat di halaman koin ini (tata letak bergeser), koin dilewati'],
     [/Grafik 15 menit|15 mnt/, 'Grafik belum termuat, koin dilewati'],
     [/Ukuran jendela/, `Ukuran jendela ${site} berubah, kembalikan seperti semula`],
     [/belum berjalan|Buka aplikasi Binance|AppNotRunning/i, 'Aplikasi Binance belum dibuka'],
@@ -122,7 +124,6 @@ function plain(text) {
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
     [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
-    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan (SOP V3)'],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
@@ -511,8 +512,84 @@ function addCoin(e) {
       el('strong', { class: `act ${act.css}`, textContent: act.text }),
       el('span', { textContent: act.note }),
       e.summary ? el('small', { textContent: `AI: ${e.summary}` }) : null,
-      chartThumb(e.chart, `${e.symbol} · ${label}`))));
+      chartThumb(e.chart, `${e.symbol} · ${label}`),
+      whyButton(e))));
 }
+
+// --------------------------------------------------------------------------- kartu "kenapa"
+
+const STEP_MARK = { pass: '✓', fail: '✕', hold: '!', skip: '–', info: 'i' };
+let cardReturnFocus = null;
+
+/** Tombol "Kenapa?" yang membuka kartu alasan keputusan untuk satu koin. */
+function whyButton(e, label = 'Lihat alasan lengkap') {
+  const button = el('button', { type: 'button', class: 'secondary small why-link', textContent: label });
+  button.addEventListener('click', () => openCard(e, button));
+  return button;
+}
+
+function explainCoin(e) {
+  return window.Reasons.explain(e, {
+    platform: platform?.id,
+    plain,
+    statusLabel: (status) => (STATUS[status] || [status])[0],
+  });
+}
+
+function cardSteps(card) {
+  return card.steps.map((s) => el('li', { class: s.state },
+    el('span', { class: 'cc-mark', textContent: STEP_MARK[s.state] || '' }),
+    el('div', {},
+      el('b', { textContent: s.title }),
+      s.text ? el('span', { class: 't', textContent: s.text }) : null,
+      s.details?.length ? el('ul', {}, ...s.details.map((line) => el('li', { textContent: line }))) : null)));
+}
+
+function cardAi(card) {
+  if (!card.summary && !card.votes.length) return [];
+  return [
+    el('h3', { textContent: 'Pembacaan AI' }),
+    card.summary ? el('p', { textContent: card.summary }) : null,
+    card.votes.length
+      ? el('div', { class: 'cc-votes', title: 'Tiap AI membaca grafik yang sama; hasil akhir = nilai tengah' },
+        ...card.votes.map((v) => el('span', {
+          class: `cc-vote${v.recent ? ' recent' : ''}`,
+          textContent: `${v.count}×`,
+        })))
+      : null,
+    card.votes.length ? el('small', { class: 'cc-legend', textContent: 'Tiap kotak = satu bacaan AI (berapa kali garis turun). Oranye = garis juga di bawah dalam 6 jam terakhir.' }) : null,
+  ];
+}
+
+function openCard(e, returnTo = null) {
+  const card = explainCoin(e);
+  const [label, css] = VERDICT[e.verdict] || ['Tidak dibaca', ''];
+  const when = e.created_at
+    ? ` · ${new Date(e.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+    : '';
+  $('cc-title').replaceChildren(el('span', { textContent: e.symbol }), el('span', { class: `tag ${css}`, textContent: label }));
+  $('cc-meta').textContent = `${e.rank ? `Top ${e.rank}` : 'Koin'} · ${platform?.name || 'Binance'}${when}`;
+  $('cc-verdict').className = `cc-verdict ${card.tone}`;
+  $('cc-headline').textContent = card.headline;
+  $('cc-because').textContent = card.because;
+  $('cc-steps').replaceChildren(...cardSteps(card));
+  $('cc-chart').replaceChildren(chartThumb(e.chart, `${e.symbol} · ${label}`)
+    || el('span', { class: 'chart-thumb none', textContent: 'Tanpa grafik' }));
+  $('cc-ai').className = 'cc-ai';
+  $('cc-ai').replaceChildren(...cardAi(card).filter(Boolean));
+  cardReturnFocus = returnTo;
+  $('coin-card').hidden = false;
+  $('cc-close').focus();
+}
+
+function closeCard() {
+  $('coin-card').hidden = true;
+  cardReturnFocus?.focus?.();
+  cardReturnFocus = null;
+}
+$('cc-close').addEventListener('click', closeCard);
+$('coin-card').addEventListener('click', (event) => { if (event.target === $('coin-card')) closeCard(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('coin-card').hidden) closeCard(); });
 
 /** Screenshot grafik 15 menit yang dibaca AI; klik untuk memperbesar. Kosong bila tidak ada. */
 function chartThumb(file, caption) {
@@ -677,6 +754,97 @@ window.bot.onExit(({ code, signal, stopped: requested }) => {
 });
 
 $('toggle').addEventListener('click', toggleRun);
+
+// --------------------------------------------------------------------------- jam pasar dunia
+
+const WORLD_AXIS = [0, 3, 6, 9, 12, 15, 18, 21];
+const WORLD = { tiles: new Map(), key: '', lineKey: '' };
+
+function worldTile(id, region, city, extra = '') {
+  const time = el('span', { class: 'wc-time' });
+  const day = el('span', { class: 'wc-day' });
+  const state = el('span', { class: 'wc-state' });
+  const note = el('span', { class: 'wc-note' });
+  const node = el('div', { class: `wc ${extra}` }, el('span', { class: 'wc-region', textContent: region }),
+    el('span', { class: 'wc-city', textContent: city }), time, day, state, note);
+  WORLD.tiles.set(id, { node, time, day, state, note });
+  return node;
+}
+
+function buildWorldClocks() {
+  const clocks = window.WorldClock;
+  $('world-clocks').replaceChildren(
+    worldTile('home', 'Kamu', `${clocks.HOME.city} · ${clocks.HOME.label}`, 'home'),
+    ...clocks.MARKETS.map((m) => worldTile(m.id, m.region, `${m.city} · ${m.exchange}`)));
+}
+
+function worldDay(date, tz) {
+  return date.toLocaleDateString('id-ID', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** Garis waktu 24 jam (WIB): sesi tiap bursa dan fase kripto, dengan penanda "sekarang". */
+function renderWorldLine(date) {
+  const clocks = window.WorldClock;
+  const day = clocks.daySegments(date);
+  const segments = (list, css) => list.map((s) => {
+    const seg = el('i', { class: `wl-seg ${css(s)}` });
+    seg.style.left = `${s.from * 100}%`;
+    seg.style.width = `${(s.to - s.from) * 100}%`;
+    return seg;
+  });
+  const row = (label, bars) => el('div', { class: 'wl-row' }, el('span', { class: 'wl-label', textContent: label }),
+    el('div', { class: 'wl-track' }, ...bars));
+  const level = Object.fromEntries(clocks.PHASES.map((p) => [p.id, p.level]));
+  const axis = el('div', { class: 'wl-axis' }, ...WORLD_AXIS.map((h) => {
+    const tick = el('span', { textContent: String(h).padStart(2, '0') });
+    tick.style.left = `${(h / 24) * 100}%`;
+    return tick;
+  }));
+  const now = el('i', { class: 'wl-now' });
+  now.style.setProperty('--f', String(day.now));
+  const legend = el('div', { class: 'wl-legend' },
+    ...[['q5', 'Paling ramai'], ['q3', 'Naik / menurun'], ['q2', 'Sedang'], ['q1', 'Paling sepi']]
+      .map(([css, text]) => el('span', {}, el('i', { class: css }), text)));
+  $('world-line').replaceChildren(
+    row('Kripto', segments(day.phases, (s) => `q${level[s.value]}`)),
+    ...day.markets.map((m) => row(m.city, segments(m.open, () => ''))),
+    axis, now, legend);
+  WORLD.lineKey = `${day.startMs}`;
+}
+
+function updateWorld() {
+  const clocks = window.WorldClock;
+  if (!clocks || $('page-run').hidden) return;
+  if (!WORLD.tiles.size) buildWorldClocks();
+  const date = new Date();
+  const home = WORLD.tiles.get('home');
+  home.time.textContent = clocks.clockText(date, clocks.HOME.tz, { seconds: true });
+  home.day.textContent = worldDay(date, clocks.HOME.tz);
+  home.state.style.display = 'none'; // jam laptop sendiri: tanpa status bursa
+  home.note.textContent = 'Jam di laptop ini';
+  for (const m of clocks.MARKETS) {
+    const tile = WORLD.tiles.get(m.id);
+    const status = clocks.marketStatus(m, date);
+    tile.time.textContent = clocks.clockText(date, m.tz, { seconds: true });
+    tile.day.textContent = worldDay(date, m.tz);
+    tile.state.className = `wc-state ${status.state}`;
+    tile.state.textContent = status.state === 'buka' ? 'Buka' : status.state === 'istirahat' ? 'Istirahat' : 'Tutup';
+    tile.note.textContent = status.note;
+  }
+  const phase = clocks.cryptoPhase(date);
+  const tag = $('world-phase');
+  tag.className = `tag q${phase.level}`;
+  tag.textContent = `Kripto sekarang: ${phase.label}`;
+  $('world-note').textContent = `${phase.range} · ${phase.note}.${phase.weekend ? ' Akhir pekan: umumnya lebih sepi dari biasa.' : ''} Hari libur bursa tidak dihitung.`;
+  // Garis waktu dihitung ulang tiap menit (penanda "sekarang" bergerak) atau saat tanggal WIB berganti.
+  const minuteKey = `${Math.floor(date.getTime() / 60000)}`;
+  if (WORLD.key !== minuteKey) {
+    WORLD.key = minuteKey;
+    renderWorldLine(date);
+  }
+}
+setInterval(updateWorld, 1000);
+updateWorld();
 
 // --------------------------------------------------------------------------- hasil uji
 
@@ -933,7 +1101,7 @@ function analysisItem(a) {
       a.old_rule ? el('p', { class: 'hist-old', textContent: 'Dinilai dengan aturan lama (tanpa syarat 6 jam terakhir). Dengan aturan sekarang hasilnya bisa berbeda.' }) : null,
       el('p', { class: 'hist-act', textContent: action }),
       a.summary ? el('small', { textContent: `AI: ${a.summary}` }) : null,
-      historyDelete(a)));
+      el('div', { class: 'hist-actions' }, a.status === 'contoh' ? null : whyButton(a, 'Kenapa begini?'), historyDelete(a))));
 }
 
 const NOT_TRADES = ['skipped', 'contoh'];

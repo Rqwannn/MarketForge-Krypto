@@ -3,7 +3,7 @@
 // Proses utama Electron: jendela, IPC, dan satu proses engine. Isian dari tampilan divalidasi
 // di engine.js sebelum menjadi argumen CLI. Tidak ada kontrol untuk order sungguhan.
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, Notification, ipcMain } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -258,6 +258,28 @@ function showAppWindow() {
   win.focus();
 }
 
+/**
+ * Bot selesai: jendela aplikasi dibawa ke depan di atas Binance/Tebbit dan sebuah notifikasi
+ * muncul, supaya pengguna tahu tanpa memantau layar. Windows menahan jendela merebut fokus dari
+ * aplikasi lain, jadi jendela dinaikkan dulu (always-on-top sebentar) dan taskbar berkedip.
+ */
+function announceExit(info) {
+  const notice = engine.exitNotice(info);
+  if (!win || win.isDestroyed()) return;
+  showAppWindow();
+  if (process.platform === 'win32') {
+    win.setAlwaysOnTop(true);
+    win.setAlwaysOnTop(false);
+  }
+  if (notice.kind === 'stopped') return; // pengguna sendiri yang menghentikan: sudah di aplikasi
+  win.flashFrame(true);
+  try {
+    if (Notification.isSupported()) new Notification({ title: notice.title, body: notice.body, silent: false }).show();
+  } catch {
+    // notifikasi hanya tambahan; jendela yang tampil sudah cukup
+  }
+}
+
 proc.on('log', (entry) => {
   send('engine:log', entry);
   const e = entry.event;
@@ -274,11 +296,7 @@ proc.on('exit', (info) => {
   syncPresence();
   refreshPositions();
   for (const job of closeQueue.splice(0)) closeForLeader(job);
-  // Bot selesai: tampilkan lagi jendela aplikasi.
-  if (win && !win.isDestroyed()) {
-    win.restore();
-    win.focus();
-  }
+  announceExit(info); // bot selesai: aplikasi kembali ke depan dan memberi tahu
 });
 
 function createWindow() {

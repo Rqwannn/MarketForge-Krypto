@@ -323,8 +323,23 @@ function hubToken(env = process.env) {
   return appSetting('BOT_HUB_TOKEN', env);
 }
 
+/**
+ * Arti berhentinya engine untuk pengguna. `stopped` = diminta lewat tombol Hentikan (di Windows
+ * keluar dengan kode 1, bukan 130). Hanya selesai normal dan kendala yang perlu diberitahukan.
+ */
+function exitNotice({ code, signal, stopped } = {}) {
+  if (stopped || signal || code === 130) {
+    return { kind: 'stopped', title: 'Bot dihentikan', body: 'Bot berhenti atas permintaan.' };
+  }
+  if (code === 0) {
+    return { kind: 'done', title: 'Pemantauan selesai', body: 'Putaran selesai. Rekap ada di Hasil uji.' };
+  }
+  return { kind: 'error', title: 'Bot berhenti karena kendala', body: 'Buka Cek laptop lalu coba lagi.' };
+}
+
 module.exports = {
   APP_ENV_KEYS,
+  exitNotice,
   EXCHANGES,
   BOT,
   ENGINE_DIR,

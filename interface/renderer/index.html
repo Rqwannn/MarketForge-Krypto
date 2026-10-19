@@ -156,6 +156,16 @@
         </div>
       </section>
 
+      <section class="card world" id="world" aria-label="Jam pasar dunia">
+        <div class="card-head">
+          <div><h2>Jam pasar dunia</h2><p>Kripto jalan 24 jam, tapi ramai-sepinya mengikuti jam kerja bursa Asia, Eropa, dan Amerika.</p></div>
+          <span class="tag" id="world-phase">–</span>
+        </div>
+        <div class="world-clocks" id="world-clocks"></div>
+        <div class="world-line" id="world-line"></div>
+        <p class="world-note" id="world-note"></p>
+      </section>
+
       <section class="card flow" id="flow">
         <div class="card-head">
           <div><h2>Alur putaran</h2><p id="flow-sub">Belum berjalan. Tekan Mulai memantau.</p></div>
@@ -171,7 +181,7 @@
             <span class="tag" id="share" hidden>Dibagikan ke pengikut</span>
           </div>
           <table class="table">
-            <thead><tr><th>Top</th><th>Koin</th><th>Garis kuning</th><th>Keputusan AI</th><th>Tindakan</th></tr></thead>
+            <thead><tr><th>Top</th><th>Koin</th><th>Garis kuning</th><th>Keputusan AI</th><th>Tindakan dan alasan</th></tr></thead>
             <tbody id="coins"></tbody>
           </table>
         </div>
@@ -345,6 +355,29 @@
     </div>
   </div>
 </div>
+<div class="backdrop" id="coin-card" hidden>
+  <div class="card dialog coin-card" role="dialog" aria-modal="true" aria-labelledby="cc-title">
+    <div class="cc-head">
+      <div>
+        <h2 id="cc-title"></h2>
+        <p id="cc-meta"></p>
+      </div>
+      <button class="secondary small" id="cc-close" type="button" aria-label="Tutup">Tutup</button>
+    </div>
+    <div class="cc-verdict" id="cc-verdict"><strong id="cc-headline"></strong><p id="cc-because"></p></div>
+    <div class="cc-grid">
+      <div class="cc-chart" id="cc-chart"></div>
+      <div>
+        <h3>Langkah penilaian</h3>
+        <ol class="cc-steps" id="cc-steps"></ol>
+      </div>
+    </div>
+    <div id="cc-ai"></div>
+    <p class="cc-note">Angka dibaca saat koin dinilai; bot hanya mengisi kolom jumlah dan tidak menekan tombol order kecuali mode uang sungguhan menyala.</p>
+  </div>
+</div>
+<script src="reasons.js"></script>
+<script src="worldclock.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
