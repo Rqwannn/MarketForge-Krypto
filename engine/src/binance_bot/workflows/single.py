@@ -9,6 +9,7 @@ from binance_bot.analysis import PatternAnalyzer, PatternReading
 from binance_bot.exceptions import BotError
 from binance_bot.logging_setup import event
 from binance_bot.market import is_futures_symbol
+from binance_bot.strategy.execution import live_orders_enabled
 from binance_bot.workflows.base import TradingNavigator
 from binance_bot.workflows.sop import ReadingSource, SopTrader, log_top_gainers
 
@@ -179,5 +180,9 @@ class SingleWorkflow:
         if opened == 0:
             logger.info("Tidak ada koin dengan pola OK: tidak masuk, pantau ulang nanti")
         else:
-            logger.info("Selesai: %d posisi uji kertas baru", opened)
+            logger.info(
+                "Selesai: %d posisi %s baru",
+                opened,
+                "uang sungguhan" if live_orders_enabled() else "uji kertas",
+            )
         return opened

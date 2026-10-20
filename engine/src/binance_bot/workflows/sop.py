@@ -420,9 +420,10 @@ class SopTrader:
         self._journal.append(entry)
         if entry.status == "open":
             logger.info(
-                "#%d %s dicatat di jurnal: posisi uji terbuka",
+                "#%d %s dicatat di jurnal: posisi %s terbuka",
                 rank,
                 symbol,
+                "uang sungguhan" if entry.real else "uji",
                 extra=coin_event(entry, self.params),
             )
         else:
@@ -566,9 +567,10 @@ class SopTrader:
         entry.margin_usdt = sizing.margin_usdt
         entry.target_price = plan.target_price
         logger.info(
-            "#%d %s MASUK UJI KERTAS: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
+            "#%d %s MASUK %s: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
             "di %g (turun %g%%), tanpa stop-loss dan tanpa batas waktu",
             entry.rank,
+            "UANG SUNGGUHAN" if entry.real else "UJI KERTAS",
             symbol,
             sizing.order_text,
             price,

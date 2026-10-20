@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.order_buttons import find_pair, text_image
@@ -87,6 +87,15 @@ _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
 _SHORT_TEXT = re.compile(r"(Jual|Sell)\s*/?\s*Short|Short|Jual", re.IGNORECASE)
 _LONG_TEXT = re.compile(r"(Beli|Buy)\s*/?\s*Long|Long|Beli", re.IGNORECASE)
 _POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\([\dOo]+\)", re.IGNORECASE)  # "Posisi(O)"
+_POSITIONS_COUNT = re.compile(r"(?:Posisi|Positions?)\s*\(([\dOo]+)\)", re.IGNORECASE)
+# Sesudah tombol Jual/Short ditekan: bukti posisi terbuka ditunggu sampai sekian detik. Uji nyata
+# (20 Okt, BRUSDT dan AGTUSDT): bot mencatat posisi sungguhan padahal Binance tidak membukanya.
+_ORDER_CONFIRM_S = 10.0
+# Pesan penolakan order Binance (toast), dicatat sebagai alasan bila order tidak masuk.
+_ORDER_MESSAGE = re.compile(
+    r"gagal|ditolak|tidak cukup|tidak mencukupi|kuis|melebihi|failed|rejected|insufficient|quiz",
+    re.IGNORECASE,
+)
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
 # Angka leverage (label di atas form dan kolom dialog); OCR bisa menggabungkannya dengan
@@ -1017,26 +1026,116 @@ class BinanceNavigator:
             raise SafetyError("Order sungguhan terkunci (Real Fund Trading belum dinyalakan)")
         if not self._on_coin_page():
             raise SafetyError("Order hanya di halaman koin")
-        shown: list[str] = []
-        for attempt in range(_VERIFY_ATTEMPTS):
-            shown = self._read_texts(self.rect.sub(*self._quantity_area()))
-            if any(same_number(value, plan.order_text) for value in shown):
-                break
-            if attempt + 1 < _VERIFY_ATTEMPTS:
-                # Uji nyata (AGTUSDT): bacaan "24" padahal kolom berisi 20, 0,17 detik setelah
-                # bacaan "20" (kursor berkedip mengganggu OCR). Baca ulang seperti saat mengisi;
-                # angkanya tetap harus persis sama dengan rencana.
-                self._sleep(_VERIFY_RETRY_DELAY_S)
-        else:
+        matches, shown = self._quantity_matches(plan)
+        if not matches:
             shot = self._save_debug_shot("kolom-jumlah")
             raise SafetyError(
                 f"Kolom jumlah menampilkan {shown}, bukan {plan.order_text}: order dibatalkan. "
                 f"Foto layar: {shot}"
             )
         target = self.short_button()
+        before = self._order_evidence()
         logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
         self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
+        if self._await_order(plan, before, _ORDER_CONFIRM_S, photo="setelah-klik-short"):
+            return
+        # Uji nyata (20 Okt, BRUSDT dan AGTUSDT): klik tercatat, tetapi Binance tidak membuat order
+        # sama sekali (tanpa jendela konfirmasi, Riwayat Order kosong). Tombol TIDAK diklik ulang:
+        # bila order pertama ternyata masuk terlambat, klik kedua membuka posisi ganda.
+        messages = self._order_messages()
+        detail = f"Binance menampilkan: {messages}" if messages else "tidak ada posisi baru"
+        self._fail_order(plan, before, detail)
+
+    def _quantity_matches(self, plan: OrderPlan) -> tuple[bool, list[str]]:
+        shown: list[str] = []
+        for attempt in range(_VERIFY_ATTEMPTS):
+            shown = self._read_texts(self.rect.sub(*self._quantity_area()))
+            if any(same_number(value, plan.order_text) for value in shown):
+                return True, shown
+            if attempt + 1 < _VERIFY_ATTEMPTS:
+                # Uji nyata (AGTUSDT): bacaan "24" padahal kolom berisi 20, 0,17 detik setelah
+                # bacaan "20" (kursor berkedip mengganggu OCR). Baca ulang seperti saat mengisi;
+                # angkanya tetap harus persis sama dengan rencana.
+                self._sleep(_VERIFY_RETRY_DELAY_S)
+        return False, shown
+
+    def _order_messages(self) -> list[str]:
+        """Teks penolakan atau galat order yang tampil di jendela (toast Binance), bila ada."""
+        return [
+            line.text for line in self._read_lines(self.rect) if _ORDER_MESSAGE.search(line.text)
+        ]
+
+    def _order_evidence(self) -> tuple[int | None, float | None]:
+        """(jumlah di tab "Posisi(n)", saldo Tersedia) saat ini; None = tidak terbaca."""
+        return self._positions_count(), self.available_usdt()
+
+    def _positions_count(self) -> int | None:
+        for line in self._read_lines(self.rect.sub(*layout.POSITIONS_TAB_AREA)):
+            match = _POSITIONS_COUNT.search(line.text)
+            if match:
+                return int(match.group(1).replace("O", "0").replace("o", "0"))
+        return None
+
+    def _await_order(
+        self,
+        plan: OrderPlan,
+        before: tuple[int | None, float | None],
+        timeout_s: float,
+        *,
+        photo: str,
+    ) -> bool:
+        """Tunggu bukti Binance membuka posisi sesudah tombol Jual/Short ditekan; True bila ada.
+
+        Bukti: jumlah di tab "Posisi(n)" bertambah, atau saldo Tersedia turun setidaknya separuh
+        margin rencana. Foto layar diambil sekali di awal penantian (pesan Binance hanya tampil
+        beberapa detik). Selama menunggu, bot tidak mengklik apa pun.
+        """
+        count0, available0 = before
+        deadline = self._clock() + timeout_s
+        first = True
+        while True:
+            self._sleep(1.0)
+            if first:
+                logger.info("Foto layar sesudah klik order: %s", self._save_debug_shot(photo))
+                first = False
+            count, available = self._order_evidence()
+            proof = (count is not None and count0 is not None and count > count0) or (
+                available is not None
+                and available0 is not None
+                and available0 - available >= plan.margin_usdt * 0.5
+            )
+            if proof:
+                logger.info(
+                    "Order Short %s terkonfirmasi: Posisi %s -> %s, Tersedia %s -> %s",
+                    plan.symbol,
+                    count0,
+                    count,
+                    available0,
+                    available,
+                )
+                return True
+            if self._clock() >= deadline:
+                return False
+
+    def _fail_order(
+        self, plan: OrderPlan, before: tuple[int | None, float | None], detail: str
+    ) -> NoReturn:
+        """Order dianggap TIDAK masuk: jurnal tidak mencatat posisi sungguhan yang tidak ada."""
+        count, available = self._order_evidence()
+        shot = self._save_debug_shot("order-tidak-terkonfirmasi")
+        logger.error(
+            "Order Short %s TIDAK terkonfirmasi di Binance (%s). Periksa Binance secara manual; "
+            "bila posisinya ternyata terbuka, tutup sendiri. Foto layar: %s",
+            plan.symbol,
+            detail,
+            shot,
+        )
+        raise ScreenReadError(
+            f"Order Short {plan.symbol} tidak terkonfirmasi: {detail} (Posisi {before[0]} -> "
+            f"{count}, Tersedia {before[1]} -> {available}); tidak dicatat sebagai posisi "
+            f"sungguhan. Foto layar: {shot}"
+        )
 
     def close_position(self, symbol: str) -> None:
         """Tutup posisi `symbol` di bursa: tab Posisi -> baris koin -> tombol Market.
