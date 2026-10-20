@@ -64,6 +64,9 @@ MARGIN_AREA = (0.84, 0.185, 1.0, 0.225)  # "Cross·Merge  75X"
 ORDER_TAB_AREA = (0.84, 0.22, 1.0, 0.27)  # "Limit  Market  Plan"
 ORDER_FORM_AREA = (0.84, 0.22, 1.0, 0.45)  # kolom Quantity
 QTY_CLICK_X = 0.87  # bagian kiri kolom (satuan USDT ada di kanan)
+# Baris saldo "Available 0.0000USDT" di bawah kolom Quantity (diukur: y 0,43, BRUSDT 20 Okt 2026).
+# Dibaca berpatokan label "Available", jadi area boleh agak lebar.
+AVAILABLE_AREA = (0.84, 0.38, 1.0, 0.48)
 MA_DIALOG_AREA = (0.2, 0.35, 0.75, 0.8)  # dialog pengaturan "MA" (Length / Ok / Cancel)
 # Dialog "Modify leverage" (judul, - 2X +, slider, Confirm) di tengah, sempit agar order book di
 # kanan (x 0.665..) tidak ikut terbaca.

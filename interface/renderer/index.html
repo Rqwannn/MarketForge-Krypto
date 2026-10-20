@@ -96,8 +96,8 @@
           </div>
           <div class="field" data-modes="single follower">
             <label class="label" for="modal">Modal</label>
-            <div class="money"><input id="modal" inputmode="decimal" placeholder="0" autocomplete="off"><span>USDT</span></div>
-            <small>Tiap posisi memakai separuh modal, leverage 2x.</small>
+            <div class="money"><input id="modal" inputmode="decimal" placeholder="0" autocomplete="off"><span>USDT</span><button type="button" class="max" id="modal-max" aria-pressed="false" title="Pakai seluruh saldo USDT yang tersedia">Max</button></div>
+            <small id="modal-note">Tiap posisi memakai separuh modal, leverage 2x.</small>
           </div>
           <div class="field" data-modes="single leader">
             <span class="label">Ulangi pemantauan</span>
@@ -319,7 +319,7 @@
     <h2 id="invite-title"></h2>
     <p id="invite-text"></p>
     <label class="label" for="invite-modal">Modal laptop ini</label>
-    <div class="money"><input id="invite-modal" inputmode="decimal" placeholder="0" autocomplete="off"><span>USDT</span></div>
+    <div class="money"><input id="invite-modal" inputmode="decimal" placeholder="0 atau Max" autocomplete="off"><span>USDT</span></div>
     <p class="error" id="invite-error" role="alert"></p>
     <div class="dialog-actions">
       <button class="secondary" id="invite-decline">Tolak</button>

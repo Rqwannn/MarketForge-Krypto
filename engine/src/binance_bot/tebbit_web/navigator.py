@@ -37,6 +37,7 @@ from binance_bot.tebbit_web.chrome import (
 from binance_bot.tebbit_web.pattern_rules import TEBBIT
 from binance_bot.tebbit_web.screen_text import (
     contract_url,
+    parse_available,
     parse_gainer_rows,
     parse_header,
     parse_margin,
@@ -71,6 +72,9 @@ _CONTRACT_PATH = "/futures/contract/u_based/"
 _PAGE_TIMEOUT_S = 25.0
 _VERIFY_ATTEMPTS = 4
 _LEGEND_RETRIES = 3
+_AVAILABLE_ROW_TOLERANCE = (
+    0.012  # label "Available" dan angkanya: satu baris (pecahan tinggi jendela)
+)
 
 
 class TebbitNavigator(BinanceNavigator):
@@ -394,7 +398,10 @@ class TebbitNavigator(BinanceNavigator):
         return lay.ORDER_FORM_AREA
 
     def available_usdt(self) -> float | None:
-        return None  # belum tersedia untuk Tebbit (Real Fund Trading Binance dulu)
+        """Saldo "Available" di form order halaman koin (USDT), atau None bila tidak terbaca."""
+        _, y0, _, y1 = lay.AVAILABLE_AREA
+        lines = self._read_lines(self.rect.sub(*lay.AVAILABLE_AREA))
+        return parse_available(lines, _AVAILABLE_ROW_TOLERANCE / (y1 - y0))
 
     def close_position(self, symbol: str) -> None:
         raise SafetyError("Tutup posisi sungguhan untuk Tebbit belum tersedia (Binance dulu)")

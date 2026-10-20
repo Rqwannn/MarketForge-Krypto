@@ -100,7 +100,7 @@ function plain(text) {
     [/Leverage tidak bisa diubah/, 'Leverage koin ini tidak bisa diubah ke 2x otomatis'],
     [/belum terbaca untuk jual otomatis/, 'Harga posisi belum terbaca, jual otomatis dicoba lagi'],
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
-    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan (SOP V3)'],
+    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
@@ -123,7 +123,7 @@ function plain(text) {
     [/Kolom (Jumlah|Quantity)/, `Kolom jumlah di ${site} tidak terisi dengan benar`],
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
-    [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
+    [/leverage \S+x, seharusnya/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
@@ -249,6 +249,7 @@ function render() {
     node.hidden = !node.dataset.modes.split(' ').includes(form.mode);
   }
   $('mode-note').textContent = MODE_NOTE[form.mode];
+  renderModal();
   updateLeaderLock();
   $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
   $('ranks-note').textContent = multi
@@ -292,11 +293,40 @@ function setupForm() {
     form.ranks = [...RANKS];
     render();
   });
-  $('modal').value = form.modal;
+  renderModal();
   $('modal').addEventListener('input', () => {
     form.modal = $('modal').value.trim();
+    renderModal();
     saveForm();
   });
+  $('modal-max').addEventListener('click', () => {
+    form.modal = isMaxModal(form.modal) ? '' : 'max';
+    renderModal();
+    saveForm();
+    if (!isMaxModal(form.modal)) $('modal').focus();
+  });
+}
+
+/** Modal 'max' = seluruh saldo USDT tersedia, dibaca bot dari form order saat akan masuk. */
+const isMaxModal = (modal) => String(modal || '').trim().toLowerCase() === 'max';
+
+/** Teks modal untuk dibaca orang: "100 USDT" atau "Max (seluruh saldo)". */
+const modalText = (modal) => (isMaxModal(modal) ? 'Max (seluruh saldo)' : `${modal} USDT`);
+
+function renderModal() {
+  const max = isMaxModal(form.modal);
+  const input = $('modal');
+  if (max) input.value = 'Max';
+  else if (input.value.trim().toLowerCase() === 'max') input.value = '';
+  else if (input.value !== form.modal) input.value = form.modal;
+  input.readOnly = max;
+  input.classList.toggle('is-max', max);
+  const button = $('modal-max');
+  button.classList.toggle('on', max);
+  button.setAttribute('aria-pressed', String(max));
+  $('modal-note').textContent = max
+    ? 'Modal = seluruh saldo USDT tersedia saat bot masuk. Tiap posisi memakai separuhnya, leverage 2x.'
+    : 'Tiap posisi memakai separuh modal, leverage 2x.';
 }
 
 // --------------------------------------------------------------------------- jalankan dan hentikan
@@ -370,10 +400,16 @@ function askReal({ follower = false, leaderName = '', modal = '' } = {}) {
   $('real-intro').textContent = follower
     ? 'Laptop ini ikut memakai uang sungguhan hanya bila kamu setuju; bila ditolak, laptop ini mengikuti sebagai uji kertas. Tiap posisi:'
     : 'Mulai putaran berikutnya, bot memakai uangmu di Binance. Tiap posisi:';
-  const capital = Number(String(modal || form.modal || '').replace(',', '.'));
+  const chosen = modal || form.modal || '';
+  const capital = Number(String(chosen).replace(',', '.'));
   const usdt = (v) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })} USDT`;
-  $('real-notional').textContent = capital > 0 ? usdt(capital) : '–';
-  $('real-margin').textContent = capital > 0 ? usdt(capital / 2) : '50% modal';
+  if (isMaxModal(chosen)) {
+    $('real-notional').textContent = 'Seluruh saldo USDT tersedia';
+    $('real-margin').textContent = 'Separuh saldo tersedia';
+  } else {
+    $('real-notional').textContent = capital > 0 ? usdt(capital) : '–';
+    $('real-margin').textContent = capital > 0 ? usdt(capital / 2) : '50% modal';
+  }
   ack.checked = false;
   word.value = '';
   confirm.disabled = true;
@@ -915,7 +951,7 @@ function donut(s) {
   const parts = [
     ['Target tercapai', s.targets, 'var(--green)'],
     ['Likuidasi', s.liquidations ?? 0, 'var(--red)'],
-    ['Stop/waktu habis (V2)', (s.stops ?? 0) + (s.timeouts ?? 0), 'var(--amber)'],
+    ['Stop/waktu habis (catatan lama)', (s.stops ?? 0) + (s.timeouts ?? 0), 'var(--amber)'],
     ['Ditutup (Sell)', s.manual ?? 0, 'var(--accent)'],
     ['Masih berjalan', s.open, 'var(--accent-2)'],
   ];
@@ -1622,7 +1658,7 @@ function applyTeam(info) {
   $('group').hidden = !member;
   if (member) {
     $('group-title').textContent = `Pengikut dari ${member.leaderName} · ${rankLabel(member.rank)}`;
-    $('group-sub').textContent = `Bot mulai otomatis setiap pemimpin memulai putaran (modal ${member.modal} USDT).`;
+    $('group-sub').textContent = `Bot mulai otomatis setiap pemimpin memulai putaran (modal ${modalText(member.modal)}).`;
     if (form.mode !== 'follower' || form.rank !== member.rank) {
       form.mode = 'follower';
       form.rank = member.rank;
@@ -1638,7 +1674,7 @@ function showInvite(invite) {
   pendingInvite = invite;
   $('invite-title').textContent = `${invite.leaderName} mengajak laptop ini`;
   $('invite-text').textContent = `Menjadi Pengikut untuk ${invite.rank === '*' ? 'semua Top yang dimainkan pemimpin' : rankLabel(invite.rank)}. Bot laptop ini akan mulai otomatis setiap pemimpin memulai putaran, memakai hasil AI dari pemimpin.`;
-  $('invite-modal').value = form.modal;
+  $('invite-modal').value = isMaxModal(form.modal) ? 'Max' : form.modal; // ketik angka atau Max
   $('invite-error').textContent = '';
   $('invite').hidden = false;
   $('invite-modal').focus();

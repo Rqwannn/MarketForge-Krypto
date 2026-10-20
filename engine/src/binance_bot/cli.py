@@ -71,6 +71,19 @@ def parse_number(text: str) -> str:
     return text
 
 
+MAX_CAPITAL = "max"
+
+
+def parse_capital(text: str) -> float | str:
+    """Modal USDT, atau "max" = seluruh saldo USDT tersedia di bursa saat masuk posisi."""
+    if text.strip().lower() == MAX_CAPITAL:
+        return MAX_CAPITAL
+    try:
+        return float(text.replace(",", "."))
+    except ValueError:
+        raise argparse.ArgumentTypeError("isi angka USDT, mis. 100, atau max") from None
+
+
 def parse_rank(text: str) -> int:
     try:
         rank = int(text)
@@ -94,7 +107,11 @@ def _sop_options() -> argparse.ArgumentParser:
     d = _DEFAULTS
     p = argparse.ArgumentParser(add_help=False)
     g = p.add_argument_group("parameter SOP V2")
-    g.add_argument("--modal", type=float, help="Modal USDT")
+    g.add_argument(
+        "--modal",
+        type=parse_capital,
+        help="Modal USDT, atau max = seluruh saldo USDT tersedia (dibaca dari form order)",
+    )
     g.add_argument(
         "--jumlah", type=float, help="Ukuran order manual dalam USDT (menimpa margin x leverage)"
     )
@@ -137,7 +154,8 @@ def _sop_options() -> argparse.ArgumentParser:
 
 def params_from(args: argparse.Namespace) -> SopParams:
     return SopParams(
-        capital_usdt=args.modal,
+        capital_usdt=None if args.modal == MAX_CAPITAL else args.modal,
+        capital_max=args.modal == MAX_CAPITAL,
         order_usdt=args.jumlah,
         margin_pct=args.margin,
         leverage=args.leverage,

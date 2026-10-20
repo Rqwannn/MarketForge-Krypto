@@ -57,6 +57,7 @@ _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
 _FOCUS_CLICK_AFTER = 2  # usaha biasa yang gagal sebelum klik titik kosong bilah judul
 _VERIFY_RETRY_DELAY_S = 0.4
+_POSITION_PAGES = 8  # langkah gulir maksimal mencari baris posisi di tabel Posisi (3-5 posisi)
 _PAGE_READ_ATTEMPTS = 3  # baca pair di halaman koin: halaman baru bisa lambat tampil
 _PAGE_READ_DELAY_S = 1.0
 _OPEN_PAGE_ATTEMPTS = 2  # klik ikon trade diulang sekali bila hilang (daftar masih tampil)
@@ -93,7 +94,7 @@ _POSITIONS_COUNT = re.compile(r"(?:Posisi|Positions?)\s*\(([\dOoIl|]+)\)", re.IG
 # (20 Okt, BRUSDT dan AGTUSDT): bot mencatat posisi sungguhan padahal Binance tidak membukanya.
 _ORDER_CONFIRM_S = 10.0
 _CLOSE_SCROLL_NOTCHES = 2  # gulir halaman sedikit bila baris posisi belum terlihat
-_CLOSE_SCROLL_TRIES = 2
+_SCROLL_UP_NOTCHES = 7  # satu scroll_up = 7 langkah roda
 _DIGIT_LOOKALIKE = str.maketrans("OoIl|", "00111")
 _FORM_COLUMN = (0.78, 0.0, 1.0, 1.0)  # kolom form order (tempat tombol dicari lewat warna)
 # Toast Binance sesudah order pasar terisi (uji nyata 20 Okt: "Order Dimasukkan", "Order Jual
@@ -1236,10 +1237,11 @@ class BinanceNavigator:
         Hanya saat Real Fund Trading. Tombol Market di baris posisi langsung menutup seluruh posisi
         koin itu (tanpa dialog). Tab, baris, dan tombol dicari di SELURUH jendela, bukan area tetap:
         uji nyata (20 Okt) halaman koin bergeser 100-200 piksel sesudah posisi terbuka, dan baris
-        posisi bisa berada di bawah tepi jendela. Bila barisnya belum terlihat, halaman digulir
-        sedikit di atas panel Posisi (bukan di atas grafik), lalu dikembalikan sesudahnya. Setelah
-        klik, layar dibaca ulang: bila baris koin masih ada, dianggap gagal supaya jurnal tidak
-        mencatat posisi tertutup padahal masih terbuka.
+        posisi bisa berada di bawah tepi jendela. Dengan 3-5 posisi terbuka baris koin bisa di
+        bawah: halaman/tabel digulir satu langkah demi satu langkah di atas panel Posisi (bukan di
+        atas grafik) sampai baris ketemu atau isinya tidak berubah lagi, lalu dikembalikan. Nama
+        koin harus persis: "PEPEUSDT" tidak cocok dengan "1000PEPEUSDT". Sesudah klik, tertutup bila
+        Posisi(n) berkurang, atau (bila angkanya tak terbaca) baris koin tidak terlihat lagi.
         """
         if not live_orders_enabled():
             raise SafetyError(
@@ -1260,14 +1262,16 @@ class BinanceNavigator:
                 raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
             self._click(tab)
             point = self.rect.point_at(0.30, min(0.95, tab[1] + 0.06))
-            row = self._position_row(symbol, tab[1])
-            for _ in range(_CLOSE_SCROLL_TRIES):
-                if row is not None:
+            row, texts = self._position_row(symbol, tab[1])
+            seen: list[str] | None = None
+            for _ in range(_POSITION_PAGES):
+                if row is not None or texts == seen:
                     break
-                self._scroll_page_down(point, _CLOSE_SCROLL_NOTCHES)
-                scrolled += _CLOSE_SCROLL_NOTCHES
+                seen = texts
+                self._scroll_page_down(point, 1)
+                scrolled += 1
                 tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT) or tab
-                row = self._position_row(symbol, tab[1])
+                row, texts = self._position_row(symbol, tab[1])
             if row is None:
                 raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
             target = self._market_button(row)
@@ -1279,7 +1283,7 @@ class BinanceNavigator:
                 )
                 sideways = True
                 self._sleep(0.8)
-                row = self._position_row(symbol, tab[1]) or row
+                row = self._position_row(symbol, tab[1])[0] or row
                 target = self._market_button(row)
             if target is None:
                 shot = self._save_debug_shot("tombol-market")
@@ -1290,17 +1294,19 @@ class BinanceNavigator:
             logger.warning("ORDER SUNGGUHAN: tutup posisi %s (Market)", symbol)
             self._click(target)
             self._sleep(self._settings.settle_delay_s)
-            still = self._position_row(symbol, tab[1])
             after = self._order_evidence().positions
+            still = self._position_row(symbol, tab[1])[0]
         finally:
             if sideways:
                 self._ensure_front()
                 self._window.scroll_horizontal(*point, -layout.POSITIONS_SCROLL_NOTCHES)
-            if scrolled:
+            for _ in range(-(-scrolled // _SCROLL_UP_NOTCHES)):  # kembali ke atas halaman/tabel
                 self._ensure_front()
-                self._window.scroll_up(*point)  # kembali ke atas halaman
+                self._window.scroll_up(*point)
                 self._sleep(0.5)
-        closed = still is None or (after is not None and before is not None and after < before)
+        # Posisi(n) berkurang = tertutup; angka tak terbaca: baris koin tidak terlihat lagi.
+        known = after is not None and before is not None
+        closed = (after < before) if known else still is None  # type: ignore[operator]
         if not closed:
             raise ScreenReadError(f"Posisi {symbol} masih terlihat di tab Posisi setelah ditutup")
         logger.info("Posisi %s sudah tertutup di Binance", symbol)
@@ -1310,20 +1316,19 @@ class BinanceNavigator:
         self._window.scroll_down(*point, notches)
         self._sleep(0.8)
 
-    def _position_row(self, symbol: str, below: float) -> float | None:
-        """Tinggi baris posisi `symbol` (relatif jendela) di bawah tab Posisi, atau None.
+    def _position_row(self, symbol: str, below: float) -> tuple[float | None, list[str]]:
+        """(tinggi baris posisi `symbol` atau None, teks di bawah tab Posisi).
 
         Dibatasi di kiri kolom form (x < 0,80) dan di bawah tab, supaya judul halaman koin
-        ("BRUSDT Perpetual") dan toast di kanan bawah tidak dikira baris posisi.
+        ("BRUSDT Perpetual") dan toast di kanan bawah tidak dikira baris posisi. Nama harus
+        persis: "PEPEUSDT" tidak cocok dengan baris "1000PEPEUSDT".
         """
-        for line in self._read_lines(self.rect):
-            if (
-                line.y > below + 0.02
-                and line.x < 0.80
-                and symbol in line.text.replace(" ", "").upper()
-            ):
-                return line.y
-        return None
+        name = re.compile(rf"(?<![A-Z0-9]){re.escape(symbol.upper())}(?:PERP|(?![A-Z0-9]))")
+        lines = [ln for ln in self._read_lines(self.rect) if ln.y > below + 0.02 and ln.x < 0.80]
+        for line in lines:
+            if name.search(line.text.replace(" ", "").upper()):
+                return line.y, [ln.text for ln in lines]
+        return None, [ln.text for ln in lines]
 
     def _market_button(self, row_y: float) -> tuple[float, float] | None:
         """Tombol "Market" di baris posisi (sejajar baris, di kiri kolom form), atau None."""

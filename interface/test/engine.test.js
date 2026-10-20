@@ -32,6 +32,14 @@ test('pengikut: satu top gainer dan modal (alamat hub dari .env admin)', () => {
   ]);
 });
 
+test('modal Max: seluruh saldo tersedia, untuk Sendiri dan Pengikut', () => {
+  assert.deepEqual(buildArgs('single', { ranks: [1], modal: 'max' }).slice(-2), ['--modal', 'max']);
+  assert.deepEqual(buildArgs('follower', { rank: 2, modal: ' Max ' }).slice(-2), ['--modal', 'max']);
+  for (const modal of ['', 'semua', 'maks']) {
+    assert.throws(() => buildArgs('single', { ranks: [1], modal }), InputError, modal);
+  }
+});
+
 test('pengikut dari ajakan pemimpin: alamat hub ikut, dan divalidasi', () => {
   assert.deepEqual(buildArgs('follower', { rank: 3, modal: '100', hub: 'http://192.168.1.19:8765' }), [
     '--events', 'follower', '--rank', '3', '--hub', 'http://192.168.1.19:8765', '--modal', '100',

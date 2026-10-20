@@ -91,7 +91,7 @@ class JournalWorkflow:
         if self._as_json:
             self._output(json.dumps(self._as_dict(entries, trades, now, warning), default=str))
             return
-        logger.info("Jurnal SOP: %s", self._journal.path)
+        logger.info("Jurnal: %s", self._journal.path)
         logger.info(
             _ROW,
             "Waktu",
@@ -169,7 +169,7 @@ class JournalWorkflow:
         )
         if stats.needs_review:
             logger.warning(
-                "%d posisi terbuka sudah lewat %g jam: tinjau bersama beliau (tanpa batas waktu)",
+                "%d posisi terbuka sudah lewat %g jam: perlu ditinjau (tanpa batas waktu)",
                 stats.needs_review,
                 self._params.review_after_h,
             )

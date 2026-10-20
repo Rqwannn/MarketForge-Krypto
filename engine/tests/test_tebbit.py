@@ -169,3 +169,27 @@ def test_another_coins_price_is_reused_instead_of_reopening_its_page() -> None:
     now[0] = 200.0
     market.quote("TRUTHUSDT")
     assert nav.visits == ["TRUTHUSDT", "BTWUSDT", "TRUTHUSDT", "BTWUSDT"]
+
+
+def _available(*rows: tuple[str, float, float]) -> float | None:
+    from binance_bot.macos import TextLine
+    from binance_bot.tebbit_web.screen_text import parse_available
+
+    return parse_available([TextLine(text, x, y) for text, x, y in rows], row_tolerance=0.1)
+
+
+def test_available_balance_is_read_from_its_own_row_only() -> None:
+    # Bacaan OCR nyata di form order Tebbit (BRUSDT, 20 Okt 2026), y relatif area saldo.
+    form = [("Available", 0.09, 0.46), ("0.0000USDT =", 0.79, 0.47), ("Stop Limit", 0.18, 0.83)]
+    assert _available(*form) == 0.0
+    assert _available(("Available", 0.09, 0.4), ("1,234.56 USDT", 0.8, 0.41)) == 1234.56
+    assert _available(("Available 58.70 USDT", 0.5, 0.4)) == 58.7
+    assert _available(("Avbl", 0.09, 0.4), ("O.OO USDT", 0.8, 0.4)) == 0.0  # nol terbaca huruf O
+
+
+def test_max_order_rows_are_not_mistaken_for_the_balance() -> None:
+    # "Max 0.0000 USDT" di bawah tombol order, tanpa label Available: bukan saldo.
+    assert _available(("Max", 0.1, 0.4), ("12.50 USDT", 0.8, 0.4)) is None
+    # Label ada, tetapi angkanya jauh di baris lain: tidak diambil.
+    assert _available(("Available", 0.1, 0.1), ("Max", 0.1, 0.9), ("12.50 USDT", 0.8, 0.9)) is None
+    assert _available(("Available", 0.1, 0.4), ("OOO USDT", 0.8, 0.4)) is None

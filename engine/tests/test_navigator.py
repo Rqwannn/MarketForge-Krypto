@@ -1366,3 +1366,49 @@ def test_close_position_does_not_take_the_page_title_for_a_position_row(
     nav, _ = _closing_nav(monkeypatch, [title_only])
     with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
         nav.close_position("BRUSDT")
+
+
+def _rows(*items: tuple[str, float]) -> list[TextLine]:
+    """Tab Posisi(4) di y 0,86 lalu baris posisi (nama di x 0,07, tombol Market di x 0,783)."""
+    lines = [TextLine("Posisi(4) Transaksi terbuka(0)", 0.15, 0.86)]
+    for name, y in items:
+        lines += [TextLine(f"{name} Perp 2x", 0.07, y), TextLine("Market", 0.783, y)]
+    return lines
+
+
+def test_the_position_row_is_found_by_name_further_down_the_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """3-5 posisi (Raqwan): baris koin yang dijual di bawah, belum terlihat. Halaman/tabel digulir,
+    lalu yang diklik tombol Market di baris koin itu, bukan baris pertama atau nama yang mirip."""
+    top = _rows(("BTWUSDT", 0.90), ("ICNTUSDT", 0.95))
+    lower = _rows(("ICNTUSDT", 0.90), ("1000PEPEUSDT", 0.93), ("PEPEUSDT", 0.96))
+    after = [TextLine("Posisi(3) Transaksi terbuka(0)", 0.15, 0.86)]
+    nav, screen = _closing_nav(monkeypatch, [top, top] + [lower] * 4 + [after])
+    nav.close_position("PEPEUSDT")
+    kinds = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down", "click")]
+    last_click = len(kinds) - 1 - kinds[::-1].index("click")
+    assert kinds.index("scroll_down") < last_click
+    assert clicks(screen)[-1] == WINDOW.point_at(0.783, 0.96)  # PEPEUSDT, bukan 1000PEPEUSDT
+    assert kinds[-1] == "scroll_up"  # dikembalikan ke atas
+
+
+def test_a_similar_name_is_not_closed_and_the_page_is_scrolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, screen = _closing_nav(monkeypatch, [_rows(("1000PEPEUSDT", 0.93))])
+    with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
+        nav.close_position("PEPEUSDT")
+    assert len(clicks(screen)) == 1  # hanya tab Posisi; tombol Market tidak disentuh
+    vertical = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down")]
+    assert vertical[-1] == "scroll_up"
+
+
+def test_a_visible_row_is_clicked_without_scrolling_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    after = [TextLine("Posisi(3) Transaksi terbuka(0)", 0.15, 0.86)]
+    nav, screen = _closing_nav(monkeypatch, [_rows(("BTWUSDT", 0.93))] * 4 + [after])
+    nav.close_position("BTWUSDT")
+    market = screen.events.index(("click", WINDOW.point_at(0.783, 0.93)))
+    assert not any(kind == "scroll_down" for kind, _ in screen.events[:market])

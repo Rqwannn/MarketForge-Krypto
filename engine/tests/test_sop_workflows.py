@@ -1205,6 +1205,39 @@ def test_paper_trading_does_not_need_a_balance(tmp_path: Path) -> None:
     assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
 
 
+def test_max_capital_uses_the_whole_available_balance_with_the_sop_formula(
+    tmp_path: Path,
+) -> None:
+    # Modal Max: modal = saldo tersedia; rumus SOP tetap (margin 50% modal, 2x -> nilai = modal).
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 107.48
+    trader, gate, journal, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "open" and entry.capital_usdt == 107.48
+    assert nav.filled == ["107,48"] and gate.plans[0].order_text == "107,48"
+    # Separuh saldo (53,74); sedikit kurang karena jumlah koin dibulatkan ke langkah koin.
+    assert 53.0 < gate.plans[0].margin_usdt <= 53.74
+    assert journal.load()[0].capital_usdt == 107.48  # hasil % modal dihitung dari saldo itu
+
+
+def test_max_capital_skips_the_coin_when_the_balance_cannot_be_read(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = None  # mis. Tebbit: saldo belum bisa dibaca dari layar
+    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "skipped" and "Modal Max" in entry.reason
+    assert nav.filled == [] and gate.plans == []
+
+
+def test_max_capital_with_an_empty_balance_says_so(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 0.0  # mis. saldo Tebbit 0.0000 USDT
+    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "skipped" and "saldo tersedia 0 USDT" in entry.reason
+    assert gate.plans == []
+
+
 def _real_position(symbol: str, entry: float = 1.0) -> JournalEntry:
     held = open_trade(symbol, entry_price=entry)
     held.created_at, held.real = NOW.timestamp() - 600, True

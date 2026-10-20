@@ -22,6 +22,8 @@ REFERENCE_LOSS_PCT = 21.8
 @dataclass(frozen=True, slots=True)
 class SopParams:
     capital_usdt: float | None = None  # modal (USDT)
+    # Modal Max: modal = saldo USDT tersedia di form order, dibaca ulang setiap akan masuk posisi.
+    capital_max: bool = False
     order_usdt: float | None = None  # JUMLAH manual: ukuran order USDT (menimpa margin x leverage)
     margin_pct: float = 50.0  # beliau: margin 50% modal per posisi
     leverage: int = 2  # beliau: 2x (nilai posisi per koin = 100% modal)
@@ -38,8 +40,8 @@ class SopParams:
 
     def validate(self) -> None:
         errors = []
-        if self.capital_usdt is None and self.order_usdt is None:
-            errors.append("isi MODAL (USDT) atau JUMLAH (USDT)")
+        if self.capital_usdt is None and self.order_usdt is None and not self.capital_max:
+            errors.append("isi MODAL (USDT atau max) atau JUMLAH (USDT)")
         if self.capital_usdt is not None and self.capital_usdt <= 0:
             errors.append("MODAL harus lebih dari 0")
         if self.order_usdt is not None and self.order_usdt <= 0:
@@ -57,7 +59,7 @@ class SopParams:
         if self.signal_source not in SIGNAL_SOURCES:
             errors.append(f"SINYAL harus salah satu dari {SIGNAL_SOURCES}")
         if errors:
-            raise ConfigError("Parameter SOP tidak valid: " + "; ".join(errors))
+            raise ConfigError("Pengaturan tidak valid: " + "; ".join(errors))
 
     def breakeven_win_rate(self, loss_pct: float = REFERENCE_LOSS_PCT) -> float:
         """Win rate minimal agar impas (bagian Titik impas V3).

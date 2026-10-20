@@ -186,6 +186,8 @@ def rank_at(window_y: float) -> int:
 
 def _work_area_width() -> int | None:
     """Lebar area kerja layar utama Windows dalam piksel fisik (di luar taskbar), atau None."""
+    if sys.platform != "win32":
+        return None
     try:
         import ctypes
         from ctypes import wintypes
