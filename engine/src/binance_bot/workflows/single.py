@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from binance_bot.analysis import PatternAnalyzer, PatternReading
+from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.exceptions import BotError
 from binance_bot.logging_setup import event
 from binance_bot.market import is_futures_symbol
@@ -43,6 +44,7 @@ class SingleWorkflow:
         self._ranks = list(ranks)
         self._interval_s = interval_s
         self._sleep = sleep
+        self._momentum: list[str] = []  # pair yang baru terjual di target, dicek ulang lebih dulu
 
     def run(self) -> None:
         failed_rounds = 0
@@ -76,12 +78,15 @@ class SingleWorkflow:
             logger.info("Pantau ulang dalam %.0f menit", self._interval_s / 60)
             self._wait_and_watch(self._interval_s)
 
-    def _refresh_safely(self) -> None:
-        """Jual otomatis; satu pengecekan yang gagal dicoba lagi menit depan, bot tetap jalan."""
+    def _refresh_safely(self) -> list[str]:
+        """Jual otomatis; satu pengecekan yang gagal dicoba lagi menit depan, bot tetap jalan.
+
+        Mengembalikan pair yang baru terjual di target."""
         try:
-            self._trader.refresh_journal()
+            return self._trader.sell_due()
         except BotError as exc:
             logger.error("Pengecekan jual otomatis gagal, dicoba lagi: %s", exc)
+            return []
 
     def _watch_real_positions(self) -> None:
         """Mode Sekali dengan uang sungguhan: tetap menyala sampai semua posisi sungguhan terjual.
@@ -97,7 +102,11 @@ class SingleWorkflow:
         # (posisi uji kertas dinilai lagi di awal putaran berikutnya)
 
     def _wait_and_watch(self, seconds: float) -> None:
-        """Tunggu putaran berikutnya sambil menjalankan jual otomatis posisi yang terbuka."""
+        """Tunggu putaran berikutnya sambil menjalankan jual otomatis posisi yang terbuka.
+
+        Momentum: begitu ada posisi yang terjual di target, putaran berikutnya dimulai saat itu
+        juga (tanpa menunggu sisa jeda), dengan koin yang baru terjual dicek lebih dulu.
+        """
         step = self._trader.watch_interval_s
         left = seconds
         while left > 0:
@@ -105,14 +114,24 @@ class SingleWorkflow:
             self._sleep(wait)
             left -= wait
             if left > 0:  # putaran berikutnya memeriksanya sendiri di awal
-                self._refresh_safely()
+                sold = self._refresh_safely()
+                if sold:
+                    self._momentum = sold
+                    logger.info(
+                        "%s terjual di target: putaran baru dimulai sekarang", ", ".join(sold)
+                    )
+                    return
 
     def run_cycle(self) -> int:
         """Satu putaran pemantauan. Mengembalikan jumlah posisi uji baru."""
-        self._trader.refresh_journal()  # jual otomatis posisi yang sudah mencapai target
-        self._nav.prepare()
-        rows = {row.rank: row for row in self._nav.open_top_gainers()}
-        log_top_gainers(list(rows.values()))
+        # Jual otomatis posisi yang sudah mencapai target; yang baru terjual dicek ulang lebih dulu.
+        sold = self._momentum + self._trader.sell_due()
+        self._momentum = []
+        with self._nav.screen_turn():
+            self._nav.prepare()
+            listed = self._nav.open_top_gainers()
+        rows = {row.rank: row for row in listed}
+        log_top_gainers(listed)
         analyzer = self._analyzer
         source: ReadingSource | None = None
         if analyzer is not None:
@@ -127,57 +146,72 @@ class SingleWorkflow:
 
             source = read_chart
 
-        min_gain = self._trader.params.min_gain_pct
-
         opened = 0
-        on_list = True
         seen: set[str] = set()
-        for rank in self._ranks:
-            row = rows.get(rank)
-            if row is not None and row.change_pct < min_gain:
-                logger.info(
-                    "#%d %s dilewati: naik %.1f%% < %g%%",
-                    rank,
-                    row.symbol,
-                    row.change_pct,
-                    min_gain,
-                )
-                continue
-            try:
-                # Buka lewat namanya: peringkat sering bertukar di tengah putaran, sehingga klik
-                # baris ke-N membuka pair lain (atau pair yang sama lagi) dan koin ke-N terlewat.
-                if row is not None and is_futures_symbol(row.symbol):
-                    symbol = self._nav.open_symbol(row.symbol)
-                else:
-                    if not on_list:
-                        self._nav.open_top_gainers()
-                    symbol = self._nav.open_gainer(rank)
-                on_list = False
-            except BotError as exc:
-                # Tetap tampil sebagai baris di aplikasi (bukan hanya log) dengan alasannya.
-                logger.warning(
-                    "Rank #%d dilewati: %s",
-                    rank,
-                    exc,
-                    extra=event(
-                        "coin",
-                        rank=rank,
-                        symbol=row.symbol if row is not None else f"Top {rank}",
-                        status="skipped",
-                        verdict=None,
-                        reason=str(exc),
-                    ),
-                )
-                continue
-            if symbol in seen:
-                # Peringkat bergeser sehingga pair yang sama terbuka lagi: jangan nilai dua kali.
-                logger.info("#%d sekarang %s: sudah dinilai di putaran ini, dilewati", rank, symbol)
-                continue
-            seen.add(symbol)
-            if self._trader.trade(rank, symbol, source).status == "open":
-                opened += 1
+        for rank in self._order(rows, sold):
+            # Satu koin = satu giliran layar: buka, baca grafik, AI, isi form, dan order tidak
+            # boleh diselingi bot lain yang membuka koin lain di layar yang sama.
+            with self._nav.screen_turn():
+                if self._play(rank, rows.get(rank), source, seen):
+                    opened += 1
         if opened == 0:
             logger.info("Tidak ada koin dengan pola OK: tidak masuk, pantau ulang nanti")
         else:
             logger.info("Selesai: %d posisi uji kertas baru", opened)
         return opened
+
+    def _order(self, rows: dict[int, GainerRow], sold: Sequence[str]) -> list[int]:
+        """Top yang dinilai putaran ini: koin yang baru terjual di target lebih dulu (selama masih
+        di daftar top gainers, walau bukan Top yang dipilih), lalu Top pilihan pengguna."""
+        by_symbol = {row.symbol: row.rank for row in rows.values()}
+        first: list[int] = []
+        for symbol in dict.fromkeys(sold):
+            rank = by_symbol.get(symbol)
+            if rank is None:
+                logger.info("%s baru terjual, tetapi sudah tidak di daftar top gainers", symbol)
+            elif rank not in first:
+                logger.info("#%d %s baru terjual di target: dicek ulang lebih dulu", rank, symbol)
+                first.append(rank)
+        return first + [rank for rank in self._ranks if rank not in first]
+
+    def _play(
+        self, rank: int, row: GainerRow | None, source: ReadingSource | None, seen: set[str]
+    ) -> bool:
+        """Nilai satu Top (di dalam giliran layar). True bila posisi uji baru dibuka."""
+        min_gain = self._trader.params.min_gain_pct
+        if row is not None and row.change_pct < min_gain:
+            logger.info(
+                "#%d %s dilewati: naik %.1f%% < %g%%", rank, row.symbol, row.change_pct, min_gain
+            )
+            return False
+        try:
+            # Buka lewat namanya: peringkat sering bertukar di tengah putaran, sehingga klik
+            # baris ke-N membuka pair lain (atau pair yang sama lagi) dan koin ke-N terlewat.
+            if row is not None and is_futures_symbol(row.symbol):
+                symbol = self._nav.open_symbol(row.symbol)
+            else:
+                # Daftar dibuka ulang: di antara giliran, bot lain bisa membuka halaman lain.
+                self._nav.open_top_gainers()
+                symbol = self._nav.open_gainer(rank)
+        except BotError as exc:
+            # Tetap tampil sebagai baris di aplikasi (bukan hanya log) dengan alasannya.
+            logger.warning(
+                "Rank #%d dilewati: %s",
+                rank,
+                exc,
+                extra=event(
+                    "coin",
+                    rank=rank,
+                    symbol=row.symbol if row is not None else f"Top {rank}",
+                    status="skipped",
+                    verdict=None,
+                    reason=str(exc),
+                ),
+            )
+            return False
+        if symbol in seen:
+            # Peringkat bergeser sehingga pair yang sama terbuka lagi: jangan nilai dua kali.
+            logger.info("#%d sekarang %s: sudah dinilai di putaran ini, dilewati", rank, symbol)
+            return False
+        seen.add(symbol)
+        return self._trader.trade(rank, symbol, source).status == "open"

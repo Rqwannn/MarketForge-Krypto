@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,6 +43,9 @@ class Settings:
     log_dir: Path = Path("logs")
     screenshot_dir: Path = Path("screenshots")
     journal_path: Path = Path("journal/sop.jsonl")
+    # Giliran layar dibagi semua bot di laptop ini (lihat filelock.ScreenTurn). None = tanpa giliran
+    # (tes); dari environment selalu berisi file di folder sementara pengguna.
+    screen_lock_path: Path | None = None
     # Tanda desimal saat mengetik di kolom Jumlah (Binance bahasa Indonesia memakai koma).
     decimal_separator: str = ","
     # Analisis AI
@@ -78,6 +82,9 @@ class Settings:
             log_dir=Path(get("LOG_DIR", defaults.log_dir)),
             screenshot_dir=Path(get("SCREENSHOT_DIR", defaults.screenshot_dir)),
             journal_path=Path(get("JOURNAL_PATH", defaults.journal_path)),
+            screen_lock_path=Path(
+                get("SCREEN_LOCK_PATH", Path(tempfile.gettempdir()) / "marketforge-screen.lock")
+            ),
             decimal_separator=get("DECIMAL_SEPARATOR", defaults.decimal_separator),
             analyzer_model=get("ANALYZER_MODEL", defaults.analyzer_model),
             analyzer_timeout_s=float(get("ANALYZER_TIMEOUT_S", defaults.analyzer_timeout_s)),

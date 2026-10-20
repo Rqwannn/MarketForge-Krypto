@@ -10,7 +10,8 @@ import logging
 import re
 import tempfile
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ from binance_bot.exceptions import (
     ScreenReadError,
     WindowError,
 )
+from binance_bot.filelock import ScreenTurn
 from binance_bot.logging_setup import event
 from binance_bot.macos import (
     AppController,
@@ -155,6 +157,23 @@ class BinanceNavigator:
         self._unit_menu_click = (
             False  # True hanya saat memilih satuan USDT (lihat _click_in_unit_menu)
         )
+        self._turn = ScreenTurn(settings.screen_lock_path)
+
+    @contextmanager
+    def screen_turn(self) -> Iterator[None]:
+        """Giliran layar untuk satu rangkaian aksi; bot lain di laptop ini menunggu gilirannya."""
+        with self._turn.hold():
+            if self._turn.changed_hands:
+                self._turn.changed_hands = False
+                self._forget_page()
+            yield
+
+    def _forget_page(self) -> None:
+        """Bot lain memakai layar sejak giliran terakhir: halaman yang tampil belum tentu yang
+        terakhir dibuka bot ini, jadi daftar dan halaman koin dibuka ulang, bukan diingat."""
+        logger.info("Giliran layar dari bot lain: halaman %s dibaca ulang", self._settings.app_name)
+        self._on_list = False
+        self._on_trade_page = False
 
     def prepare(self) -> None:
         """Bawa Binance ke depan dan pastikan ukuran jendela sesuai kalibrasi posisi klik."""
@@ -1052,9 +1071,20 @@ class BinanceNavigator:
             raise SafetyError(
                 "Tutup posisi sungguhan terkunci (Real Fund Trading belum dinyalakan)"
             )
+        with self.screen_turn():
+            self._close_position(symbol)
+
+    def _close_position(self, symbol: str) -> None:
         if self._rect is None:  # menu Posisi (Sell manual): Binance belum disiapkan
             self.prepare()
         tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
+        if tab is None and not self._on_trade_page:
+            # Bot lain meninggalkan layar di halaman lain (mis. daftar top gainers). Tab Posisi ada
+            # di halaman koin mana pun: buka koin teratas lewat ikon trade-nya (bukan tombol order).
+            rows = self.open_top_gainers()
+            if rows:
+                self.open_gainer(rows[0].rank)
+                tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
         if tab is None:
             raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
         self._positions_shift = self._measure_positions_shift(tab)

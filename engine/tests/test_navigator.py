@@ -1211,3 +1211,32 @@ def test_the_1366_profile_is_internally_consistent() -> None:
             for x0, y0, x1, y1 in small.ORDER_BUTTON_ZONES
         )
     assert small.ORDER_UNIT_MIN_Y >= 0.6 and small.OCR_UPSCALE == 2
+
+
+def test_closing_from_another_page_first_opens_a_coin_page_for_the_positions_tab(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bot lain meninggalkan layar di daftar top gainers (tanpa tab Posisi): jual otomatis membuka
+    halaman koin teratas dulu, bukan gagal dengan "tab Posisi tidak ditemukan"."""
+    from binance_bot.binance_desktop.screen_text import GainerRow
+
+    nav, screen = _positions_nav(
+        monkeypatch,
+        [
+            [TextLine("BTWUSDT Perp", 0.1, 0.3)],
+            [TextLine("Market", 0.8, 0.3)],
+            [TextLine("ICNTUSDT Perp", 0.1, 0.3)],
+        ],
+    )
+    tab_area = screen.rect.sub(*layout.POSITIONS_TAB_AREA)
+    screen._texts[tab_area] = [[], [TextLine("Posisi(1)", 0.1, 0.5)]]
+    opened: list[str] = []
+    monkeypatch.setattr(
+        nav, "open_top_gainers", lambda: opened.append("list") or [GainerRow(1, "AUSDT", 9.0)]
+    )
+    monkeypatch.setattr(nav, "open_gainer", lambda rank: opened.append(f"top{rank}") or "AUSDT")
+
+    nav.close_position("BTWUSDT")
+
+    assert opened == ["list", "top1"]
+    assert ("click", _table_point(0.8, 0.3)) in screen.events

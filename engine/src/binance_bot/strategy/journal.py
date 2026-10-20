@@ -10,10 +10,13 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, TypeVar
+
+from binance_bot.filelock import exclusive
 
 _T = TypeVar("_T")
 
@@ -105,8 +108,22 @@ def _retry_locked(action: Callable[[], _T]) -> _T:
 
 
 class Journal:
+    """Jurnal JSONL. Beberapa bot (proses) di satu laptop bisa memakai jurnal yang sama, jadi
+    setiap penulisan memegang kunci jurnal dan perubahan ditulis di atas isi file TERBARU: catatan
+    yang ditambahkan bot lain di antara baca dan tulis tidak tertimpa."""
+
     def __init__(self, path: Path) -> None:
         self.path = path
+
+    @contextmanager
+    def _writing(self) -> Iterator[None]:
+        # Ditahan sebentar (baca + tulis file), tidak pernah sambil memakai layar atau jaringan.
+        with exclusive(
+            self.path.with_suffix(".write.lock"),
+            timeout_s=60.0,
+            busy="Jurnal sedang ditulis bot lain",
+        ):
+            yield
 
     def load(self) -> list[JournalEntry]:
         if not self.path.exists():
@@ -122,7 +139,26 @@ class Journal:
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(line)
 
-        _retry_locked(write)
+        with self._writing():
+            _retry_locked(write)
+
+    def rewrite(
+        self, change: Callable[[list[JournalEntry]], list[JournalEntry]]
+    ) -> list[JournalEntry]:
+        """Ubah jurnal dari isi file terbaru: `change(entries)` -> isi baru (ditulis bila beda)."""
+        with self._writing():
+            entries = self.load()
+            updated = change(entries)
+            if updated != entries:
+                self.save(updated)
+            return updated
+
+    def replace(self, changed: Sequence[JournalEntry]) -> list[JournalEntry]:
+        """Ganti entri yang berubah (dicocokkan lewat id dan waktu dibuat) di isi file terbaru."""
+        by_key = {(e.id, e.created_at): e for e in changed}
+        if not by_key:
+            return self.load()
+        return self.rewrite(lambda entries: [by_key.get((e.id, e.created_at), e) for e in entries])
 
     def save(self, entries: list[JournalEntry]) -> None:
         """Tulis ulang seluruh jurnal secara atomik (aman bila proses terhenti di tengah)."""

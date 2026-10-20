@@ -1399,7 +1399,9 @@ def test_real_positions_keep_being_watched_even_when_every_round_fails(
     workflow = SingleWorkflow(
         nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=900, sleep=sleep
     )  # type: ignore[arg-type]
-    with pytest.raises(KeyboardInterrupt):
+    # Setelah terjual tidak ada posisi sungguhan lagi: 5 putaran gagal beruntun boleh menghentikan
+    # bot (putaran setelah jual dimulai segera, jadi batas itu bisa tercapai sebelum sleep ke-40).
+    with pytest.raises((KeyboardInterrupt, BotError)):
         workflow.run()
     assert [e.status for e in journal.load()] == [
         "target"
@@ -1673,3 +1675,105 @@ def test_a_position_missing_on_the_exchange_is_reported_not_closed(
     events = [r.event for r in caplog.records if hasattr(r, "event")]
     assert {"type": "position_missing", "symbol": "ARIAUSDT"} in events
     assert [e.status for e in journal.load()] == ["open"]
+
+
+# --------------------------------------------------------------------------- beberapa bot, momentum
+
+
+def test_journal_changes_are_written_over_entries_another_bot_added_meanwhile(
+    tmp_path: Path,
+) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(open_trade("AUSDT"))
+    held = journal.load()[0]
+    journal.append(open_trade("BUSDT"))  # bot lain masuk posisi sementara bot ini menjual
+    held.status, held.exit_price = "target", 0.98
+
+    journal.replace([held])
+
+    assert [(e.symbol, e.status) for e in journal.load()] == [
+        ("AUSDT", "target"),
+        ("BUSDT", "open"),
+    ]
+
+
+def test_after_a_sale_at_target_the_next_round_starts_at_once_with_that_coin_first(
+    tmp_path: Path,
+) -> None:
+    """Momentum: terjual di target -> putaran baru tanpa menunggu sisa jeda, dan koin itu dicek
+    ulang lebih dulu walau bukan Top yang dipilih (selama masih di daftar). Uji kertas."""
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({1: "AUSDT", 2: "BUSDT", 3: "CUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("CUSDT")  # jual otomatis di 0,98
+    held.created_at = NOW.timestamp() - 600
+    journal.append(held)
+    market.quotes["CUSDT"] = Quote(bid=0.995, ask=1.0, funding_rate=0.0, change_pct=9.0)
+    sleeps: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 1:  # harga CUSDT turun ke target selama menunggu
+            market.quotes["CUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=9.0)
+        else:
+            raise KeyboardInterrupt
+
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=900, sleep=sleep
+    )  # type: ignore[arg-type]
+    with pytest.raises(KeyboardInterrupt):
+        workflow.run()
+
+    assert sleeps == [60.0, 60.0]  # tidak menunggu 15 menit penuh setelah terjual
+    second = nav.calls[nav.calls.index("open_symbol:AUSDT") + 1 :]
+    assert [c for c in second if c.startswith("open_symbol")] == [
+        "open_symbol:CUSDT",
+        "open_symbol:AUSDT",
+    ]
+    assert journal.load()[0].status == "target"
+    assert nav.outside_turns() == []  # setiap aksi layar di dalam giliran
+
+
+def test_a_sold_coin_that_left_the_list_is_not_chased(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "AUSDT"})
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    workflow = SingleWorkflow(nav, trader, FakePatternAnalyzer(WAIT), ranks=[1])  # type: ignore[arg-type]
+    workflow._momentum = ["ZUSDT"]
+
+    workflow.run_cycle()
+
+    assert [c for c in nav.calls if c.startswith("open_symbol")] == ["open_symbol:AUSDT"]
+
+
+def _entered(symbol: str, when: datetime, *, real: bool = False) -> JournalEntry:
+    entry = open_trade(symbol)
+    entry.id, entry.created_at = f"{when:%H%M%S}_{symbol}", when.timestamp()
+    entry.status, entry.real = "target", real
+    return entry
+
+
+def test_the_same_coin_is_entered_at_most_four_times_a_day(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "AUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    for hour in (9, 10, 11, 12):  # masuk pertama + 3 kali masuk ulang hari ini
+        journal.append(_entered("AUSDT", NOW.replace(hour=hour)))
+    analyzer = FakePatternAnalyzer(OK)
+
+    entry = trader.trade(1, "AUSDT", source(analyzer))
+
+    assert entry.status == "skipped"
+    assert "sudah masuk 4 kali hari ini" in entry.reason
+    assert analyzer.calls == []  # grafik dan AI tidak dibaca untuk koin yang tidak dimasuki
+
+
+def test_reentry_count_ignores_yesterday_and_the_other_money_mode(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "AUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    for hour in (9, 10, 11):
+        journal.append(_entered("AUSDT", NOW.replace(hour=hour)))
+    journal.append(_entered("AUSDT", NOW.replace(hour=12), real=True))  # uang sungguhan
+    journal.append(_entered("AUSDT", NOW.replace(day=NOW.day - 1)))  # kemarin
+
+    entry = trader.trade(1, "AUSDT", source(FakePatternAnalyzer(OK)))
+
+    assert entry.status == "open"  # baru 3 kali uji kertas hari ini

@@ -134,10 +134,11 @@ class FollowerWorkflow:
 
     def _follow(self, rank: int, uses_ai: bool, handled: set[str]) -> JournalEntry | None:
         if not uses_ai:
-            self._nav.prepare()
-            log_top_gainers(self._nav.open_top_gainers())
-            symbol = self._nav.open_gainer(rank)
-            return self._trader.trade(rank, symbol, None)
+            with self._nav.screen_turn():  # satu koin = satu giliran layar
+                self._nav.prepare()
+                log_top_gainers(self._nav.open_top_gainers())
+                symbol = self._nav.open_gainer(rank)
+                return self._trader.trade(rank, symbol, None)
 
         try:
             shared = self._wait_for_leader(rank)
@@ -178,29 +179,30 @@ class FollowerWorkflow:
         if blocker:
             return self._trader.skip(rank, record.symbol, blocker, reading)
 
-        self._nav.prepare()
-        rows = self._nav.open_top_gainers()
-        log_top_gainers(rows)
-        now = next((row.rank for row in rows if row.symbol == record.symbol), None)
-        if now is None or now > MAX_RANK:
-            return self._trader.skip(
-                rank,
-                record.symbol,
-                f"{record.symbol} sudah tidak di top {MAX_RANK} gainers saat follower masuk",
-                reading,
-            )
-        opened = self._nav.open_gainer(now)
-        if opened != record.symbol:
-            return self._trader.skip(
-                rank,
-                record.symbol,
-                f"peringkat bergeser: yang terbuka {opened}, bukan {record.symbol}",
-                reading,
-            )
-        # Dicatat dengan Top versi pemimpin (`rank`), bukan posisi koin di daftar laptop ini saat
-        # ini (`now`, hanya untuk membuka koinnya): peringkat bisa bergeser dan dua baris tabel
-        # jadi berlabel sama.
-        return self._trader.trade(rank, opened, lambda _symbol, _chart: reading)
+        with self._nav.screen_turn():  # satu koin = satu giliran layar
+            self._nav.prepare()
+            rows = self._nav.open_top_gainers()
+            log_top_gainers(rows)
+            now = next((row.rank for row in rows if row.symbol == record.symbol), None)
+            if now is None or now > MAX_RANK:
+                return self._trader.skip(
+                    rank,
+                    record.symbol,
+                    f"{record.symbol} sudah tidak di top {MAX_RANK} gainers saat follower masuk",
+                    reading,
+                )
+            opened = self._nav.open_gainer(now)
+            if opened != record.symbol:
+                return self._trader.skip(
+                    rank,
+                    record.symbol,
+                    f"peringkat bergeser: yang terbuka {opened}, bukan {record.symbol}",
+                    reading,
+                )
+            # Dicatat dengan Top versi pemimpin (`rank`), bukan posisi koin di daftar laptop ini
+            # saat ini (`now`, hanya untuk membuka koinnya): peringkat bisa bergeser dan dua baris
+            # tabel jadi berlabel sama.
+            return self._trader.trade(rank, opened, lambda _symbol, _chart: reading)
 
     def _wait_for_leader(self, rank: int) -> SharedAnalysis | None:
         """Tunggu leader menilai Top ini; None bila leader selesai putaran tanpa menilainya."""

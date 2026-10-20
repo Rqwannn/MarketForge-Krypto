@@ -27,6 +27,8 @@ class SopParams:
     order_usdt: float | None = None  # JUMLAH manual: ukuran order USDT (menimpa margin x leverage)
     margin_pct: float = 50.0  # beliau: margin 50% modal per posisi
     leverage: int = 2  # beliau: 2x (nilai posisi per koin = 100% modal)
+    # Masuk ulang koin yang sama setelah terjual: paling banyak sekian kali per hari (20 Okt).
+    max_reentries: int = 3
     target_pct: float = 3.0  # V3: jual saat untung 3-5%; dasar harga, mulai di 3% (usulan)
     min_crosses: int = 2  # usulan: MA7 minimal 2 kali di bawah MA25 = pola OK
     min_gain_pct: float = 0.0  # V2 tidak mensyaratkan kenaikan minimal; isi untuk menyaring
@@ -50,6 +52,8 @@ class SopParams:
             errors.append("MARGIN harus di antara 0 dan 100 persen")
         if not 1 <= self.leverage <= 10:
             errors.append("LEVERAGE harus 1..10")
+        if self.max_reentries < 0:
+            errors.append("batas masuk ulang tidak boleh negatif")
         if not 0 < self.target_pct < 100:
             errors.append("TARGET harus di antara 0 dan 100 persen")
         if self.min_crosses < 1:

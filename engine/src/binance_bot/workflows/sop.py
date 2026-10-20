@@ -262,9 +262,8 @@ def record_changes(
                     pnl_usdt=entry.pnl_usdt,
                 ),
             )
-    if changed:
-        journal.save(after)
-    return after
+    # Ditulis di atas isi jurnal terbaru: bot lain mungkin menambah catatan sejak `before` dibaca.
+    return journal.replace(changed) if changed else after
 
 
 class SopTrader:
@@ -353,6 +352,44 @@ class SopTrader:
         except MarketDataError as exc:
             logger.warning("Posisi uji belum bisa dinilai: %s", exc)
             return self._journal.load()
+
+    def sell_due(self) -> list[str]:
+        """Jual otomatis (lihat `refresh_journal`), lalu pair yang baru terjual di target.
+
+        Terjual di target = harga sedang turun (momentum short): putaran berikutnya dimulai segera
+        dan koin itu dicek ulang lebih dulu, tetap dengan semua aturan masuk.
+        """
+        before = {(e.id, e.created_at) for e in self._journal.load() if e.status == "open"}
+        return [
+            e.symbol
+            for e in self.refresh_journal()
+            if e.status == "target" and (e.id, e.created_at) in before
+        ]
+
+    def _reentry_blocker(self, symbol: str) -> str | None:
+        """Batas masuk ulang: koin yang sama paling banyak 1 + `max_reentries` kali per hari.
+
+        Tanpa stop-loss, masuk ulang tepat saat harga berbalik naik bisa tertahan lama; batas ini
+        membatasi berapa kali satu koin dikejar dalam sehari. Uji kertas dan uang sungguhan
+        dihitung terpisah.
+        """
+        today = datetime.fromtimestamp(self._wall_clock()).date()
+        real = live_orders_enabled()
+        entered = sum(
+            1
+            for e in self._journal.load()
+            if e.symbol == symbol
+            and e.entry_price is not None
+            and e.real == real
+            and datetime.fromtimestamp(e.created_at).date() == today
+        )
+        limit = 1 + self.params.max_reentries
+        if entered >= limit:
+            return (
+                f"sudah masuk {entered} kali hari ini (masuk ulang paling banyak "
+                f"{self.params.max_reentries} kali per koin per hari)"
+            )
+        return None
 
     def _refresh_by_price(self) -> list[JournalEntry]:
         return refresh_by_price(
@@ -471,6 +508,10 @@ class SopTrader:
         params, symbol = self.params, entry.symbol
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
+        # Dicek sebelum grafik dan AI: tidak perlu membaca koin yang memang tidak akan dimasuki.
+        reentry = self._reentry_blocker(symbol)
+        if reentry:
+            raise _Skip(reentry)
 
         # Harga, funding, dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini.
         # Funding dan spread baru menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot),

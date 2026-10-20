@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 
 from binance_bot.exceptions import BotError
-from binance_bot.strategy import Journal
+from binance_bot.strategy import Journal, JournalEntry
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +37,19 @@ class HistoryWorkflow:
         self._output = output
 
     def run(self) -> None:
-        entries = self._journal.load()
-        if self._clear:
-            kept = [e for e in entries if e.status not in NOT_TRADES]
-        else:
-            kept = [e for e in entries if e.id != self._delete_id]
-            if len(kept) == len(entries):
-                raise BotError(f"Riwayat {self._delete_id} tidak ditemukan")
-        removed = len(entries) - len(kept)
-        if removed:
-            self._journal.save(kept)
+        removed = 0
+
+        def keep(entries: list[JournalEntry]) -> list[JournalEntry]:
+            nonlocal removed
+            if self._clear:
+                kept = [e for e in entries if e.status not in NOT_TRADES]
+            else:
+                kept = [e for e in entries if e.id != self._delete_id]
+                if len(kept) == len(entries):
+                    raise BotError(f"Riwayat {self._delete_id} tidak ditemukan")
+            removed = len(entries) - len(kept)
+            return kept
+
+        self._journal.rewrite(keep)
         logger.info("Riwayat dihapus: %d entri", removed)
         self._output(json.dumps({"removed": removed}))

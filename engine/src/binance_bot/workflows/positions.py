@@ -128,8 +128,7 @@ class PositionsWorkflow:
             closed.reason = (
                 f"{closed.reason}. " if closed.reason else ""
             ) + "Ditutup manual di bursa, dicatat lewat aplikasi"
-            entries[index] = closed
-            self._journal.save(entries)
+            entries = self._journal.replace([closed])
         logger.warning(
             "Posisi %s dicatat ditutup manual di %g: %+.2f USDT (%+.2f%% modal)",
             closed.symbol,
@@ -250,7 +249,7 @@ class PositionsWorkflow:
                 )
             updated.append(entry)
         if closed:
-            self._journal.save(updated)
+            updated = self._journal.replace(closed)
         elif wanted not in (None, ALL):
             logger.info("Tidak ada posisi terbuka untuk %s", wanted)
         return updated, closed

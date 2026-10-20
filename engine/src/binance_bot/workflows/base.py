@@ -1,3 +1,4 @@
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Protocol
 
@@ -19,6 +20,10 @@ class TradingNavigator(Protocol):
     Navigator Binance (aplikasi desktop) dan Tebbit (website di Chrome) sama-sama memenuhinya;
     alur SOP, jurnal, dan mode banyak tidak tahu platform mana yang dipakai.
     """
+
+    def screen_turn(self) -> AbstractContextManager[None]:
+        """Giliran layar: satu rangkaian aksi utuh, bot lain di laptop ini menunggu."""
+        ...
 
     def prepare(self) -> None: ...
 

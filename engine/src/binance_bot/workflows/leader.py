@@ -92,13 +92,14 @@ class LeaderWorkflow:
 
     def _cycle(self) -> list[AnalysisRecord]:
         logger.info("Siklus analisis dimulai", extra=event("cycle", phase="start"))
-        self._nav.prepare()
         stamp = f"{self._now():%Y%m%d_%H%M%S}"
-        rows = {row.rank: row for row in self._nav.open_top_gainers()}
-        log_top_gainers(list(rows.values()))
+        with self._nav.screen_turn():
+            self._nav.prepare()
+            listed = self._nav.open_top_gainers()
+        rows = {row.rank: row for row in listed}
+        log_top_gainers(listed)
         records: list[AnalysisRecord] = []
         ai_calls = 0
-        on_list = True
         seen: set[str] = set()
 
         for rank in self._ranks:
@@ -113,25 +114,25 @@ class LeaderWorkflow:
                 )
                 continue
             try:
-                # Buka lewat namanya (lihat SingleWorkflow): peringkat bergeser di tengah siklus.
-                if row is not None and is_futures_symbol(row.symbol):
-                    symbol = self._nav.open_symbol(row.symbol)
-                else:
-                    if not on_list:
-                        self._nav.open_top_gainers()
-                    symbol = self._nav.open_gainer(rank)
-                on_list = False
-                if symbol in seen:
-                    # Peringkat bergeser sehingga pair yang sama terbuka lagi.
-                    logger.info("#%d sekarang %s: sudah dinilai di siklus ini", rank, symbol)
-                    continue
-                seen.add(symbol)
-                record = self._fresh(symbol, rank)
-                if record is None:
-                    record = self._analyze(symbol, rank, stamp)
-                    if record is None:
+                # Satu koin = satu giliran layar (bot lain di laptop ini menunggu).
+                with self._nav.screen_turn():
+                    # Buka lewat namanya (lihat SingleWorkflow): peringkat bergeser.
+                    if row is not None and is_futures_symbol(row.symbol):
+                        symbol = self._nav.open_symbol(row.symbol)
+                    else:
+                        self._nav.open_top_gainers()  # bot lain bisa membuka halaman lain
+                        symbol = self._nav.open_gainer(rank)
+                    if symbol in seen:
+                        # Peringkat bergeser sehingga pair yang sama terbuka lagi.
+                        logger.info("#%d sekarang %s: sudah dinilai di siklus ini", rank, symbol)
                         continue
-                    ai_calls += 1
+                    seen.add(symbol)
+                    record = self._fresh(symbol, rank)
+                    if record is None:
+                        record = self._analyze(symbol, rank, stamp)
+                        if record is None:
+                            continue
+                        ai_calls += 1
             except BotError as exc:
                 # Tetap tampil sebagai baris di aplikasi (bukan hanya log) dengan alasannya.
                 logger.warning(

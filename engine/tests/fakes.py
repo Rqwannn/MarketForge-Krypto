@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from binance_bot.analysis import AnalysisRecord, PatternReading
@@ -202,7 +204,24 @@ class FakeNavigator:
         self.margin = margin
         self.available: float | None = 1000.0  # saldo tersedia di form order
         self.calls: list[str] = []
+        self.turns: list[tuple[int, int]] = []  # rentang `calls` di dalam giliran layar
         self.filled: list[str] = []
+
+    @contextmanager
+    def screen_turn(self) -> Iterator[None]:
+        """Giliran layar: rentang indeks `calls` yang terjadi di dalam giliran dicatat."""
+        start = len(self.calls)
+        try:
+            yield
+        finally:
+            self.turns.append((start, len(self.calls)))
+
+    def outside_turns(self) -> list[str]:
+        """Aksi layar di luar giliran (show_app hanya memunculkan aplikasi, bukan klik)."""
+        inside = {i for start, end in self.turns for i in range(start, end)}
+        return [
+            c for i, c in enumerate(self.calls) if i not in inside and not c.startswith("show_app")
+        ]
 
     def prepare(self) -> None:
         self.calls.append("prepare")
