@@ -303,11 +303,13 @@ class SopTrader:
         """Modal Max: modal = saldo USDT tersedia di form order SAAT INI (rumus SOP tetap).
 
         Dibaca ulang setiap koin, jadi posisi berikutnya memakai sisa saldo setelah margin posisi
-        sebelumnya terpakai. Tidak terbaca = tidak masuk (Tebbit belum bisa membaca saldo).
+        sebelumnya terpakai. Tidak terbaca atau kosong = tidak masuk.
         """
         available = self._nav.available_usdt()
-        if available is None or available <= 0:
+        if available is None:
             raise _Skip("Modal Max: saldo tersedia tidak terbaca di form order")
+        if available <= 0:
+            raise _Skip("Modal Max: saldo tersedia 0 USDT")
         logger.info("Modal Max: saldo tersedia %.2f USDT dipakai sebagai modal", available)
         entry.capital_usdt = available
         return replace(self.params, capital_usdt=available, capital_max=False)

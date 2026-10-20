@@ -126,6 +126,36 @@ def parse_order_book(
     return max(bids), min(asks)
 
 
+# Baris saldo di form order: "Available 0.0000USDT". OCR sering memisahkan label dan angkanya
+# menjadi dua baris pada tinggi yang sama, dan membaca nol sebagai huruf O.
+_AVAILABLE_LABEL = re.compile(r"\bAvail(?:able)?\b|\bAvbl\b", re.IGNORECASE)
+_USDT_AMOUNT = re.compile(r"([\dOo][\dOo.,]*)\s*USDT", re.IGNORECASE)
+
+
+def parse_available(lines: Sequence[TextLine], row_tolerance: float) -> float | None:
+    """Saldo USDT di baris berlabel "Available"; None bila tidak terbaca.
+
+    Angka hanya diambil dari baris yang sama dengan labelnya (selisih tinggi <= `row_tolerance`,
+    satuan sama dengan `TextLine.y`), jadi baris "Max 0.0000 USDT" di bawahnya tidak tertukar.
+    Huruf O di dalam angka dibaca nol: hanya bisa memperkecil saldo, tidak pernah menambah.
+    """
+    for label in lines:
+        if not _AVAILABLE_LABEL.search(label.text):
+            continue
+        row = sorted(
+            (line for line in lines if abs(line.y - label.y) <= row_tolerance),
+            key=lambda line: line.x,
+        )
+        match = _USDT_AMOUNT.search(" ".join(line.text for line in row))
+        if match is None or not re.search(r"[\d.,]", match.group(1)):
+            continue
+        try:
+            return float(match.group(1).translate(str.maketrans("Oo", "00")).replace(",", ""))
+        except ValueError:
+            continue
+    return None
+
+
 def parse_margin(texts: Sequence[str]) -> MarginSettings:
     """Panel "Cross·Merge  75X" -> mode margin dan leverage."""
     joined = " ".join(texts)

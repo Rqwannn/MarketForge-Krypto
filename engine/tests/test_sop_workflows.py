@@ -1229,6 +1229,15 @@ def test_max_capital_skips_the_coin_when_the_balance_cannot_be_read(tmp_path: Pa
     assert nav.filled == [] and gate.plans == []
 
 
+def test_max_capital_with_an_empty_balance_says_so(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = 0.0  # mis. saldo Tebbit 0.0000 USDT
+    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "skipped" and "saldo tersedia 0 USDT" in entry.reason
+    assert gate.plans == []
+
+
 def _real_position(symbol: str, entry: float = 1.0) -> JournalEntry:
     held = open_trade(symbol, entry_price=entry)
     held.created_at, held.real = NOW.timestamp() - 600, True

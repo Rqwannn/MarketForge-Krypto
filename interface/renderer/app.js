@@ -314,11 +314,6 @@ const isMaxModal = (modal) => String(modal || '').trim().toLowerCase() === 'max'
 const modalText = (modal) => (isMaxModal(modal) ? 'Max (seluruh saldo)' : `${modal} USDT`);
 
 function renderModal() {
-  // Saldo Tebbit belum bisa dibaca dari layar: Max hanya untuk Binance.
-  const binance = (platform?.id || 'binance') === 'binance';
-  if (!binance && isMaxModal(form.modal)) form.modal = '';
-  $('modal-max').disabled = !binance;
-  $('modal-max').title = binance ? 'Pakai seluruh saldo USDT yang tersedia' : 'Max belum tersedia untuk Tebbit';
   const max = isMaxModal(form.modal);
   const input = $('modal');
   if (max) input.value = 'Max';
@@ -1824,7 +1819,6 @@ function choosePlatform(id) {
   $('platform-logo').src = chosen.logo;
   $('platform-logo').parentElement.className = `plat-logo ${chosen.id}`;
   renderReal(); // Real Fund Trading hanya untuk Binance
-  renderModal(); // Modal Max juga
   $('chooser').hidden = true;
   $('app').inert = false;
   showPage('run');

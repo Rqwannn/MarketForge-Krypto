@@ -81,6 +81,9 @@ MARGIN_AREA = (0.835, 0.10, 1.0, 0.155)  # "Cross-Merge  75X"
 ORDER_TAB_AREA = (0.835, 0.15, 1.0, 0.21)  # "Limit  Market  Plan"
 ORDER_FORM_AREA = (0.835, 0.21, 1.0, 0.40)  # kolom Quantity
 QTY_CLICK_X = 0.87
+# Baris "Available ... USDT" di bawah kolom Quantity. Belum diukur di Windows: area dibuat lebar dan
+# dibaca berpatokan label "Available" (tidak ketemu = saldo tak terbaca, koin dilewati).
+AVAILABLE_AREA = (0.835, 0.28, 1.0, 0.50)
 
 # Zona terlarang. Menu atas situs (akun, dompet): tidak pernah perlu diklik. Di halaman koin:
 # semua di bawah kolom Quantity (slider, Buy/Long, Sell/Short, Transfer) dan tab bawah.
