@@ -1082,6 +1082,84 @@ def test_positions_panel_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch)
     assert nav._measure_positions_shift((0.1, 0.9)) == 0.0  # profil tanpa kalibrasi: tidak digeser
 
 
+def _positions_nav(
+    monkeypatch: pytest.MonkeyPatch, pages: list[list[TextLine]]
+) -> tuple[BinanceNavigator, FakeScreen]:
+    """Navigator di mode uang sungguhan; `pages` = bacaan tabel Posisi berurutan."""
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)
+    screen = FakeScreen(
+        texts={
+            layout.POSITIONS_TAB_AREA: [[TextLine("Posisi(4)", 0.1, 0.5)]],
+            layout.POSITIONS_TABLE_AREA: pages,
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    return nav, screen
+
+
+def _table_point(x: float, y: float) -> tuple[int, int]:
+    x0, y0, x1, y1 = layout.POSITIONS_TABLE_AREA
+    return at((x0 + x * (x1 - x0), y0 + y * (y1 - y0)))
+
+
+def test_the_position_row_is_found_by_name_further_down_the_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """3-5 posisi: baris koin yang dijual di bawah, belum terlihat. Tabel digulir, lalu yang diklik
+    tombol Market di baris koin itu, bukan baris pertama atau baris koin bernama mirip."""
+    top = [TextLine("BTWUSDT Perp", 0.1, 0.3), TextLine("ICNTUSDT Perp", 0.1, 0.7)]
+    lower = [
+        TextLine("ICNTUSDT Perp", 0.1, 0.3),
+        TextLine("1000PEPEUSDT Perp", 0.1, 0.5),
+        TextLine("PEPEUSDT Perp", 0.1, 0.7),
+    ]
+    buttons = [
+        TextLine("Market", 0.8, 0.3),
+        TextLine("Market", 0.8, 0.5),
+        TextLine("Market", 0.8, 0.7),
+    ]
+    closed = [TextLine("ICNTUSDT Perp", 0.1, 0.3), TextLine("1000PEPEUSDT Perp", 0.1, 0.5)]
+    nav, screen = _positions_nav(monkeypatch, [top, top, lower, buttons, closed])
+
+    nav.close_position("PEPEUSDT")
+
+    kinds = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down", "click")]
+    assert kinds.index("scroll_down") < len(kinds) - 1 - kinds[::-1].index("click")
+    assert clicks(screen)[-1] == _table_point(0.8, 0.7)  # baris PEPEUSDT, bukan 1000PEPEUSDT
+    assert kinds[-1] == "scroll_up"  # tabel dikembalikan ke baris teratas
+
+
+def test_a_similar_name_is_not_closed_and_the_table_is_scrolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    only_similar = [TextLine("1000PEPEUSDT Perp", 0.1, 0.3), TextLine("Market", 0.8, 0.3)]
+    nav, screen = _positions_nav(monkeypatch, [only_similar])
+
+    with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
+        nav.close_position("PEPEUSDT")
+
+    assert len(clicks(screen)) == 1  # hanya tab Posisi; tombol Market tidak disentuh
+    vertical = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down")]
+    assert vertical[-1] == "scroll_up"
+
+
+def test_a_visible_row_is_clicked_without_scrolling_the_table_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    row = [TextLine("BTWUSDT Perp", 0.1, 0.3)]
+    nav, screen = _positions_nav(
+        monkeypatch, [row, [TextLine("Market", 0.8, 0.3)], [TextLine("ICNTUSDT Perp", 0.1, 0.3)]]
+    )
+    nav.close_position("BTWUSDT")
+    market = screen.events.index(("click", _table_point(0.8, 0.3)))
+    assert not any(kind == "scroll_down" for kind, _ in screen.events[:market])
+    # Sesudah klik, seluruh tabel diperiksa: baris BTWUSDT harus hilang di mana pun.
+    assert any(kind == "scroll_down" for kind, _ in screen.events[market:])
+
+
 @pytest.mark.parametrize(
     "label", ["Posisi(0)", "Posisi(O) Transaksi terbuka(O) Riwayat Order", "Positions(2)"]
 )

@@ -57,6 +57,7 @@ _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
 _FOCUS_CLICK_AFTER = 2  # usaha biasa yang gagal sebelum klik titik kosong bilah judul
 _VERIFY_RETRY_DELAY_S = 0.4
+_POSITION_PAGES = 8  # langkah gulir maksimal mencari baris posisi di tabel Posisi (3-5 posisi)
 _PAGE_READ_ATTEMPTS = 3  # baca pair di halaman koin: halaman baru bisa lambat tampil
 _PAGE_READ_DELAY_S = 1.0
 _OPEN_PAGE_ATTEMPTS = 2  # klik ikon trade diulang sekali bila hilang (daftar masih tampil)
@@ -142,6 +143,7 @@ class BinanceNavigator:
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
         self._positions_shift = 0.0  # pergeseran panel Posisi (diukur dari tab saat menutup posisi)
+        self._positions_scrolled = False  # tabel Posisi digulir vertikal saat mencari baris koin
         self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
@@ -1062,7 +1064,16 @@ class BinanceNavigator:
         self._ensure_front()
         self._window.scroll_horizontal(*center, -layout.POSITIONS_SCROLL_NOTCHES)
         self._sleep(0.5)
-        row_y = self._position_row(symbol)
+        try:
+            self._close_row(symbol)
+        finally:
+            self._positions_to_top()
+        logger.info("Posisi %s sudah tertutup di Binance", symbol)
+
+    def _close_row(self, symbol: str) -> None:
+        """Cari baris `symbol`, klik Market di baris itu, lalu pastikan barisnya hilang."""
+        x0, y0, x1, y1 = self._positions_table()
+        row_y = self._find_position_row(symbol)
         if row_y is None:
             if self._positions_shift >= _FORM_SHIFT_MIN * 1.5:
                 raise ScreenReadError(
@@ -1095,9 +1106,8 @@ class BinanceNavigator:
             self._ensure_front()
             self._window.scroll_horizontal(*middle, -layout.POSITIONS_SCROLL_NOTCHES)
             self._sleep(0.5)
-        if self._position_row(symbol) is not None:
+        if self._find_position_row(symbol) is not None:
             raise ScreenReadError(f"Posisi {symbol} masih terlihat di tab Posisi setelah ditutup")
-        logger.info("Posisi %s sudah tertutup di Binance", symbol)
 
     def _measure_positions_shift(self, tab: tuple[float, float]) -> float:
         """Banner mendorong panel Posisi ke bawah: selisih tinggi tab dari tinggi normalnya."""
@@ -1109,13 +1119,57 @@ class BinanceNavigator:
     def _positions_table(self) -> tuple[float, float, float, float]:
         return _shifted(layout.POSITIONS_TABLE_AREA, self._positions_shift)
 
-    def _position_row(self, symbol: str) -> float | None:
-        """Tinggi baris posisi `symbol` (relatif jendela) di tabel Posisi, atau None."""
-        _, y0, _, y1 = self._positions_table()
-        for line in self._read_lines(self.rect.sub(*self._positions_table())):
-            if symbol in line.text.replace(" ", "").upper():
-                return y0 + line.y * (y1 - y0)
+    def _find_position_row(self, symbol: str) -> float | None:
+        """Baris posisi `symbol` di tabel Posisi; tabel digulir ke bawah bila belum terlihat.
+
+        Dengan 3-5 posisi terbuka hanya beberapa baris yang tampil di panel bawah. Baris dicari
+        lewat nama koinnya, bukan urutannya: mulai dari atas, turun satu langkah, sampai ketemu
+        atau tabel tidak bergerak lagi (ujung daftar).
+        """
+        row_y, texts = self._position_row(symbol)
+        if row_y is not None:
+            return row_y
+        center = self._positions_center()
+        self._ensure_front()
+        self._window.scroll_up(*center)
+        self._positions_scrolled = True
+        self._sleep(0.5)
+        seen: list[str] | None = None
+        for _ in range(_POSITION_PAGES):
+            row_y, texts = self._position_row(symbol)
+            if row_y is not None or texts == seen:
+                return row_y
+            seen = texts
+            self._ensure_front()
+            self._window.scroll_down(*center, 1)
+            self._sleep(0.5)
         return None
+
+    def _positions_to_top(self) -> None:
+        """Kembalikan tabel Posisi ke baris teratas bila tadi digulir."""
+        if not self._positions_scrolled:
+            return
+        self._ensure_front()
+        self._window.scroll_up(*self._positions_center())
+        self._positions_scrolled = False
+        self._sleep(0.5)
+
+    def _positions_center(self) -> tuple[int, int]:
+        x0, y0, x1, y1 = self._positions_table()
+        return self.rect.point_at((x0 + x1) / 2, (y0 + y1) / 2)
+
+    def _position_row(self, symbol: str) -> tuple[float | None, list[str]]:
+        """(tinggi baris posisi `symbol` relatif jendela atau None, semua teks yang terbaca).
+
+        Nama harus persis: "PEPEUSDT" tidak cocok dengan baris "1000PEPEUSDT".
+        """
+        _, y0, _, y1 = self._positions_table()
+        name = re.compile(rf"(?<![A-Z0-9]){re.escape(symbol.upper())}(?:PERP|(?![A-Z0-9]))")
+        lines = self._read_lines(self.rect.sub(*self._positions_table()))
+        for line in lines:
+            if name.search(line.text.replace(" ", "").upper()):
+                return y0 + line.y * (y1 - y0), [line.text for line in lines]
+        return None, [line.text for line in lines]
 
     def _capture(self, area: Rect, path: Path) -> Path:
         self._ensure_front()
