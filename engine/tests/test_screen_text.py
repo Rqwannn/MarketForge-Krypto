@@ -45,7 +45,7 @@ def test_sorted_by_top_gain() -> None:
 def test_margin_settings_against_sop_v2() -> None:
     cross = parse_margin(["Cross", "20x", "M"])
     assert (cross.isolated, cross.leverage, cross.describe()) == (False, 20, "Cross 20x")
-    assert cross.problems(leverage=2) == ["leverage 20x, SOP 2x"]
+    assert cross.problems(leverage=2) == ["leverage 20x, seharusnya 2x"]
     # Mode margin memakai bawaan bursa: Cross 2x dan Isolated 2x sama-sama sesuai SOP.
     assert parse_margin(["Cross", "2x"]).problems(leverage=2) == []
     assert parse_margin(["Isolated", "2x"]).problems(leverage=2) == []

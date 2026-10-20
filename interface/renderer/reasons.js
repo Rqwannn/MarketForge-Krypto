@@ -28,7 +28,7 @@
     if (verdict === 'ok') return 'Sudah berkali-kali di bawah dan baru saja turun lagi: harga cenderung turun.';
     if (verdict === 'jangan') return `${names.fast} selalu di atas ${names.mid}: harga naik terus, belum ada tanda berbalik.`;
     if (ai.lines_close === true && ai.below_recent !== false) {
-      return 'Kedua garis berdekatan. Aturan SOP V3: masuk hanya bila garisnya berjauhan.';
+      return 'Kedua garis berdekatan. Bot masuk hanya bila garisnya berjauhan.';
     }
     if (known(ai.below_count) && ai.below_count < limits.min_crosses) {
       return `Baru ${ai.below_count} kali di bawah (minimal ${limits.min_crosses}): harga masih bisa naik lagi.`;
@@ -170,12 +170,12 @@
     } else if (e.status === 'open') {
       tone = 'good';
       headline = e.real ? 'Bot masuk short (uang sungguhan)' : 'Bot masuk short (uji kertas)';
-      because = 'Semua saringan SOP lolos.';
+      because = 'Semua saringan lolos.';
     } else if (opened) {
       tone = 'neutral';
       const label = opts.statusLabel ? opts.statusLabel(e.status) : e.status;
       headline = `Bot sempat masuk short; posisi ${String(label).toLowerCase()}`;
-      because = 'Semua saringan SOP lolos saat koin ini dinilai.';
+      because = 'Semua saringan lolos saat koin ini dinilai.';
     } else {
       tone = firstStop?.state === 'hold' ? 'warn' : 'bad';
       headline = firstStop?.state === 'hold' ? 'Tidak masuk: menunggu' : 'Tidak masuk';

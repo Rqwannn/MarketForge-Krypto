@@ -59,7 +59,7 @@ class SopParams:
         if self.signal_source not in SIGNAL_SOURCES:
             errors.append(f"SINYAL harus salah satu dari {SIGNAL_SOURCES}")
         if errors:
-            raise ConfigError("Parameter SOP tidak valid: " + "; ".join(errors))
+            raise ConfigError("Pengaturan tidak valid: " + "; ".join(errors))
 
     def breakeven_win_rate(self, loss_pct: float = REFERENCE_LOSS_PCT) -> float:
         """Win rate minimal agar impas (bagian Titik impas V3).

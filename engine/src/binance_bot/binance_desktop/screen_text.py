@@ -37,7 +37,7 @@ class MarginSettings:
         if self.leverage == leverage:
             return []
         shown = "?" if self.leverage is None else self.leverage
-        return [f"leverage {shown}x, SOP {leverage}x"]
+        return [f"leverage {shown}x, seharusnya {leverage}x"]
 
     @property
     def mode(self) -> str:

@@ -100,7 +100,7 @@ function plain(text) {
     [/Leverage tidak bisa diubah/, 'Leverage koin ini tidak bisa diubah ke 2x otomatis'],
     [/belum terbaca untuk jual otomatis/, 'Harga posisi belum terbaca, jual otomatis dicoba lagi'],
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
-    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan (SOP V3)'],
+    [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
@@ -123,7 +123,7 @@ function plain(text) {
     [/Kolom (Jumlah|Quantity)/, `Kolom jumlah di ${site} tidak terisi dengan benar`],
     [/Indikator MA/, `Atur indikator grafik ${site} ke MA 7, MA 25, MA 99`],
     [/tidak tampil di layar/, `Jendela ${site} tertutup jendela lain, bot berhenti demi keamanan`],
-    [/leverage .*SOP/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
+    [/leverage \S+x, seharusnya/i, `Leverage di ${site} belum 2x (ubah sebelum memakai uang sungguhan)`],
     [/BOT_HUB_TOKEN wajib/, 'Token hub belum diatur di laptop ini, hubungi admin'],
     [/Leader belum menilai (Top \d+)/, (m) => `Pemimpin belum menilai ${m[1]}, tidak ada tindakan`],
     [/sudah tidak di top/, 'Koin pemimpin sudah keluar dari top gainers, tidak ada tindakan'],
@@ -951,7 +951,7 @@ function donut(s) {
   const parts = [
     ['Target tercapai', s.targets, 'var(--green)'],
     ['Likuidasi', s.liquidations ?? 0, 'var(--red)'],
-    ['Stop/waktu habis (V2)', (s.stops ?? 0) + (s.timeouts ?? 0), 'var(--amber)'],
+    ['Stop/waktu habis (catatan lama)', (s.stops ?? 0) + (s.timeouts ?? 0), 'var(--amber)'],
     ['Ditutup (Sell)', s.manual ?? 0, 'var(--accent)'],
     ['Masih berjalan', s.open, 'var(--accent-2)'],
   ];
