@@ -2,9 +2,9 @@
 
 Dipakai bersama oleh mode single (AI sendiri) dan follower (AI dari hub leader). Urutan:
 cek slot (koin berikutnya hanya bila posisi terbuka tidak rugi; jumlah posisi tidak dibatasi),
-saringan gratis (funding, spread, kenaikan minimal bila diisi), pola garis kuning MA7 (AI atau
-data), ukuran posisi (margin 50% x 2x), leverage 2x di bursa, isi kolom Jumlah, lalu pintu
-order yang DIMATIKAN. Semua dicatat.
+saringan gratis (spread, kenaikan minimal bila diisi; funding rate tidak dipakai), pola garis
+kuning MA7 (AI atau data), ukuran posisi (margin 50% x 2x), leverage 2x di bursa, isi kolom
+Jumlah, lalu pintu order yang DIMATIKAN. Semua dicatat.
 """
 
 from __future__ import annotations
@@ -66,7 +66,6 @@ def limits_of(params: SopParams) -> dict[str, float]:
     """Batas SOP untuk menilai koin; kartu alasan di aplikasi membandingkan angka dengannya."""
     return {
         "min_crosses": params.min_crosses,
-        "min_funding_pct": params.min_funding_pct,
         "max_spread_pct": params.max_spread_pct,
         "min_gain_pct": params.min_gain_pct,
     }
@@ -76,7 +75,6 @@ def decision_fields(entry: JournalEntry, params: SopParams | None = None) -> dic
     """Angka di balik keputusan satu koin: bahan kartu "kenapa" di aplikasi."""
     fields: dict[str, Any] = {
         "change_pct": entry.change_pct,
-        "funding_rate": entry.funding_rate,  # pecahan (0,0001 = 0,01%)
         "spread_pct": entry.spread_pct,
         "ma_gap_pct": entry.ma_gap_pct,  # positif = garis cepat di bawah pembanding
         "ai": entry.pattern_ai,
@@ -489,9 +487,10 @@ class SopTrader:
         self._journal.append(entry)
         if entry.status == "open":
             logger.info(
-                "#%d %s dicatat di jurnal: posisi uji terbuka",
+                "#%d %s dicatat di jurnal: posisi %s terbuka",
                 rank,
                 symbol,
+                "uang sungguhan" if entry.real else "uji",
                 extra=coin_event(entry, self.params),
             )
         else:
@@ -513,19 +512,16 @@ class SopTrader:
         if reentry:
             raise _Skip(reentry)
 
-        # Harga, funding, dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini.
-        # Funding dan spread baru menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot),
-        # supaya penilaian AI dan grafiknya tetap tampil untuk koin yang biayanya mahal.
+        # Harga dan spread dibaca sekarang; kenaikan minimal bila diisi gugur di sini. Spread baru
+        # menolak koin SETELAH pola dinilai (urutan SOP: pola, biaya, slot), supaya penilaian AI dan
+        # grafiknya tetap tampil untuk koin yang spread-nya lebar. Funding rate tidak dinilai.
         quote = self._market.quote(symbol)
         entry.change_pct = quote.change_pct
-        entry.funding_rate = quote.funding_rate
         entry.spread_pct = quote.spread_pct
         if quote.change_pct < params.min_gain_pct:
             raise _Skip(f"naik {quote.change_pct:.1f}% < {params.min_gain_pct:g}% dalam 24 jam")
         cost_issue: str | None = None
-        if quote.funding_rate * 100 < params.min_funding_pct:
-            cost_issue = f"funding {quote.funding_rate * 100:.4f}% terlalu negatif (short membayar)"
-        elif quote.spread_pct > params.max_spread_pct:
+        if quote.spread_pct > params.max_spread_pct:
             cost_issue = f"spread {quote.spread_pct:.3f}% > {params.max_spread_pct:g}%"
 
         # Saringan pola: garis kuning (MA7) terhadap MA25 di chart 15 menit.
@@ -583,7 +579,7 @@ class SopTrader:
                 )
             raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
 
-        # Langkah 3 SOP (setelah pola): funding dan spread.
+        # Langkah 3 SOP (setelah pola): spread.
         if cost_issue:
             raise _Skip(cost_issue)
 
@@ -641,9 +637,10 @@ class SopTrader:
         entry.margin_usdt = sizing.margin_usdt
         entry.target_price = plan.target_price
         logger.info(
-            "#%d %s MASUK UJI KERTAS: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
+            "#%d %s MASUK %s: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
             "di %g (turun %g%%), tanpa stop-loss dan tanpa batas waktu",
             entry.rank,
+            "UANG SUNGGUHAN" if entry.real else "UJI KERTAS",
             symbol,
             sizing.order_text,
             price,

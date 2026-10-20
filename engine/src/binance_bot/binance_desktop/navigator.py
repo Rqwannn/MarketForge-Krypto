@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple, NoReturn
 
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.order_buttons import find_pair, text_image
@@ -91,6 +91,26 @@ _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
 _SHORT_TEXT = re.compile(r"(Jual|Sell)\s*/?\s*Short|Short|Jual", re.IGNORECASE)
 _LONG_TEXT = re.compile(r"(Beli|Buy)\s*/?\s*Long|Long|Beli", re.IGNORECASE)
 _POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\([\dOo]+\)", re.IGNORECASE)  # "Posisi(O)"
+# "Posisi(1)"; OCR seluruh jendela kadang membaca angkanya sebagai huruf ("Posisi(O)", "Posisi(l)").
+_POSITIONS_COUNT = re.compile(r"(?:Posisi|Positions?)\s*\(([\dOoIl|]+)\)", re.IGNORECASE)
+# Sesudah tombol Jual/Short ditekan: bukti posisi terbuka ditunggu sampai sekian detik. Uji nyata
+# (20 Okt, BRUSDT dan AGTUSDT): bot mencatat posisi sungguhan padahal Binance tidak membukanya.
+_ORDER_CONFIRM_S = 10.0
+_CLOSE_SCROLL_NOTCHES = 2  # gulir halaman sedikit bila baris posisi belum terlihat
+_SCROLL_UP_NOTCHES = 7  # satu scroll_up = 7 langkah roda
+_DIGIT_LOOKALIKE = str.maketrans("OoIl|", "00111")
+_FORM_COLUMN = (0.78, 0.0, 1.0, 1.0)  # kolom form order (tempat tombol dicari lewat warna)
+# Toast Binance sesudah order pasar terisi (uji nyata 20 Okt: "Order Dimasukkan", "Order Jual
+# Market Terisi"). Hanya toast yang BARU muncul sesudah klik yang dihitung sebagai bukti.
+_ORDER_FILLED = re.compile(r"Order\s+Jual\b.*Terisi|Sell\b.*Order.*Filled", re.IGNORECASE)
+# Pesan penolakan order Binance (toast), dicatat sebagai alasan bila order tidak masuk.
+# Bukan kata "gagal" saja: jendela konfirmasi order memuat kalimat peringatan "...order Anda akan
+# gagal" (uji nyata 20 Okt 10.00) yang bukan penolakan.
+_ORDER_MESSAGE = re.compile(
+    r"order\s+gagal|gagal\s+(?:ditempatkan|dipasang|dibuat)|ditolak|tidak cukup|tidak mencukupi"
+    r"|selesaikan kuis|melebihi|order failed|rejected|insufficient|quiz",
+    re.IGNORECASE,
+)
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
 # Angka leverage (label di atas form dan kolom dialog); OCR bisa menggabungkannya dengan
@@ -110,6 +130,15 @@ def _leverage_of(text: str) -> int | None:
 _CHART_LOAD_TIMEOUT_S = 25.0  # aplikasi bisa lambat memuat grafik
 _CHART_RETRY_TIMEOUT_S = 15.0  # tunggu sesudah klik "15 mnt" diulang
 _FORM_SHIFT_MIN = 0.02  # pergeseran lebih kecil dari ini dianggap galat ukur, bukan banner
+
+
+class _OrderEvidence(NamedTuple):
+    """Bukti order di layar: jumlah "Posisi(n)", saldo Tersedia, toast terisi, pesan penolakan."""
+
+    positions: int | None
+    available: float | None
+    filled: list[str]
+    rejected: list[str]
 
 
 def _shifted(
@@ -145,8 +174,6 @@ class BinanceNavigator:
         self._rect: Rect | None = None
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
-        self._positions_shift = 0.0  # pergeseran panel Posisi (diukur dari tab saat menutup posisi)
-        self._positions_scrolled = False  # tabel Posisi digulir vertikal saat mencari baris koin
         self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
@@ -833,9 +860,51 @@ class BinanceNavigator:
         if not self._on_trade_page:
             return False
         shift = self._form_shift
-        return layout.in_order_button_zone(target) or (
+        if layout.in_order_button_zone(target) or (
             shift != 0.0 and layout.in_order_button_zone((target[0], target[1] - shift))
+        ):
+            return True
+        # Zona tetap bisa meleset: uji nyata (20 Okt) halaman koin bergeser naik ~100-200 piksel
+        # sesudah posisi terbuka, sehingga Jual/Short tampil di y 0,32, di LUAR zona tetap dan tepat
+        # di tempat kolom Jumlah biasanya. Karena itu tombol yang benar-benar tampil dicari lewat
+        # warnanya, dan klik ke dalamnya selalu ditolak.
+        return any(
+            x0 <= target[0] <= x1 and y0 <= target[1] <= y1
+            for x0, y0, x1, y1 in self._button_boxes(target)
         )
+
+    def _button_boxes(self, target: tuple[float, float]) -> list[tuple[float, float, float, float]]:
+        """Kotak tombol Beli/Long dan Jual/Short yang tampil (relatif jendela, diperlebar sedikit).
+
+        Hanya dicari bila titik klik berada di kolom form order; tanpa gambar (tes) daftar kosong.
+        """
+        x0, y0, x1, y1 = _FORM_COLUMN
+        if not self._COLOR_BUTTONS or not (x0 <= target[0] <= x1):
+            return []
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "kolom.png"
+            self._window.capture(self.rect.sub(*_FORM_COLUMN), path)
+            try:
+                with Image.open(path) as opened:
+                    image = opened.convert("RGB")
+            except (OSError, ValueError):
+                return []
+        pair = find_pair(image)
+        if pair is None:
+            return []
+        w, h = image.width, image.height
+        margin = 0.01
+        return [
+            (
+                x0 + box.x0 / w * (x1 - x0) - margin,
+                y0 + box.y0 / h * (y1 - y0) - margin,
+                x0 + box.x1 / w * (x1 - x0) + margin,
+                y0 + box.y1 / h * (y1 - y0) + margin,
+            )
+            for box in (pair.left, pair.right)
+        ]
 
     def _ensure_front(self) -> None:
         """Pastikan Binance jendela aktif. Klik, ketikan, dan tangkapan layar hanya berarti bila
@@ -1039,33 +1108,160 @@ class BinanceNavigator:
             raise SafetyError("Order sungguhan terkunci (Real Fund Trading belum dinyalakan)")
         if not self._on_coin_page():
             raise SafetyError("Order hanya di halaman koin")
-        shown: list[str] = []
-        for attempt in range(_VERIFY_ATTEMPTS):
-            shown = self._read_texts(self.rect.sub(*self._quantity_area()))
-            if any(same_number(value, plan.order_text) for value in shown):
-                break
-            if attempt + 1 < _VERIFY_ATTEMPTS:
-                # Uji nyata (AGTUSDT): bacaan "24" padahal kolom berisi 20, 0,17 detik setelah
-                # bacaan "20" (kursor berkedip mengganggu OCR). Baca ulang seperti saat mengisi;
-                # angkanya tetap harus persis sama dengan rencana.
-                self._sleep(_VERIFY_RETRY_DELAY_S)
-        else:
+        matches, shown = self._quantity_matches(plan)
+        if not matches:
             shot = self._save_debug_shot("kolom-jumlah")
             raise SafetyError(
                 f"Kolom jumlah menampilkan {shown}, bukan {plan.order_text}: order dibatalkan. "
                 f"Foto layar: {shot}"
             )
         target = self.short_button()
+        before = self._order_evidence()
         logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
         self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
+        # Tombol TIDAK pernah diklik ulang: bila order pertama ternyata masuk terlambat, klik kedua
+        # membuka posisi ganda.
+        self._await_order(plan, before, _ORDER_CONFIRM_S, photo="setelah-klik-short")
+
+    def _quantity_matches(self, plan: OrderPlan) -> tuple[bool, list[str]]:
+        shown: list[str] = []
+        for attempt in range(_VERIFY_ATTEMPTS):
+            shown = self._read_texts(self.rect.sub(*self._quantity_area()))
+            if any(same_number(value, plan.order_text) for value in shown):
+                return True, shown
+            if attempt + 1 < _VERIFY_ATTEMPTS:
+                # Uji nyata (AGTUSDT): bacaan "24" padahal kolom berisi 20, 0,17 detik setelah
+                # bacaan "20" (kursor berkedip mengganggu OCR). Baca ulang seperti saat mengisi;
+                # angkanya tetap harus persis sama dengan rencana.
+                self._sleep(_VERIFY_RETRY_DELAY_S)
+        return False, shown
+
+    def _order_messages(self) -> list[str]:
+        """Teks penolakan atau galat order yang tampil di jendela (toast Binance), bila ada."""
+        return self._order_evidence().rejected
+
+    def _order_evidence(self) -> _OrderEvidence:
+        """Bukti order dari SELURUH jendela (satu kali OCR).
+
+        Dibaca di seluruh jendela, bukan di area tetap: uji nyata (20 Okt, BRUSDT) halaman Binance
+        bergeser naik ~100 piksel tepat sesudah order terisi, sehingga baris Tersedia dan tab
+        Posisi keluar dari area tetap dan bukti yang jelas di layar terbaca kosong.
+        """
+        texts = [line.text for line in self._read_lines(self.rect)]
+        count = None
+        for text in texts:
+            match = _POSITIONS_COUNT.search(text)
+            if match:
+                count = int(match.group(1).translate(_DIGIT_LOOKALIKE))
+                break
+        return _OrderEvidence(
+            positions=count,
+            available=parse_available_usdt(texts),
+            filled=[t for t in texts if _ORDER_FILLED.search(t)],
+            rejected=[t for t in texts if _ORDER_MESSAGE.search(t)],
+        )
+
+    def _positions_count(self) -> int | None:
+        return self._order_evidence().positions
+
+    def _await_order(
+        self, plan: OrderPlan, before: _OrderEvidence, timeout_s: float, *, photo: str
+    ) -> None:
+        """Tunggu bukti Binance membuka posisi sesudah tombol Jual/Short ditekan.
+
+        Bukti: toast "Order Jual Market Terisi" yang baru muncul, jumlah di tab "Posisi(n)"
+        bertambah, atau saldo Tersedia turun setidaknya separuh margin. Selama menunggu bot tidak
+        mengklik apa pun; foto layar diambil sekali di awal (toast Binance hanya tampil sebentar).
+
+        Tanpa bukti sampai batas waktu, galat HANYA dilempar bila layar jelas menunjukkan order
+        tidak masuk (Posisi dan Tersedia terbaca dan tidak berubah, atau ada pesan penolakan).
+        Bila bacaannya tidak lengkap, posisi dianggap TERBUKA dan tetap diawasi: posisi sungguhan
+        yang tak tercatat (uji nyata 20 Okt 10.00 dan 10.11) jauh lebih berbahaya daripada posisi
+        tercatat yang ternyata tidak ada (penjualannya hanya gagal).
+        """
+        deadline = self._clock() + timeout_s
+        first = True
+        now = before
+        while True:
+            self._sleep(1.0)
+            if first:
+                logger.info("Foto layar sesudah klik order: %s", self._save_debug_shot(photo))
+                first = False
+            now = self._order_evidence()
+            new_toast = [t for t in now.filled if t not in before.filled]
+            more = (
+                now.positions is not None
+                and before.positions is not None
+                and now.positions > before.positions
+            )
+            spent = (
+                now.available is not None
+                and before.available is not None
+                and before.available - now.available >= plan.margin_usdt * 0.5
+            )
+            if new_toast or more or spent:
+                logger.info(
+                    "Order Short %s terkonfirmasi: Posisi %s -> %s, Tersedia %s -> %s, toast %s",
+                    plan.symbol,
+                    before.positions,
+                    now.positions,
+                    before.available,
+                    now.available,
+                    new_toast or "-",
+                )
+                return
+            if now.rejected:
+                self._fail_order(plan, before, now, f"Binance menampilkan: {now.rejected}")
+            if self._clock() >= deadline:
+                break
+        unchanged = (
+            now.positions is not None
+            and before.positions is not None
+            and now.positions == before.positions
+            and now.available is not None
+            and before.available is not None
+            and abs(before.available - now.available) < plan.margin_usdt * 0.5
+        )
+        if unchanged:
+            self._fail_order(plan, before, now, "Posisi dan saldo Tersedia tidak berubah")
+        shot = self._save_debug_shot("order-belum-pasti")
+        logger.error(
+            "Order Short %s BELUM PASTI (Posisi %s -> %s, Tersedia %s -> %s): dicatat TERBUKA dan "
+            "diawasi demi keamanan. Periksa Binance secara manual. Foto layar: %s",
+            plan.symbol,
+            before.positions,
+            now.positions,
+            before.available,
+            now.available,
+            shot,
+        )
+
+    def _fail_order(
+        self, plan: OrderPlan, before: _OrderEvidence, now: _OrderEvidence, detail: str
+    ) -> NoReturn:
+        """Order jelas TIDAK masuk: jurnal tidak mencatat posisi sungguhan yang tidak ada."""
+        shot = self._save_debug_shot("order-tidak-terkonfirmasi")
+        logger.error(
+            "Order Short %s TIDAK masuk di Binance (%s). Foto layar: %s", plan.symbol, detail, shot
+        )
+        raise ScreenReadError(
+            f"Order Short {plan.symbol} tidak masuk: {detail} (Posisi {before.positions} -> "
+            f"{now.positions}, Tersedia {before.available} -> {now.available}); "
+            f"tidak dicatat sebagai posisi sungguhan. Foto layar: {shot}"
+        )
 
     def close_position(self, symbol: str) -> None:
         """Tutup posisi `symbol` di bursa: tab Posisi -> baris koin -> tombol Market.
 
         Hanya saat Real Fund Trading. Tombol Market di baris posisi langsung menutup seluruh posisi
-        koin itu (tanpa dialog). Setelah klik, tabel dibaca ulang: bila baris koin masih ada,
-        dianggap gagal supaya jurnal tidak mencatat posisi tertutup padahal masih terbuka.
+        koin itu (tanpa dialog). Tab, baris, dan tombol dicari di SELURUH jendela, bukan area tetap:
+        uji nyata (20 Okt) halaman koin bergeser 100-200 piksel sesudah posisi terbuka, dan baris
+        posisi bisa berada di bawah tepi jendela. Dengan 3-5 posisi terbuka baris koin bisa di
+        bawah: halaman/tabel digulir satu langkah demi satu langkah di atas panel Posisi (bukan di
+        atas grafik) sampai baris ketemu atau isinya tidak berubah lagi, lalu dikembalikan. Nama
+        koin harus persis: "PEPEUSDT" tidak cocok dengan "1000PEPEUSDT". Sesudah klik, tertutup bila
+        Posisi(n) berkurang, atau (bila angkanya tak terbaca) baris koin tidak terlihat lagi.
         """
         if not live_orders_enabled():
             raise SafetyError(
@@ -1077,130 +1273,106 @@ class BinanceNavigator:
     def _close_position(self, symbol: str) -> None:
         if self._rect is None:  # menu Posisi (Sell manual): Binance belum disiapkan
             self.prepare()
-        tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
-        if tab is None and not self._on_trade_page:
-            # Bot lain meninggalkan layar di halaman lain (mis. daftar top gainers). Tab Posisi ada
-            # di halaman koin mana pun: buka koin teratas lewat ikon trade-nya (bukan tombol order).
-            rows = self.open_top_gainers()
-            if rows:
-                self.open_gainer(rows[0].rank)
-                tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
-        if tab is None:
-            raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
-        self._positions_shift = self._measure_positions_shift(tab)
-        self._click(tab)
-        # Tabel bisa masih tergeser ke kanan (kolom nama koin tersembunyi): kembalikan ke kiri.
-        x0, y0, x1, y1 = self._positions_table()
-        center = self.rect.point_at((x0 + x1) / 2, (y0 + y1) / 2)
-        self._ensure_front()
-        self._window.scroll_horizontal(*center, -layout.POSITIONS_SCROLL_NOTCHES)
-        self._sleep(0.5)
+        scrolled = 0
+        sideways = False
+        point = self.rect.point_at(0.30, 0.95)
         try:
-            self._close_row(symbol)
-        finally:
-            self._positions_to_top()
-        logger.info("Posisi %s sudah tertutup di Binance", symbol)
-
-    def _close_row(self, symbol: str) -> None:
-        """Cari baris `symbol`, klik Market di baris itu, lalu pastikan barisnya hilang."""
-        x0, y0, x1, y1 = self._positions_table()
-        row_y = self._find_position_row(symbol)
-        if row_y is None:
-            if self._positions_shift >= _FORM_SHIFT_MIN * 1.5:
-                raise ScreenReadError(
-                    f"Baris posisi {symbol} tidak terlihat: banner di halaman koin ini mendorong "
-                    "panel Posisi keluar jendela. Buka halaman koin tanpa banner dan coba lagi."
-                )
-            raise PositionNotFoundError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
-        middle = self.rect.point_at((x0 + x1) / 2, row_y)
-        self._ensure_front()
-        self._window.scroll_horizontal(*middle, layout.POSITIONS_SCROLL_NOTCHES)
-        self._sleep(0.8)
-        try:
-            target = None
-            for line in self._read_lines(self.rect.sub(*self._positions_table())):
-                match = _MARKET_CLOSE.search(line.text)
-                y = y0 + line.y * (y1 - y0)
-                if match and abs(y - row_y) < 0.02:
-                    x = line.x
-                    if line.width and len(line.text) > len(match.group()):
-                        mid = (match.start() + match.end()) / 2
-                        x = line.x - line.width / 2 + line.width * mid / len(line.text)
-                    target = (x0 + x * (x1 - x0), y)
+            tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT)
+            if tab is None:
+                self._scroll_page_down(point, _CLOSE_SCROLL_NOTCHES)
+                scrolled += _CLOSE_SCROLL_NOTCHES
+                tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT)
+            if tab is None and not self._on_trade_page:
+                # Bot lain meninggalkan layar di halaman lain (mis. daftar top gainers). Tab Posisi
+                # ada di halaman koin mana pun: buka koin teratas lewat ikon trade-nya.
+                rows = self.open_top_gainers()
+                if rows:
+                    self.open_gainer(rows[0].rank)
+                    tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT)
+            if tab is None:
+                raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
+            self._click(tab)
+            point = self.rect.point_at(0.30, min(0.95, tab[1] + 0.06))
+            row, texts = self._position_row(symbol, tab[1])
+            seen: list[str] | None = None
+            for _ in range(_POSITION_PAGES):
+                if row is not None or texts == seen:
                     break
+                seen = texts
+                self._scroll_page_down(point, 1)
+                scrolled += 1
+                tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT) or tab
+                row, texts = self._position_row(symbol, tab[1])
+            if row is None:
+                raise PositionNotFoundError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
+            target = self._market_button(row)
             if target is None:
-                raise ScreenReadError(f"Tombol Market di baris posisi {symbol} tidak ditemukan")
+                # Kolom tombol bisa tersembunyi di kanan tabel: geser tabel ke kanan.
+                self._ensure_front()
+                self._window.scroll_horizontal(
+                    *self.rect.point_at(0.40, row), layout.POSITIONS_SCROLL_NOTCHES
+                )
+                sideways = True
+                self._sleep(0.8)
+                row = self._position_row(symbol, tab[1])[0] or row
+                target = self._market_button(row)
+            if target is None:
+                shot = self._save_debug_shot("tombol-market")
+                raise ScreenReadError(
+                    f"Tombol Market di baris posisi {symbol} tidak ditemukan. Foto layar: {shot}"
+                )
+            before = self._order_evidence().positions
             logger.warning("ORDER SUNGGUHAN: tutup posisi %s (Market)", symbol)
             self._click(target)
             self._sleep(self._settings.settle_delay_s)
+            after = self._order_evidence().positions
+            still = self._position_row(symbol, tab[1])[0]
         finally:
-            self._ensure_front()
-            self._window.scroll_horizontal(*middle, -layout.POSITIONS_SCROLL_NOTCHES)
-            self._sleep(0.5)
-        if self._find_position_row(symbol) is not None:
+            if sideways:
+                self._ensure_front()
+                self._window.scroll_horizontal(*point, -layout.POSITIONS_SCROLL_NOTCHES)
+            for _ in range(-(-scrolled // _SCROLL_UP_NOTCHES)):  # kembali ke atas halaman/tabel
+                self._ensure_front()
+                self._window.scroll_up(*point)
+                self._sleep(0.5)
+        # Posisi(n) berkurang = tertutup; angka tak terbaca: baris koin tidak terlihat lagi.
+        known = after is not None and before is not None
+        closed = (after < before) if known else still is None  # type: ignore[operator]
+        if not closed:
             raise ScreenReadError(f"Posisi {symbol} masih terlihat di tab Posisi setelah ditutup")
+        logger.info("Posisi %s sudah tertutup di Binance", symbol)
 
-    def _measure_positions_shift(self, tab: tuple[float, float]) -> float:
-        """Banner mendorong panel Posisi ke bawah: selisih tinggi tab dari tinggi normalnya."""
-        if layout.POSITIONS_TAB_Y is None:
-            return 0.0
-        shift = tab[1] - layout.POSITIONS_TAB_Y
-        return shift if abs(shift) >= _FORM_SHIFT_MIN else 0.0
-
-    def _positions_table(self) -> tuple[float, float, float, float]:
-        return _shifted(layout.POSITIONS_TABLE_AREA, self._positions_shift)
-
-    def _find_position_row(self, symbol: str) -> float | None:
-        """Baris posisi `symbol` di tabel Posisi; tabel digulir ke bawah bila belum terlihat.
-
-        Dengan 3-5 posisi terbuka hanya beberapa baris yang tampil di panel bawah. Baris dicari
-        lewat nama koinnya, bukan urutannya: mulai dari atas, turun satu langkah, sampai ketemu
-        atau tabel tidak bergerak lagi (ujung daftar).
-        """
-        row_y, texts = self._position_row(symbol)
-        if row_y is not None:
-            return row_y
-        center = self._positions_center()
+    def _scroll_page_down(self, point: tuple[int, int], notches: int) -> None:
         self._ensure_front()
-        self._window.scroll_up(*center)
-        self._positions_scrolled = True
-        self._sleep(0.5)
-        seen: list[str] | None = None
-        for _ in range(_POSITION_PAGES):
-            row_y, texts = self._position_row(symbol)
-            if row_y is not None or texts == seen:
-                return row_y
-            seen = texts
-            self._ensure_front()
-            self._window.scroll_down(*center, 1)
-            self._sleep(0.5)
-        return None
+        self._window.scroll_down(*point, notches)
+        self._sleep(0.8)
 
-    def _positions_to_top(self) -> None:
-        """Kembalikan tabel Posisi ke baris teratas bila tadi digulir."""
-        if not self._positions_scrolled:
-            return
-        self._ensure_front()
-        self._window.scroll_up(*self._positions_center())
-        self._positions_scrolled = False
-        self._sleep(0.5)
+    def _position_row(self, symbol: str, below: float) -> tuple[float | None, list[str]]:
+        """(tinggi baris posisi `symbol` atau None, teks di bawah tab Posisi).
 
-    def _positions_center(self) -> tuple[int, int]:
-        x0, y0, x1, y1 = self._positions_table()
-        return self.rect.point_at((x0 + x1) / 2, (y0 + y1) / 2)
-
-    def _position_row(self, symbol: str) -> tuple[float | None, list[str]]:
-        """(tinggi baris posisi `symbol` relatif jendela atau None, semua teks yang terbaca).
-
-        Nama harus persis: "PEPEUSDT" tidak cocok dengan baris "1000PEPEUSDT".
+        Dibatasi di kiri kolom form (x < 0,80) dan di bawah tab, supaya judul halaman koin
+        ("BRUSDT Perpetual") dan toast di kanan bawah tidak dikira baris posisi. Nama harus
+        persis: "PEPEUSDT" tidak cocok dengan baris "1000PEPEUSDT".
         """
-        _, y0, _, y1 = self._positions_table()
         name = re.compile(rf"(?<![A-Z0-9]){re.escape(symbol.upper())}(?:PERP|(?![A-Z0-9]))")
-        lines = self._read_lines(self.rect.sub(*self._positions_table()))
+        lines = [ln for ln in self._read_lines(self.rect) if ln.y > below + 0.02 and ln.x < 0.80]
         for line in lines:
             if name.search(line.text.replace(" ", "").upper()):
-                return y0 + line.y * (y1 - y0), [line.text for line in lines]
-        return None, [line.text for line in lines]
+                return line.y, [ln.text for ln in lines]
+        return None, [ln.text for ln in lines]
+
+    def _market_button(self, row_y: float) -> tuple[float, float] | None:
+        """Tombol "Market" di baris posisi (sejajar baris, di kiri kolom form), atau None."""
+        for line in self._read_lines(self.rect):
+            match = _MARKET_CLOSE.search(line.text)
+            if not match or abs(line.y - row_y) >= 0.02 or line.x >= 0.80:
+                continue
+            x = line.x
+            if line.width and len(line.text) > len(match.group()):
+                mid = (match.start() + match.end()) / 2
+                x = line.x - line.width / 2 + line.width * mid / len(line.text)
+            return x, line.y
+        return None
 
     def _capture(self, area: Rect, path: Path) -> Path:
         self._ensure_front()

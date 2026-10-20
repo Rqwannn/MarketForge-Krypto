@@ -161,7 +161,7 @@ class FakeMarket:
         candles: list[Candle] | None = None,
         rules: SymbolRules | None = None,
     ) -> None:
-        self.q = quote or Quote(bid=1.0, ask=1.0005, funding_rate=0.0001, change_pct=50.0)
+        self.q = quote or Quote(bid=1.0, ask=1.0005, change_pct=50.0)
         self.quotes: dict[str, Quote] = {}
         self.candles = candles if candles is not None else ma_candles(2)
         self.r = rules or SymbolRules(step=0.1, min_qty=0.1, min_notional=5.0)

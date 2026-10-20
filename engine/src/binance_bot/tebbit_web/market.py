@@ -2,7 +2,6 @@
 
 Tebbit tidak punya sumber candle atau funding yang kita pakai, jadi `klines` dan `funding_history`
 melempar NoHistoryError (SOP menanganinya sebagai "tanpa pembanding"; hanya AI yang menilai pola).
-Funding tidak tampil di halaman: dianggap 0, sehingga saringan funding tidak menolak koin.
 
 Harga koin lain (mis. posisi uji yang masih terbuka) hanya dibaca bila `browse` aktif: bot
 membuka halaman koin itu sebentar lalu kembali. Saat aplikasi sekadar menampilkan daftar posisi,
@@ -65,7 +64,7 @@ class ScreenMarket:
 
     def _read(self) -> Quote:
         bid, ask, _price, change = self._nav.read_quote()
-        return Quote(bid=bid, ask=ask, funding_rate=0.0, change_pct=change)
+        return Quote(bid=bid, ask=ask, change_pct=change)
 
     def klines(
         self,

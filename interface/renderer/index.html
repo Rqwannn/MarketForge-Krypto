@@ -292,7 +292,24 @@
       <section class="card">
         <div class="card-head"><div><h2>Riwayat analisis AI</h2><p>Setiap koin yang dinilai AI, terbaru di atas. Klik grafik untuk memperbesar.</p></div>
           <button class="secondary small" id="history-clear" title="Hapus semua koin yang dilewati dan gambar contoh. Posisi uji tetap ada.">Bersihkan</button></div>
+        <div class="hist-tools">
+          <label class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+            <input type="search" id="history-search" placeholder="Cari koin" aria-label="Cari koin di riwayat" autocomplete="off" spellcheck="false">
+          </label>
+          <span class="select-box">
+            <select id="history-verdict" aria-label="Saring keputusan">
+              <option value="">Semua keputusan</option>
+              <option value="ok">Layak short</option>
+              <option value="tunggu">Tunggu</option>
+              <option value="jangan">Jangan short</option>
+            </select>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+          <span class="hist-count" id="history-count"></span>
+        </div>
         <ul class="history" id="analyses"></ul>
+        <nav class="pager" id="history-pager" aria-label="Halaman riwayat" hidden></nav>
       </section>
     </section>
 
@@ -412,6 +429,7 @@
 </div>
 <script src="reasons.js"></script>
 <script src="worldclock.js"></script>
+<script src="history.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

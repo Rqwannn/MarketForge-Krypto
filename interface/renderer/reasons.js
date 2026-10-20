@@ -1,13 +1,15 @@
 'use strict';
 
 // Kartu "kenapa": menjelaskan keputusan bot untuk satu koin langkah demi langkah, dalam kalimat
-// sehari-hari. Urutan langkah mengikuti SOP (kenaikan -> pola garis -> biaya -> slot -> order).
+// sehari-hari. Urutan langkah mengikuti SOP (kenaikan -> pola garis -> spread -> slot -> order).
+// Funding rate tidak dinilai lagi (keputusan tim 20 Okt 2026); catatan lama yang dilewati karena
+// funding tetap dijelaskan dari teks alasannya.
 // Murni fungsi tanpa DOM supaya bisa diuji di Node; app.js yang menggambarnya.
 
 (function (root) {
   const PERIODS = { binance: { fast: 7, mid: 25 }, tebbit: { fast: 5, mid: 10 } };
   // Cermin SopParams bawaan; bila engine mengirim `limits` (batas yang sedang dipakai), itu menang.
-  const DEFAULT_LIMITS = { min_crosses: 2, min_funding_pct: -0.1, max_spread_pct: 0.3, min_gain_pct: 0 };
+  const DEFAULT_LIMITS = { min_crosses: 2, max_spread_pct: 0.3, min_gain_pct: 0 };
   const VERDICT_LABEL = { ok: 'Layak short', tunggu: 'Tunggu', jangan: 'Jangan short' };
   const IDENTITY = (text) => String(text || '');
 
@@ -103,23 +105,13 @@
     steps.push(pattern);
     const patternOk = e.verdict === 'ok';
 
-    // 3. Funding dan 4. spread (angka dari bursa, dibaca saat koin dinilai)
+    // 3. Spread (angka dari bursa, dibaca saat koin dinilai)
     if (leaderOnly) {
-      steps.push({ id: 'biaya', state: 'skip', title: 'Biaya funding dan selisih harga', text: 'Dicek di laptop pengikut sebelum membuka posisi.' });
+      steps.push({ id: 'biaya', state: 'skip', title: 'Selisih harga beli dan jual', text: 'Dicek di laptop pengikut sebelum membuka posisi.' });
     } else {
-      if (known(e.funding_rate)) {
-        const f = Number(e.funding_rate) * 100;
-        const bad = f < limits.min_funding_pct;
-        const who = f < 0 ? 'short membayar' : 'short menerima';
-        const blocked = /funding/i.test(reason);
-        steps.push({
-          id: 'funding',
-          state: bad ? (patternOk || blocked ? 'fail' : 'info') : 'pass',
-          title: 'Biaya funding',
-          text: bad
-            ? `Funding ${signed(f, 4)}% (${who}) lebih negatif dari batas ${comma(limits.min_funding_pct, 2)}%.${patternOk || blocked ? '' : ' Tidak menentukan: pola sudah menolak lebih dulu.'}`
-            : `Funding ${signed(f, 4)}% (${who}), masih dalam batas ${comma(limits.min_funding_pct, 2)}%.`,
-        });
+      // Catatan lama (sebelum 20 Okt 2026): koin sempat dilewati oleh aturan funding yang sudah dihapus.
+      if (e.status === 'skipped' && /funding/i.test(reason)) {
+        steps.push({ id: 'funding', state: 'fail', title: 'Aturan funding (lama, sudah dihapus)', text: plain(reason) });
       }
       if (known(e.spread_pct)) {
         const s = Number(e.spread_pct);

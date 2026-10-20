@@ -1,8 +1,8 @@
 """Data pasar publik Binance USDⓈ-M Futures.
 
 Endpoint publik: tanpa API key, tanpa akun, tanpa langganan. Dipakai untuk angka yang tidak
-tampil lengkap di layar (aturan jumlah per koin, funding, spread) dan untuk menilai hasil
-uji kertas dari candle sungguhan.
+tampil lengkap di layar (aturan jumlah per koin, spread) dan untuk menilai hasil uji kertas
+dari candle sungguhan (termasuk funding yang benar-benar dibayar selama posisi terbuka).
 """
 
 from __future__ import annotations
@@ -60,7 +60,6 @@ class SymbolRules:
 class Quote:
     bid: float
     ask: float
-    funding_rate: float  # per periode funding, pecahan (0.0001 = 0,01%)
     change_pct: float  # perubahan 24 jam dalam persen
 
     @property
@@ -112,12 +111,10 @@ class FuturesMarket:
     def quote(self, symbol: str) -> Quote:
         query = self._query(symbol=_checked(symbol))
         book = self._get(f"{self._base}/ticker/bookTicker?{query}")
-        premium = self._get(f"{self._base}/premiumIndex?{query}")
         ticker = self._get(f"{self._base}/ticker/24hr?{query}")
         return Quote(
             bid=float(book["bidPrice"]),
             ask=float(book["askPrice"]),
-            funding_rate=float(premium["lastFundingRate"]),
             change_pct=float(ticker["priceChangePercent"]),
         )
 

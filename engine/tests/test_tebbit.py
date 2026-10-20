@@ -88,7 +88,7 @@ def test_harga_koin_lain_hanya_dibaca_saat_bot_bekerja_lalu_kembali() -> None:
     # Saat bot menilai OPUSDT: buka TRUTHUSDT sebentar untuk cek slot, lalu kembali ke OPUSDT.
     nav = _Nav("BTWUSDT")
     quote = ScreenMarket(nav, browse=True).quote("TRUTHUSDT")  # type: ignore[arg-type]
-    assert (quote.bid, quote.ask, quote.funding_rate) == (0.021, 0.0211, 0.0)
+    assert (quote.bid, quote.ask) == (0.021, 0.0211)
     assert nav.visits == ["TRUTHUSDT", "BTWUSDT"]
     # Belum ada jendela (cek slot di awal putaran): siapkan Chrome dulu.
     nav = _Nav(None)

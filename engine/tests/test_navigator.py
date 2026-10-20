@@ -7,6 +7,7 @@ from binance_bot.config import Settings
 from binance_bot.exceptions import (
     AppNotRunningError,
     AppTimeoutError,
+    PositionNotFoundError,
     SafetyError,
     ScreenReadError,
     WindowError,
@@ -825,7 +826,154 @@ def _locked_order_nav(
     monkeypatch.setattr(nav, "_read_texts", lambda area: shown)
     monkeypatch.setattr(nav, "_ensure_front", lambda: None)
     monkeypatch.setattr(nav, "short_button", lambda: (0.95, 0.51))
+    # Bukti order: sebelum klik Posisi(0) dan Tersedia 21; sesudah klik Posisi(1) dan Tersedia 11.
+    evidence = iter([ev(0, 21.0)])
+    monkeypatch.setattr(nav, "_order_evidence", lambda: next(evidence, ev(1, 11.0)))
     return nav, pressed
+
+
+def ev(count, available, filled=(), rejected=()):  # type: ignore[no-untyped-def]
+    from binance_bot.binance_desktop.navigator import _OrderEvidence
+
+    return _OrderEvidence(count, available, list(filled), list(rejected))
+
+
+def _plan_20() -> object:
+    from binance_bot.strategy.execution import OrderPlan
+
+    return OrderPlan("BRUSDT", "20", "30", 20.0, 9.78, 0.65191, 0.632353, 2)
+
+
+def _unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)
+
+
+def _with_evidence(monkeypatch, nav, before, after):  # type: ignore[no-untyped-def]
+    seq = iter([before])
+    monkeypatch.setattr(nav, "_order_evidence", lambda: next(seq, after))
+
+
+@pytest.mark.parametrize(
+    "after",
+    [
+        ev(1, 21.0),  # Posisi bertambah
+        ev(None, 11.2),  # saldo turun
+        ev(0, 11.2),
+        ev(None, None, filled=["Order Jual Market Terisi"]),  # uji nyata 10.11: toast terisi
+    ],
+)
+def test_press_short_accepts_proof_that_binance_opened_the_position(
+    monkeypatch: pytest.MonkeyPatch, after: object
+) -> None:
+    _unlocked(monkeypatch)
+    nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    _with_evidence(monkeypatch, nav, ev(0, 21.0), after)
+    nav.press_short(_plan_20())  # tidak ada galat: posisi terbukti terbuka
+    assert len(pressed) == 1
+
+
+def test_an_old_fill_toast_is_not_proof(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Toast yang sudah tampil sebelum klik (mis. dari order manual) tidak dihitung."""
+    _unlocked(monkeypatch)
+    nav, _ = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    old = ["Order Jual Market Terisi"]
+    _with_evidence(monkeypatch, nav, ev(0, 21.0, filled=old), ev(0, 21.0, filled=old))
+    with pytest.raises(ScreenReadError, match="tidak masuk"):
+        nav.press_short(_plan_20())
+
+
+def test_press_short_clear_no_change_is_an_error_not_a_phantom_position(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Uji nyata (09.10, BRUSDT dan AGTUSDT): Posisi(0) dan Tersedia 21,00 tetap terbaca.
+
+    Layar jelas menunjukkan order tidak masuk: galat, tidak ada posisi hantu, tanpa klik ulang.
+    """
+    _unlocked(monkeypatch)
+    nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    monkeypatch.setattr(nav, "_order_evidence", lambda: ev(0, 21.0))
+    with pytest.raises(ScreenReadError, match="tidak masuk"):
+        nav.press_short(_plan_20())
+    assert len(pressed) == 1  # tanpa klik ulang
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (ev(None, 21.0), ev(None, None)),  # uji nyata 10.00: bacaan tidak lengkap
+        (ev(0, None), ev(None, 11.28)),
+        (ev(0, 21.0), ev(None, None)),  # uji nyata 10.11: halaman bergeser, tidak terbaca
+    ],
+)
+def test_uncertain_evidence_keeps_the_position_as_open(
+    monkeypatch: pytest.MonkeyPatch, before: object, after: object
+) -> None:
+    """Bacaan tidak lengkap: posisi dianggap TERBUKA (diawasi), bukan dianggap tidak masuk."""
+    _unlocked(monkeypatch)
+    nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    _with_evidence(monkeypatch, nav, before, after)
+    nav.press_short(_plan_20())  # tidak ada galat: jurnal mencatat posisi terbuka
+    assert len(pressed) == 1
+
+
+def test_press_short_reports_binance_rejection_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _unlocked(monkeypatch)
+    nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    monkeypatch.setattr(
+        nav, "_order_evidence", lambda: ev(0, 21.0, rejected=["Order gagal: margin tidak cukup"])
+    )
+    with pytest.raises(ScreenReadError, match="margin tidak cukup"):
+        nav.press_short(_plan_20())
+    assert len(pressed) == 1
+
+
+def test_order_evidence_reads_the_whole_window() -> None:
+    """Halaman bergeser (uji nyata 10.11): Tersedia dan Posisi dicari di seluruh jendela."""
+    from fakes import text_lines as lines
+
+    screen = FakeScreen(
+        texts={
+            (0.0, 0.0, 1.0, 1.0): [
+                lines(
+                    "Tersedia 11,07 USDT",
+                    "Posisi(1) Transaksi terbuka(0)",
+                    "Order Jual Market Terisi",
+                    "Order gagal",
+                    "Maks 41,90 USDT",
+                )
+            ]
+        }
+    )
+    nav = make_nav(screen)
+    nav._rect = WINDOW
+    got = nav._order_evidence()
+    assert (got.positions, got.available) == (1, 11.07)
+    assert got.filled == ["Order Jual Market Terisi"] and got.rejected == ["Order gagal"]
+
+
+def test_press_short_small_balance_noise_is_not_proof(monkeypatch: pytest.MonkeyPatch) -> None:
+    _unlocked(monkeypatch)
+    nav, _ = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    _with_evidence(monkeypatch, nav, ev(0, 21.0), ev(0, 20.5))  # turun 0,5: bukan margin 9,78
+    with pytest.raises(ScreenReadError, match="tidak masuk"):
+        nav.press_short(_plan_20())
+
+
+def test_positions_count_reads_the_tab_label_even_with_letter_o() -> None:
+    from fakes import text_lines as lines
+
+    for label, expected in [
+        ("Posisi(1) Transaksi terbuka(0)", 1),
+        ("Posisi(O)", 0),
+        ("Posisi(l)", 1),
+        ("Riwayat Posisi", None),
+    ]:
+        screen = FakeScreen(texts={(0.0, 0.0, 1.0, 1.0): [lines(label)]})
+        nav = make_nav(screen)
+        nav._rect = WINDOW
+        assert nav._positions_count() == expected
 
 
 def test_press_short_is_locked_even_when_called_directly(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1067,99 +1215,6 @@ def test_leverage_is_not_clicked_blindly_when_nothing_could_be_read(
     assert len(clicks(screen)) == before
 
 
-def test_positions_panel_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Uji nyata (BRUSDT): banner menggeser panel Posisi ~0,065 sampai barisnya keluar jendela."""
-    monkeypatch.setattr(layout, "POSITIONS_TAB_Y", 0.857, raising=False)
-    nav = make_nav()
-    nav.prepare()
-    assert nav._measure_positions_shift((0.1, 0.857 + 0.003)) == 0.0  # galat ukur
-    shift = nav._measure_positions_shift((0.1, 0.920))
-    assert shift == pytest.approx(0.063)
-    nav._positions_shift = shift
-    x0, y0, x1, _y1 = layout.POSITIONS_TABLE_AREA
-    assert nav._positions_table() == (x0, pytest.approx(min(1.0, y0 + shift)), x1, 1.0)
-    monkeypatch.setattr(layout, "POSITIONS_TAB_Y", None)
-    assert nav._measure_positions_shift((0.1, 0.9)) == 0.0  # profil tanpa kalibrasi: tidak digeser
-
-
-def _positions_nav(
-    monkeypatch: pytest.MonkeyPatch, pages: list[list[TextLine]]
-) -> tuple[BinanceNavigator, FakeScreen]:
-    """Navigator di mode uang sungguhan; `pages` = bacaan tabel Posisi berurutan."""
-    from binance_bot.strategy import execution
-
-    monkeypatch.setattr(execution, "_live_orders", True)
-    screen = FakeScreen(
-        texts={
-            layout.POSITIONS_TAB_AREA: [[TextLine("Posisi(4)", 0.1, 0.5)]],
-            layout.POSITIONS_TABLE_AREA: pages,
-        }
-    )
-    nav = make_nav(screen)
-    nav.prepare()
-    return nav, screen
-
-
-def _table_point(x: float, y: float) -> tuple[int, int]:
-    x0, y0, x1, y1 = layout.POSITIONS_TABLE_AREA
-    return at((x0 + x * (x1 - x0), y0 + y * (y1 - y0)))
-
-
-def test_the_position_row_is_found_by_name_further_down_the_table(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """3-5 posisi: baris koin yang dijual di bawah, belum terlihat. Tabel digulir, lalu yang diklik
-    tombol Market di baris koin itu, bukan baris pertama atau baris koin bernama mirip."""
-    top = [TextLine("BTWUSDT Perp", 0.1, 0.3), TextLine("ICNTUSDT Perp", 0.1, 0.7)]
-    lower = [
-        TextLine("ICNTUSDT Perp", 0.1, 0.3),
-        TextLine("1000PEPEUSDT Perp", 0.1, 0.5),
-        TextLine("PEPEUSDT Perp", 0.1, 0.7),
-    ]
-    buttons = [
-        TextLine("Market", 0.8, 0.3),
-        TextLine("Market", 0.8, 0.5),
-        TextLine("Market", 0.8, 0.7),
-    ]
-    closed = [TextLine("ICNTUSDT Perp", 0.1, 0.3), TextLine("1000PEPEUSDT Perp", 0.1, 0.5)]
-    nav, screen = _positions_nav(monkeypatch, [top, top, lower, buttons, closed])
-
-    nav.close_position("PEPEUSDT")
-
-    kinds = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down", "click")]
-    assert kinds.index("scroll_down") < len(kinds) - 1 - kinds[::-1].index("click")
-    assert clicks(screen)[-1] == _table_point(0.8, 0.7)  # baris PEPEUSDT, bukan 1000PEPEUSDT
-    assert kinds[-1] == "scroll_up"  # tabel dikembalikan ke baris teratas
-
-
-def test_a_similar_name_is_not_closed_and_the_table_is_scrolled_back(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    only_similar = [TextLine("1000PEPEUSDT Perp", 0.1, 0.3), TextLine("Market", 0.8, 0.3)]
-    nav, screen = _positions_nav(monkeypatch, [only_similar])
-
-    with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
-        nav.close_position("PEPEUSDT")
-
-    assert len(clicks(screen)) == 1  # hanya tab Posisi; tombol Market tidak disentuh
-    vertical = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down")]
-    assert vertical[-1] == "scroll_up"
-
-
-def test_a_visible_row_is_clicked_without_scrolling_the_table_first(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    row = [TextLine("BTWUSDT Perp", 0.1, 0.3)]
-    nav, screen = _positions_nav(
-        monkeypatch, [row, [TextLine("Market", 0.8, 0.3)], [TextLine("ICNTUSDT Perp", 0.1, 0.3)]]
-    )
-    nav.close_position("BTWUSDT")
-    market = screen.events.index(("click", _table_point(0.8, 0.3)))
-    assert not any(kind == "scroll_down" for kind, _ in screen.events[:market])
-    # Sesudah klik, seluruh tabel diperiksa: baris BTWUSDT harus hilang di mana pun.
-    assert any(kind == "scroll_down" for kind, _ in screen.events[market:])
-
-
 @pytest.mark.parametrize(
     "label", ["Posisi(0)", "Posisi(O) Transaksi terbuka(O) Riwayat Order", "Positions(2)"]
 )
@@ -1213,6 +1268,153 @@ def test_the_1366_profile_is_internally_consistent() -> None:
     assert small.ORDER_UNIT_MIN_Y >= 0.6 and small.OCR_UPSCALE == 2
 
 
+def test_confirmation_dialog_warning_is_not_a_rejection() -> None:
+    """Uji nyata (10.00): dialog konfirmasi memuat "...order Anda akan gagal." (peringatan)."""
+    from fakes import text_lines as lines
+
+    screen = FakeScreen(
+        texts={
+            (0.0, 0.0, 1.0, 1.0): [
+                lines(
+                    "* Jika harga pasar menyimpang dari harga mark lebih dari 15%, order",
+                    "Anda akan gagal.",
+                    "Konfirmasi",
+                    "Selesaikan Kuis untuk Memulai",
+                )
+            ]
+        }
+    )
+    nav = make_nav(screen)
+    nav._rect = WINDOW
+    assert nav._order_evidence().rejected == ["Selesaikan Kuis untuk Memulai"]
+
+
+# ------------------------------------------------------------------ jual otomatis (tutup posisi)
+
+
+def _page(*items: tuple[str, float, float]) -> list[TextLine]:
+    """Teks seluruh jendela pada posisi relatif jendela (x, y)."""
+    return [TextLine(t, x, y) for t, x, y in items]
+
+
+WITH_ROW = _page(
+    ("Posisi(1) Transaksi terbuka(0)", 0.15, 0.86),
+    ("BRUSDT Perp 2x", 0.07, 0.93),
+    ("Market", 0.783, 0.93),
+    ("Order Jual Market Terisi", 0.90, 0.93),  # toast di kanan bawah, bukan tombol
+)
+TAB_ONLY = _page(("Posisi(1) Transaksi terbuka(0)", 0.15, 0.86))
+AFTER = _page(("Posisi(0) Transaksi terbuka(0)", 0.15, 0.86))
+
+
+def _closing_nav(
+    monkeypatch: pytest.MonkeyPatch, pages: list[list[TextLine]]
+) -> tuple[BinanceNavigator, FakeScreen]:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)
+    screen = FakeScreen(texts={(0.0, 0.0, 1.0, 1.0): pages})
+    nav = make_nav(screen)
+    nav._rect, nav._on_trade_page = WINDOW, True
+    return nav, screen
+
+
+def test_close_position_finds_tab_row_and_market_button_anywhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, screen = _closing_nav(monkeypatch, [WITH_ROW] * 4 + [AFTER])
+    nav.close_position("BRUSDT")
+    assert clicks(screen) == [WINDOW.point_at(0.15, 0.86), WINDOW.point_at(0.783, 0.93)]
+
+
+def test_close_position_scrolls_a_little_when_the_row_is_below_the_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pengguna: "pas jual otomatis gak keliatan tombolnya, harus agak di scroll sedikit"."""
+    nav, screen = _closing_nav(monkeypatch, [TAB_ONLY, TAB_ONLY] + [WITH_ROW] * 4 + [AFTER])
+    nav.close_position("BRUSDT")
+    kinds = [kind for kind, _ in screen.events]
+    assert "scroll_down" in kinds and kinds[-1] == "scroll_up"  # digulir, lalu dikembalikan
+    assert clicks(screen)[-1] == WINDOW.point_at(0.783, 0.93)
+
+
+def test_close_position_never_clicks_a_toast_instead_of_the_market_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    row_without_button = _page(
+        ("Posisi(1) Transaksi terbuka(0)", 0.15, 0.86),
+        ("BRUSDT Perp 2x", 0.07, 0.93),
+        ("Order Jual Market Terisi", 0.90, 0.93),
+    )
+    nav, screen = _closing_nav(monkeypatch, [row_without_button])
+    with pytest.raises(ScreenReadError, match="Tombol Market"):
+        nav.close_position("BRUSDT")
+    assert clicks(screen) == [WINDOW.point_at(0.15, 0.86)]  # hanya tab Posisi
+
+
+def test_close_position_that_stays_open_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    nav, _ = _closing_nav(monkeypatch, [WITH_ROW])
+    with pytest.raises(ScreenReadError, match="masih terlihat"):
+        nav.close_position("BRUSDT")
+
+
+def test_close_position_does_not_take_the_page_title_for_a_position_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    title_only = _page(
+        ("BRUSDT Perpetual", 0.10, 0.07), ("Posisi(0) Transaksi terbuka(0)", 0.15, 0.86)
+    )
+    nav, _ = _closing_nav(monkeypatch, [title_only])
+    with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
+        nav.close_position("BRUSDT")
+
+
+def _rows(*items: tuple[str, float]) -> list[TextLine]:
+    """Tab Posisi(4) di y 0,86 lalu baris posisi (nama di x 0,07, tombol Market di x 0,783)."""
+    lines = [TextLine("Posisi(4) Transaksi terbuka(0)", 0.15, 0.86)]
+    for name, y in items:
+        lines += [TextLine(f"{name} Perp 2x", 0.07, y), TextLine("Market", 0.783, y)]
+    return lines
+
+
+def test_the_position_row_is_found_by_name_further_down_the_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """3-5 posisi (Raqwan): baris koin yang dijual di bawah, belum terlihat. Halaman/tabel digulir,
+    lalu yang diklik tombol Market di baris koin itu, bukan baris pertama atau nama yang mirip."""
+    top = _rows(("BTWUSDT", 0.90), ("ICNTUSDT", 0.95))
+    lower = _rows(("ICNTUSDT", 0.90), ("1000PEPEUSDT", 0.93), ("PEPEUSDT", 0.96))
+    after = [TextLine("Posisi(3) Transaksi terbuka(0)", 0.15, 0.86)]
+    nav, screen = _closing_nav(monkeypatch, [top, top] + [lower] * 4 + [after])
+    nav.close_position("PEPEUSDT")
+    kinds = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down", "click")]
+    last_click = len(kinds) - 1 - kinds[::-1].index("click")
+    assert kinds.index("scroll_down") < last_click
+    assert clicks(screen)[-1] == WINDOW.point_at(0.783, 0.96)  # PEPEUSDT, bukan 1000PEPEUSDT
+    assert kinds[-1] == "scroll_up"  # dikembalikan ke atas
+
+
+def test_a_similar_name_is_not_closed_and_the_page_is_scrolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, screen = _closing_nav(monkeypatch, [_rows(("1000PEPEUSDT", 0.93))])
+    with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
+        nav.close_position("PEPEUSDT")
+    assert len(clicks(screen)) == 1  # hanya tab Posisi; tombol Market tidak disentuh
+    vertical = [kind for kind, _ in screen.events if kind in ("scroll_up", "scroll_down")]
+    assert vertical[-1] == "scroll_up"
+
+
+def test_a_visible_row_is_clicked_without_scrolling_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    after = [TextLine("Posisi(3) Transaksi terbuka(0)", 0.15, 0.86)]
+    nav, screen = _closing_nav(monkeypatch, [_rows(("BTWUSDT", 0.93))] * 4 + [after])
+    nav.close_position("BTWUSDT")
+    market = screen.events.index(("click", WINDOW.point_at(0.783, 0.93)))
+    assert not any(kind == "scroll_down" for kind, _ in screen.events[:market])
+
+
 def test_closing_from_another_page_first_opens_a_coin_page_for_the_positions_tab(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1220,23 +1422,24 @@ def test_closing_from_another_page_first_opens_a_coin_page_for_the_positions_tab
     halaman koin teratas dulu, bukan gagal dengan "tab Posisi tidak ditemukan"."""
     from binance_bot.binance_desktop.screen_text import GainerRow
 
-    nav, screen = _positions_nav(
-        monkeypatch,
-        [
-            [TextLine("BTWUSDT Perp", 0.1, 0.3)],
-            [TextLine("Market", 0.8, 0.3)],
-            [TextLine("ICNTUSDT Perp", 0.1, 0.3)],
-        ],
-    )
-    tab_area = screen.rect.sub(*layout.POSITIONS_TAB_AREA)
-    screen._texts[tab_area] = [[], [TextLine("Posisi(1)", 0.1, 0.5)]]
+    nav, screen = _closing_nav(monkeypatch, [[], []] + [WITH_ROW] * 4 + [AFTER])
+    nav._on_trade_page = False  # giliran layar dari bot lain: halaman tidak diingat
     opened: list[str] = []
     monkeypatch.setattr(
         nav, "open_top_gainers", lambda: opened.append("list") or [GainerRow(1, "AUSDT", 9.0)]
     )
     monkeypatch.setattr(nav, "open_gainer", lambda rank: opened.append(f"top{rank}") or "AUSDT")
 
-    nav.close_position("BTWUSDT")
+    nav.close_position("BRUSDT")
 
     assert opened == ["list", "top1"]
-    assert ("click", _table_point(0.8, 0.3)) in screen.events
+    assert clicks(screen)[-1] == WINDOW.point_at(0.783, 0.93)
+
+
+def test_a_position_gone_from_the_exchange_is_reported_as_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Baris koin tidak ada: PositionNotFoundError (aplikasi menawarkan catat tutup manual)."""
+    nav, _ = _closing_nav(monkeypatch, [AFTER])
+    with pytest.raises(PositionNotFoundError):
+        nav.close_position("BRUSDT")

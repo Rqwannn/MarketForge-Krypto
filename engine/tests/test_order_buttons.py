@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 from binance_bot.binance_desktop import BinanceNavigator, layout
 from binance_bot.binance_desktop.order_buttons import find_boxes, find_pair
 from binance_bot.config import Settings
-from binance_bot.exceptions import ScreenReadError
+from binance_bot.exceptions import SafetyError, ScreenReadError
 from binance_bot.macos import Rect, TextLine
 from fakes import WINDOW, Clock, FakeApps, FakeScreen
 
@@ -232,3 +232,30 @@ def test_tebbit_keeps_the_text_search_only() -> None:
     assert BinanceNavigator._COLOR_BUTTONS is True
     assert TebbitNavigator._COLOR_BUTTONS is False
     assert layout.ORDER_BUTTON_ZONES  # zona terlarang tetap melindungi tombol order
+
+
+def test_clicks_on_visible_order_buttons_are_refused_even_outside_the_fixed_zone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Uji nyata (20 Okt 10.14): halaman koin bergeser naik, Jual/Short tampil di y 0,32, di luar
+    zona tetap dan tepat di tempat kolom Jumlah biasanya. Klik ke tombol itu tetap ditolak."""
+    image, (long_box, short_box) = window_with_buttons((0.80, 0.25, 1.0, 0.40))
+    screen = ImageScreen(image)
+    nav = BinanceNavigator(
+        Settings(settle_delay_s=0),
+        FakeApps(),
+        screen,
+        screen,
+        sleep=Clock().sleep,
+        clock=Clock(),
+        screens=lambda: [WINDOW],
+    )
+    nav._rect, nav._on_trade_page = WINDOW, True
+    monkeypatch.setattr(nav, "_ensure_front", lambda: None)
+    for box in (long_box, short_box):
+        cx, cy = (box[0] + box[2]) / 2 / WINDOW.width, (box[1] + box[3]) / 2 / WINDOW.height
+        assert not layout.in_order_button_zone((cx, cy))  # zona tetap tidak mencakupnya
+        with pytest.raises(SafetyError):
+            nav._click((cx, cy))
+    assert not any(kind == "click" for kind, _ in screen.events)
+    nav._click((0.85, 0.20))  # titik lain di kolom form (di luar tombol) tetap boleh

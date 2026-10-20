@@ -34,10 +34,11 @@ class SopParams:
     min_gain_pct: float = 0.0  # V2 tidak mensyaratkan kenaikan minimal; isi untuk menyaring
     review_after_h: float = 24.0  # V3: pantau posisi yang ditahan lebih dari satu hari
     fee_pct: float = 0.1  # riwayat: fee masuk + keluar per putaran
-    # SOP V2 hanya menyebut "spread lebar" dan "funding sangat negatif", tanpa angka. Longgar dulu
-    # sampai Pak Saputra menentukan batasnya: koin ETF (UVXY, SQQQ) spread-nya 0,1-0,25%.
+    # SOP V2 hanya menyebut "spread lebar", tanpa angka. Longgar dulu sampai Pak Saputra
+    # menentukan batasnya: koin ETF (UVXY, SQQQ) spread-nya 0,1-0,25%.
+    # Funding rate sengaja TIDAK menyaring koin (keputusan tim 20 Okt 2026): posisi scalping
+    # singkat, jadi biaya funding per periode tidak relevan untuk memilih koin.
     max_spread_pct: float = 0.3
-    min_funding_pct: float = -0.1
     signal_source: str = "ai"  # siapa yang membaca pola garis kuning: "ai" atau "data"
 
     def validate(self) -> None:
