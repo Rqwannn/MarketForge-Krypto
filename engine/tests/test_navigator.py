@@ -826,9 +826,15 @@ def _locked_order_nav(
     monkeypatch.setattr(nav, "_ensure_front", lambda: None)
     monkeypatch.setattr(nav, "short_button", lambda: (0.95, 0.51))
     # Bukti order: sebelum klik Posisi(0) dan Tersedia 21; sesudah klik Posisi(1) dan Tersedia 11.
-    evidence = iter([(0, 21.0)])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: next(evidence, (1, 11.0)))
+    evidence = iter([ev(0, 21.0)])
+    monkeypatch.setattr(nav, "_order_evidence", lambda: next(evidence, ev(1, 11.0)))
     return nav, pressed
+
+
+def ev(count, available, filled=(), rejected=()):  # type: ignore[no-untyped-def]
+    from binance_bot.binance_desktop.navigator import _OrderEvidence
+
+    return _OrderEvidence(count, available, list(filled), list(rejected))
 
 
 def _plan_20() -> object:
@@ -843,64 +849,114 @@ def _unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(execution, "_live_orders", True)
 
 
+def _with_evidence(monkeypatch, nav, before, after):  # type: ignore[no-untyped-def]
+    seq = iter([before])
+    monkeypatch.setattr(nav, "_order_evidence", lambda: next(seq, after))
+
+
 @pytest.mark.parametrize(
-    ("after", "label"),
-    [((1, 21.0), "Posisi bertambah"), ((None, 11.2), "saldo turun"), ((0, 11.2), "saldo turun")],
+    "after",
+    [
+        ev(1, 21.0),  # Posisi bertambah
+        ev(None, 11.2),  # saldo turun
+        ev(0, 11.2),
+        ev(None, None, filled=["Order Jual Market Terisi"]),  # uji nyata 10.11: toast terisi
+    ],
 )
 def test_press_short_accepts_proof_that_binance_opened_the_position(
-    monkeypatch: pytest.MonkeyPatch, after: tuple, label: str
+    monkeypatch: pytest.MonkeyPatch, after: object
 ) -> None:
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
-    evidence = iter([(0, 21.0)])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: next(evidence, after))
+    _with_evidence(monkeypatch, nav, ev(0, 21.0), after)
     nav.press_short(_plan_20())  # tidak ada galat: posisi terbukti terbuka
     assert len(pressed) == 1
 
 
-def test_press_short_without_proof_is_an_error_not_a_phantom_position(
+def test_an_old_fill_toast_is_not_proof(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Toast yang sudah tampil sebelum klik (mis. dari order manual) tidak dihitung."""
+    _unlocked(monkeypatch)
+    nav, _ = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    old = ["Order Jual Market Terisi"]
+    _with_evidence(monkeypatch, nav, ev(0, 21.0, filled=old), ev(0, 21.0, filled=old))
+    with pytest.raises(ScreenReadError, match="tidak masuk"):
+        nav.press_short(_plan_20())
+
+
+def test_press_short_clear_no_change_is_an_error_not_a_phantom_position(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Uji nyata (20 Okt, BRUSDT dan AGTUSDT): tombol ditekan, tetapi Binance tidak membuka posisi.
+    """Uji nyata (09.10, BRUSDT dan AGTUSDT): Posisi(0) dan Tersedia 21,00 tetap terbaca.
 
-    Posisi(0) dan Tersedia 21,00 tetap: order dianggap tidak masuk (galat), sehingga jurnal tidak
-    mencatat posisi sungguhan hantu. Tombol TIDAK diklik ulang (risiko posisi ganda).
+    Layar jelas menunjukkan order tidak masuk: galat, tidak ada posisi hantu, tanpa klik ulang.
     """
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: (0, 21.0))
-    with pytest.raises(ScreenReadError, match="tidak terkonfirmasi"):
+    monkeypatch.setattr(nav, "_order_evidence", lambda: ev(0, 21.0))
+    with pytest.raises(ScreenReadError, match="tidak masuk"):
         nav.press_short(_plan_20())
     assert len(pressed) == 1  # tanpa klik ulang
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (ev(None, 21.0), ev(None, None)),  # uji nyata 10.00: bacaan tidak lengkap
+        (ev(0, None), ev(None, 11.28)),
+        (ev(0, 21.0), ev(None, None)),  # uji nyata 10.11: halaman bergeser, tidak terbaca
+    ],
+)
+def test_uncertain_evidence_keeps_the_position_as_open(
+    monkeypatch: pytest.MonkeyPatch, before: object, after: object
+) -> None:
+    """Bacaan tidak lengkap: posisi dianggap TERBUKA (diawasi), bukan dianggap tidak masuk."""
+    _unlocked(monkeypatch)
+    nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    _with_evidence(monkeypatch, nav, before, after)
+    nav.press_short(_plan_20())  # tidak ada galat: jurnal mencatat posisi terbuka
+    assert len(pressed) == 1
 
 
 def test_press_short_reports_binance_rejection_message(monkeypatch: pytest.MonkeyPatch) -> None:
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: (0, 21.0))
-    monkeypatch.setattr(nav, "_order_messages", lambda: ["Order gagal: margin tidak cukup"])
+    monkeypatch.setattr(
+        nav, "_order_evidence", lambda: ev(0, 21.0, rejected=["Order gagal: margin tidak cukup"])
+    )
     with pytest.raises(ScreenReadError, match="margin tidak cukup"):
         nav.press_short(_plan_20())
     assert len(pressed) == 1
 
 
-def test_order_messages_pick_rejection_toasts_only() -> None:
+def test_order_evidence_reads_the_whole_window() -> None:
+    """Halaman bergeser (uji nyata 10.11): Tersedia dan Posisi dicari di seluruh jendela."""
     from fakes import text_lines as lines
 
     screen = FakeScreen(
-        texts={(0.0, 0.0, 1.0, 1.0): [lines("Buku Order", "Order gagal", "Maks 41,90 USDT")]}
+        texts={
+            (0.0, 0.0, 1.0, 1.0): [
+                lines(
+                    "Tersedia 11,07 USDT",
+                    "Posisi(1) Transaksi terbuka(0)",
+                    "Order Jual Market Terisi",
+                    "Order gagal",
+                    "Maks 41,90 USDT",
+                )
+            ]
+        }
     )
     nav = make_nav(screen)
     nav._rect = WINDOW
-    assert nav._order_messages() == ["Order gagal"]
+    got = nav._order_evidence()
+    assert (got.positions, got.available) == (1, 11.07)
+    assert got.filled == ["Order Jual Market Terisi"] and got.rejected == ["Order gagal"]
 
 
 def test_press_short_small_balance_noise_is_not_proof(monkeypatch: pytest.MonkeyPatch) -> None:
     _unlocked(monkeypatch)
     nav, _ = _locked_order_nav(monkeypatch, ["20", "USDT"])
-    evidence = iter([(None, 21.0)])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: next(evidence, (None, 20.5)))  # turun 0,5
-    with pytest.raises(ScreenReadError, match="tidak terkonfirmasi"):
+    _with_evidence(monkeypatch, nav, ev(0, 21.0), ev(0, 20.5))  # turun 0,5: bukan margin 9,78
+    with pytest.raises(ScreenReadError, match="tidak masuk"):
         nav.press_short(_plan_20())
 
 
@@ -910,9 +966,10 @@ def test_positions_count_reads_the_tab_label_even_with_letter_o() -> None:
     for label, expected in [
         ("Posisi(1) Transaksi terbuka(0)", 1),
         ("Posisi(O)", 0),
-        ("Riwayat Order", None),
+        ("Posisi(l)", 1),
+        ("Riwayat Posisi", None),
     ]:
-        screen = FakeScreen(texts={layout.POSITIONS_TAB_AREA: [lines(label)]})
+        screen = FakeScreen(texts={(0.0, 0.0, 1.0, 1.0): [lines(label)]})
         nav = make_nav(screen)
         nav._rect = WINDOW
         assert nav._positions_count() == expected
@@ -1223,3 +1280,24 @@ def test_the_1366_profile_is_internally_consistent() -> None:
             for x0, y0, x1, y1 in small.ORDER_BUTTON_ZONES
         )
     assert small.ORDER_UNIT_MIN_Y >= 0.6 and small.OCR_UPSCALE == 2
+
+
+def test_confirmation_dialog_warning_is_not_a_rejection() -> None:
+    """Uji nyata (10.00): dialog konfirmasi memuat "...order Anda akan gagal." (peringatan)."""
+    from fakes import text_lines as lines
+
+    screen = FakeScreen(
+        texts={
+            (0.0, 0.0, 1.0, 1.0): [
+                lines(
+                    "* Jika harga pasar menyimpang dari harga mark lebih dari 15%, order",
+                    "Anda akan gagal.",
+                    "Konfirmasi",
+                    "Selesaikan Kuis untuk Memulai",
+                )
+            ]
+        }
+    )
+    nav = make_nav(screen)
+    nav._rect = WINDOW
+    assert nav._order_evidence().rejected == ["Selesaikan Kuis untuk Memulai"]

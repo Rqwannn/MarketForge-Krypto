@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.order_buttons import find_pair, text_image
@@ -87,13 +87,22 @@ _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
 _SHORT_TEXT = re.compile(r"(Jual|Sell)\s*/?\s*Short|Short|Jual", re.IGNORECASE)
 _LONG_TEXT = re.compile(r"(Beli|Buy)\s*/?\s*Long|Long|Beli", re.IGNORECASE)
 _POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\([\dOo]+\)", re.IGNORECASE)  # "Posisi(O)"
-_POSITIONS_COUNT = re.compile(r"(?:Posisi|Positions?)\s*\(([\dOo]+)\)", re.IGNORECASE)
+# "Posisi(1)"; OCR seluruh jendela kadang membaca angkanya sebagai huruf ("Posisi(O)", "Posisi(l)").
+_POSITIONS_COUNT = re.compile(r"(?:Posisi|Positions?)\s*\(([\dOoIl|]+)\)", re.IGNORECASE)
 # Sesudah tombol Jual/Short ditekan: bukti posisi terbuka ditunggu sampai sekian detik. Uji nyata
 # (20 Okt, BRUSDT dan AGTUSDT): bot mencatat posisi sungguhan padahal Binance tidak membukanya.
 _ORDER_CONFIRM_S = 10.0
+_DIGIT_LOOKALIKE = str.maketrans("OoIl|", "00111")
+_FORM_COLUMN = (0.78, 0.0, 1.0, 1.0)  # kolom form order (tempat tombol dicari lewat warna)
+# Toast Binance sesudah order pasar terisi (uji nyata 20 Okt: "Order Dimasukkan", "Order Jual
+# Market Terisi"). Hanya toast yang BARU muncul sesudah klik yang dihitung sebagai bukti.
+_ORDER_FILLED = re.compile(r"Order\s+Jual\b.*Terisi|Sell\b.*Order.*Filled", re.IGNORECASE)
 # Pesan penolakan order Binance (toast), dicatat sebagai alasan bila order tidak masuk.
+# Bukan kata "gagal" saja: jendela konfirmasi order memuat kalimat peringatan "...order Anda akan
+# gagal" (uji nyata 20 Okt 10.00) yang bukan penolakan.
 _ORDER_MESSAGE = re.compile(
-    r"gagal|ditolak|tidak cukup|tidak mencukupi|kuis|melebihi|failed|rejected|insufficient|quiz",
+    r"order\s+gagal|gagal\s+(?:ditempatkan|dipasang|dibuat)|ditolak|tidak cukup|tidak mencukupi"
+    r"|selesaikan kuis|melebihi|order failed|rejected|insufficient|quiz",
     re.IGNORECASE,
 )
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
@@ -115,6 +124,15 @@ def _leverage_of(text: str) -> int | None:
 _CHART_LOAD_TIMEOUT_S = 25.0  # aplikasi bisa lambat memuat grafik
 _CHART_RETRY_TIMEOUT_S = 15.0  # tunggu sesudah klik "15 mnt" diulang
 _FORM_SHIFT_MIN = 0.02  # pergeseran lebih kecil dari ini dianggap galat ukur, bukan banner
+
+
+class _OrderEvidence(NamedTuple):
+    """Bukti order di layar: jumlah "Posisi(n)", saldo Tersedia, toast terisi, pesan penolakan."""
+
+    positions: int | None
+    available: float | None
+    filled: list[str]
+    rejected: list[str]
 
 
 def _shifted(
@@ -820,9 +838,51 @@ class BinanceNavigator:
         if not self._on_trade_page:
             return False
         shift = self._form_shift
-        return layout.in_order_button_zone(target) or (
+        if layout.in_order_button_zone(target) or (
             shift != 0.0 and layout.in_order_button_zone((target[0], target[1] - shift))
+        ):
+            return True
+        # Zona tetap bisa meleset: uji nyata (20 Okt) halaman koin bergeser naik ~100-200 piksel
+        # sesudah posisi terbuka, sehingga Jual/Short tampil di y 0,32, di LUAR zona tetap dan tepat
+        # di tempat kolom Jumlah biasanya. Karena itu tombol yang benar-benar tampil dicari lewat
+        # warnanya, dan klik ke dalamnya selalu ditolak.
+        return any(
+            x0 <= target[0] <= x1 and y0 <= target[1] <= y1
+            for x0, y0, x1, y1 in self._button_boxes(target)
         )
+
+    def _button_boxes(self, target: tuple[float, float]) -> list[tuple[float, float, float, float]]:
+        """Kotak tombol Beli/Long dan Jual/Short yang tampil (relatif jendela, diperlebar sedikit).
+
+        Hanya dicari bila titik klik berada di kolom form order; tanpa gambar (tes) daftar kosong.
+        """
+        x0, y0, x1, y1 = _FORM_COLUMN
+        if not self._COLOR_BUTTONS or not (x0 <= target[0] <= x1):
+            return []
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "kolom.png"
+            self._window.capture(self.rect.sub(*_FORM_COLUMN), path)
+            try:
+                with Image.open(path) as opened:
+                    image = opened.convert("RGB")
+            except (OSError, ValueError):
+                return []
+        pair = find_pair(image)
+        if pair is None:
+            return []
+        w, h = image.width, image.height
+        margin = 0.01
+        return [
+            (
+                x0 + box.x0 / w * (x1 - x0) - margin,
+                y0 + box.y0 / h * (y1 - y0) - margin,
+                x0 + box.x1 / w * (x1 - x0) + margin,
+                y0 + box.y1 / h * (y1 - y0) + margin,
+            )
+            for box in (pair.left, pair.right)
+        ]
 
     def _ensure_front(self) -> None:
         """Pastikan Binance jendela aktif. Klik, ketikan, dan tangkapan layar hanya berarti bila
@@ -1038,14 +1098,9 @@ class BinanceNavigator:
         logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
         self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
-        if self._await_order(plan, before, _ORDER_CONFIRM_S, photo="setelah-klik-short"):
-            return
-        # Uji nyata (20 Okt, BRUSDT dan AGTUSDT): klik tercatat, tetapi Binance tidak membuat order
-        # sama sekali (tanpa jendela konfirmasi, Riwayat Order kosong). Tombol TIDAK diklik ulang:
-        # bila order pertama ternyata masuk terlambat, klik kedua membuka posisi ganda.
-        messages = self._order_messages()
-        detail = f"Binance menampilkan: {messages}" if messages else "tidak ada posisi baru"
-        self._fail_order(plan, before, detail)
+        # Tombol TIDAK pernah diklik ulang: bila order pertama ternyata masuk terlambat, klik kedua
+        # membuka posisi ganda.
+        self._await_order(plan, before, _ORDER_CONFIRM_S, photo="setelah-klik-short")
 
     def _quantity_matches(self, plan: OrderPlan) -> tuple[bool, list[str]]:
         shown: list[str] = []
@@ -1062,79 +1117,116 @@ class BinanceNavigator:
 
     def _order_messages(self) -> list[str]:
         """Teks penolakan atau galat order yang tampil di jendela (toast Binance), bila ada."""
-        return [
-            line.text for line in self._read_lines(self.rect) if _ORDER_MESSAGE.search(line.text)
-        ]
+        return self._order_evidence().rejected
 
-    def _order_evidence(self) -> tuple[int | None, float | None]:
-        """(jumlah di tab "Posisi(n)", saldo Tersedia) saat ini; None = tidak terbaca."""
-        return self._positions_count(), self.available_usdt()
+    def _order_evidence(self) -> _OrderEvidence:
+        """Bukti order dari SELURUH jendela (satu kali OCR).
+
+        Dibaca di seluruh jendela, bukan di area tetap: uji nyata (20 Okt, BRUSDT) halaman Binance
+        bergeser naik ~100 piksel tepat sesudah order terisi, sehingga baris Tersedia dan tab
+        Posisi keluar dari area tetap dan bukti yang jelas di layar terbaca kosong.
+        """
+        texts = [line.text for line in self._read_lines(self.rect)]
+        count = None
+        for text in texts:
+            match = _POSITIONS_COUNT.search(text)
+            if match:
+                count = int(match.group(1).translate(_DIGIT_LOOKALIKE))
+                break
+        return _OrderEvidence(
+            positions=count,
+            available=parse_available_usdt(texts),
+            filled=[t for t in texts if _ORDER_FILLED.search(t)],
+            rejected=[t for t in texts if _ORDER_MESSAGE.search(t)],
+        )
 
     def _positions_count(self) -> int | None:
-        for line in self._read_lines(self.rect.sub(*layout.POSITIONS_TAB_AREA)):
-            match = _POSITIONS_COUNT.search(line.text)
-            if match:
-                return int(match.group(1).replace("O", "0").replace("o", "0"))
-        return None
+        return self._order_evidence().positions
 
     def _await_order(
-        self,
-        plan: OrderPlan,
-        before: tuple[int | None, float | None],
-        timeout_s: float,
-        *,
-        photo: str,
-    ) -> bool:
-        """Tunggu bukti Binance membuka posisi sesudah tombol Jual/Short ditekan; True bila ada.
+        self, plan: OrderPlan, before: _OrderEvidence, timeout_s: float, *, photo: str
+    ) -> None:
+        """Tunggu bukti Binance membuka posisi sesudah tombol Jual/Short ditekan.
 
-        Bukti: jumlah di tab "Posisi(n)" bertambah, atau saldo Tersedia turun setidaknya separuh
-        margin rencana. Foto layar diambil sekali di awal penantian (pesan Binance hanya tampil
-        beberapa detik). Selama menunggu, bot tidak mengklik apa pun.
+        Bukti: toast "Order Jual Market Terisi" yang baru muncul, jumlah di tab "Posisi(n)"
+        bertambah, atau saldo Tersedia turun setidaknya separuh margin. Selama menunggu bot tidak
+        mengklik apa pun; foto layar diambil sekali di awal (toast Binance hanya tampil sebentar).
+
+        Tanpa bukti sampai batas waktu, galat HANYA dilempar bila layar jelas menunjukkan order
+        tidak masuk (Posisi dan Tersedia terbaca dan tidak berubah, atau ada pesan penolakan).
+        Bila bacaannya tidak lengkap, posisi dianggap TERBUKA dan tetap diawasi: posisi sungguhan
+        yang tak tercatat (uji nyata 20 Okt 10.00 dan 10.11) jauh lebih berbahaya daripada posisi
+        tercatat yang ternyata tidak ada (penjualannya hanya gagal).
         """
-        count0, available0 = before
         deadline = self._clock() + timeout_s
         first = True
+        now = before
         while True:
             self._sleep(1.0)
             if first:
                 logger.info("Foto layar sesudah klik order: %s", self._save_debug_shot(photo))
                 first = False
-            count, available = self._order_evidence()
-            proof = (count is not None and count0 is not None and count > count0) or (
-                available is not None
-                and available0 is not None
-                and available0 - available >= plan.margin_usdt * 0.5
+            now = self._order_evidence()
+            new_toast = [t for t in now.filled if t not in before.filled]
+            more = (
+                now.positions is not None
+                and before.positions is not None
+                and now.positions > before.positions
             )
-            if proof:
+            spent = (
+                now.available is not None
+                and before.available is not None
+                and before.available - now.available >= plan.margin_usdt * 0.5
+            )
+            if new_toast or more or spent:
                 logger.info(
-                    "Order Short %s terkonfirmasi: Posisi %s -> %s, Tersedia %s -> %s",
+                    "Order Short %s terkonfirmasi: Posisi %s -> %s, Tersedia %s -> %s, toast %s",
                     plan.symbol,
-                    count0,
-                    count,
-                    available0,
-                    available,
+                    before.positions,
+                    now.positions,
+                    before.available,
+                    now.available,
+                    new_toast or "-",
                 )
-                return True
+                return
+            if now.rejected:
+                self._fail_order(plan, before, now, f"Binance menampilkan: {now.rejected}")
             if self._clock() >= deadline:
-                return False
-
-    def _fail_order(
-        self, plan: OrderPlan, before: tuple[int | None, float | None], detail: str
-    ) -> NoReturn:
-        """Order dianggap TIDAK masuk: jurnal tidak mencatat posisi sungguhan yang tidak ada."""
-        count, available = self._order_evidence()
-        shot = self._save_debug_shot("order-tidak-terkonfirmasi")
+                break
+        unchanged = (
+            now.positions is not None
+            and before.positions is not None
+            and now.positions == before.positions
+            and now.available is not None
+            and before.available is not None
+            and abs(before.available - now.available) < plan.margin_usdt * 0.5
+        )
+        if unchanged:
+            self._fail_order(plan, before, now, "Posisi dan saldo Tersedia tidak berubah")
+        shot = self._save_debug_shot("order-belum-pasti")
         logger.error(
-            "Order Short %s TIDAK terkonfirmasi di Binance (%s). Periksa Binance secara manual; "
-            "bila posisinya ternyata terbuka, tutup sendiri. Foto layar: %s",
+            "Order Short %s BELUM PASTI (Posisi %s -> %s, Tersedia %s -> %s): dicatat TERBUKA dan "
+            "diawasi demi keamanan. Periksa Binance secara manual. Foto layar: %s",
             plan.symbol,
-            detail,
+            before.positions,
+            now.positions,
+            before.available,
+            now.available,
             shot,
         )
+
+    def _fail_order(
+        self, plan: OrderPlan, before: _OrderEvidence, now: _OrderEvidence, detail: str
+    ) -> NoReturn:
+        """Order jelas TIDAK masuk: jurnal tidak mencatat posisi sungguhan yang tidak ada."""
+        shot = self._save_debug_shot("order-tidak-terkonfirmasi")
+        logger.error(
+            "Order Short %s TIDAK masuk di Binance (%s). Foto layar: %s", plan.symbol, detail, shot
+        )
         raise ScreenReadError(
-            f"Order Short {plan.symbol} tidak terkonfirmasi: {detail} (Posisi {before[0]} -> "
-            f"{count}, Tersedia {before[1]} -> {available}); tidak dicatat sebagai posisi "
-            f"sungguhan. Foto layar: {shot}"
+            f"Order Short {plan.symbol} tidak masuk: {detail} (Posisi {before.positions} -> "
+            f"{now.positions}, Tersedia {before.available} -> {now.available}); "
+            f"tidak dicatat sebagai posisi sungguhan. Foto layar: {shot}"
         )
 
     def close_position(self, symbol: str) -> None:
