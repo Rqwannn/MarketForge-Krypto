@@ -12,7 +12,7 @@ dependencies = [
     "pyobjc-framework-Cocoa>=10; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
     "pyobjc-framework-Vision>=10; sys_platform == 'darwin'",
-    "Pillow>=10; sys_platform == 'win32'",
+    "Pillow>=10",
     "winrt-runtime>=2; sys_platform == 'win32'",
     "winrt-Windows.Foundation>=2; sys_platform == 'win32'",
     "winrt-Windows.Foundation.Collections>=2; sys_platform == 'win32'",
