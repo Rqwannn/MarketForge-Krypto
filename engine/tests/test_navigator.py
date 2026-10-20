@@ -1214,21 +1214,6 @@ def test_leverage_is_not_clicked_blindly_when_nothing_could_be_read(
     assert len(clicks(screen)) == before
 
 
-def test_positions_panel_follows_a_banner_shift(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Uji nyata (BRUSDT): banner menggeser panel Posisi ~0,065 sampai barisnya keluar jendela."""
-    monkeypatch.setattr(layout, "POSITIONS_TAB_Y", 0.857, raising=False)
-    nav = make_nav()
-    nav.prepare()
-    assert nav._measure_positions_shift((0.1, 0.857 + 0.003)) == 0.0  # galat ukur
-    shift = nav._measure_positions_shift((0.1, 0.920))
-    assert shift == pytest.approx(0.063)
-    nav._positions_shift = shift
-    x0, y0, x1, _y1 = layout.POSITIONS_TABLE_AREA
-    assert nav._positions_table() == (x0, pytest.approx(min(1.0, y0 + shift)), x1, 1.0)
-    monkeypatch.setattr(layout, "POSITIONS_TAB_Y", None)
-    assert nav._measure_positions_shift((0.1, 0.9)) == 0.0  # profil tanpa kalibrasi: tidak digeser
-
-
 @pytest.mark.parametrize(
     "label", ["Posisi(0)", "Posisi(O) Transaksi terbuka(O) Riwayat Order", "Positions(2)"]
 )
@@ -1301,3 +1286,83 @@ def test_confirmation_dialog_warning_is_not_a_rejection() -> None:
     nav = make_nav(screen)
     nav._rect = WINDOW
     assert nav._order_evidence().rejected == ["Selesaikan Kuis untuk Memulai"]
+
+
+# ------------------------------------------------------------------ jual otomatis (tutup posisi)
+
+
+def _page(*items: tuple[str, float, float]) -> list[TextLine]:
+    """Teks seluruh jendela pada posisi relatif jendela (x, y)."""
+    return [TextLine(t, x, y) for t, x, y in items]
+
+
+WITH_ROW = _page(
+    ("Posisi(1) Transaksi terbuka(0)", 0.15, 0.86),
+    ("BRUSDT Perp 2x", 0.07, 0.93),
+    ("Market", 0.783, 0.93),
+    ("Order Jual Market Terisi", 0.90, 0.93),  # toast di kanan bawah, bukan tombol
+)
+TAB_ONLY = _page(("Posisi(1) Transaksi terbuka(0)", 0.15, 0.86))
+AFTER = _page(("Posisi(0) Transaksi terbuka(0)", 0.15, 0.86))
+
+
+def _closing_nav(
+    monkeypatch: pytest.MonkeyPatch, pages: list[list[TextLine]]
+) -> tuple[BinanceNavigator, FakeScreen]:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)
+    screen = FakeScreen(texts={(0.0, 0.0, 1.0, 1.0): pages})
+    nav = make_nav(screen)
+    nav._rect, nav._on_trade_page = WINDOW, True
+    return nav, screen
+
+
+def test_close_position_finds_tab_row_and_market_button_anywhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nav, screen = _closing_nav(monkeypatch, [WITH_ROW] * 4 + [AFTER])
+    nav.close_position("BRUSDT")
+    assert clicks(screen) == [WINDOW.point_at(0.15, 0.86), WINDOW.point_at(0.783, 0.93)]
+
+
+def test_close_position_scrolls_a_little_when_the_row_is_below_the_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pengguna: "pas jual otomatis gak keliatan tombolnya, harus agak di scroll sedikit"."""
+    nav, screen = _closing_nav(monkeypatch, [TAB_ONLY, TAB_ONLY] + [WITH_ROW] * 4 + [AFTER])
+    nav.close_position("BRUSDT")
+    kinds = [kind for kind, _ in screen.events]
+    assert "scroll_down" in kinds and kinds[-1] == "scroll_up"  # digulir, lalu dikembalikan
+    assert clicks(screen)[-1] == WINDOW.point_at(0.783, 0.93)
+
+
+def test_close_position_never_clicks_a_toast_instead_of_the_market_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    row_without_button = _page(
+        ("Posisi(1) Transaksi terbuka(0)", 0.15, 0.86),
+        ("BRUSDT Perp 2x", 0.07, 0.93),
+        ("Order Jual Market Terisi", 0.90, 0.93),
+    )
+    nav, screen = _closing_nav(monkeypatch, [row_without_button])
+    with pytest.raises(ScreenReadError, match="Tombol Market"):
+        nav.close_position("BRUSDT")
+    assert clicks(screen) == [WINDOW.point_at(0.15, 0.86)]  # hanya tab Posisi
+
+
+def test_close_position_that_stays_open_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    nav, _ = _closing_nav(monkeypatch, [WITH_ROW])
+    with pytest.raises(ScreenReadError, match="masih terlihat"):
+        nav.close_position("BRUSDT")
+
+
+def test_close_position_does_not_take_the_page_title_for_a_position_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    title_only = _page(
+        ("BRUSDT Perpetual", 0.10, 0.07), ("Posisi(0) Transaksi terbuka(0)", 0.15, 0.86)
+    )
+    nav, _ = _closing_nav(monkeypatch, [title_only])
+    with pytest.raises(ScreenReadError, match="tidak ada di tab Posisi"):
+        nav.close_position("BRUSDT")

@@ -92,6 +92,8 @@ _POSITIONS_COUNT = re.compile(r"(?:Posisi|Positions?)\s*\(([\dOoIl|]+)\)", re.IG
 # Sesudah tombol Jual/Short ditekan: bukti posisi terbuka ditunggu sampai sekian detik. Uji nyata
 # (20 Okt, BRUSDT dan AGTUSDT): bot mencatat posisi sungguhan padahal Binance tidak membukanya.
 _ORDER_CONFIRM_S = 10.0
+_CLOSE_SCROLL_NOTCHES = 2  # gulir halaman sedikit bila baris posisi belum terlihat
+_CLOSE_SCROLL_TRIES = 2
 _DIGIT_LOOKALIKE = str.maketrans("OoIl|", "00111")
 _FORM_COLUMN = (0.78, 0.0, 1.0, 1.0)  # kolom form order (tempat tombol dicari lewat warna)
 # Toast Binance sesudah order pasar terisi (uji nyata 20 Okt: "Order Dimasukkan", "Order Jual
@@ -168,7 +170,6 @@ class BinanceNavigator:
         self._rect: Rect | None = None
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
-        self._positions_shift = 0.0  # pergeseran panel Posisi (diukur dari tab saat menutup posisi)
         self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
@@ -1233,8 +1234,12 @@ class BinanceNavigator:
         """Tutup posisi `symbol` di bursa: tab Posisi -> baris koin -> tombol Market.
 
         Hanya saat Real Fund Trading. Tombol Market di baris posisi langsung menutup seluruh posisi
-        koin itu (tanpa dialog). Setelah klik, tabel dibaca ulang: bila baris koin masih ada,
-        dianggap gagal supaya jurnal tidak mencatat posisi tertutup padahal masih terbuka.
+        koin itu (tanpa dialog). Tab, baris, dan tombol dicari di SELURUH jendela, bukan area tetap:
+        uji nyata (20 Okt) halaman koin bergeser 100-200 piksel sesudah posisi terbuka, dan baris
+        posisi bisa berada di bawah tepi jendela. Bila barisnya belum terlihat, halaman digulir
+        sedikit di atas panel Posisi (bukan di atas grafik), lalu dikembalikan sesudahnya. Setelah
+        klik, layar dibaca ulang: bila baris koin masih ada, dianggap gagal supaya jurnal tidak
+        mencatat posisi tertutup padahal masih terbuka.
         """
         if not live_orders_enabled():
             raise SafetyError(
@@ -1242,70 +1247,95 @@ class BinanceNavigator:
             )
         if self._rect is None:  # menu Posisi (Sell manual): Binance belum disiapkan
             self.prepare()
-        tab = self._find_text(layout.POSITIONS_TAB_AREA, _POSITIONS_TAB)
-        if tab is None:
-            raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
-        self._positions_shift = self._measure_positions_shift(tab)
-        self._click(tab)
-        # Tabel bisa masih tergeser ke kanan (kolom nama koin tersembunyi): kembalikan ke kiri.
-        x0, y0, x1, y1 = self._positions_table()
-        center = self.rect.point_at((x0 + x1) / 2, (y0 + y1) / 2)
-        self._ensure_front()
-        self._window.scroll_horizontal(*center, -layout.POSITIONS_SCROLL_NOTCHES)
-        self._sleep(0.5)
-        row_y = self._position_row(symbol)
-        if row_y is None:
-            if self._positions_shift >= _FORM_SHIFT_MIN * 1.5:
-                raise ScreenReadError(
-                    f"Baris posisi {symbol} tidak terlihat: banner di halaman koin ini mendorong "
-                    "panel Posisi keluar jendela. Buka halaman koin tanpa banner dan coba lagi."
-                )
-            raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
-        middle = self.rect.point_at((x0 + x1) / 2, row_y)
-        self._ensure_front()
-        self._window.scroll_horizontal(*middle, layout.POSITIONS_SCROLL_NOTCHES)
-        self._sleep(0.8)
+        scrolled = 0
+        sideways = False
+        point = self.rect.point_at(0.30, 0.95)
         try:
-            target = None
-            for line in self._read_lines(self.rect.sub(*self._positions_table())):
-                match = _MARKET_CLOSE.search(line.text)
-                y = y0 + line.y * (y1 - y0)
-                if match and abs(y - row_y) < 0.02:
-                    x = line.x
-                    if line.width and len(line.text) > len(match.group()):
-                        mid = (match.start() + match.end()) / 2
-                        x = line.x - line.width / 2 + line.width * mid / len(line.text)
-                    target = (x0 + x * (x1 - x0), y)
+            tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT)
+            if tab is None:
+                self._scroll_page_down(point, _CLOSE_SCROLL_NOTCHES)
+                scrolled += _CLOSE_SCROLL_NOTCHES
+                tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT)
+            if tab is None:
+                raise ScreenReadError("Tab Posisi di panel bawah Binance tidak ditemukan")
+            self._click(tab)
+            point = self.rect.point_at(0.30, min(0.95, tab[1] + 0.06))
+            row = self._position_row(symbol, tab[1])
+            for _ in range(_CLOSE_SCROLL_TRIES):
+                if row is not None:
                     break
+                self._scroll_page_down(point, _CLOSE_SCROLL_NOTCHES)
+                scrolled += _CLOSE_SCROLL_NOTCHES
+                tab = self._find_text((0.0, 0.0, 1.0, 1.0), _POSITIONS_COUNT) or tab
+                row = self._position_row(symbol, tab[1])
+            if row is None:
+                raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
+            target = self._market_button(row)
             if target is None:
-                raise ScreenReadError(f"Tombol Market di baris posisi {symbol} tidak ditemukan")
+                # Kolom tombol bisa tersembunyi di kanan tabel: geser tabel ke kanan.
+                self._ensure_front()
+                self._window.scroll_horizontal(
+                    *self.rect.point_at(0.40, row), layout.POSITIONS_SCROLL_NOTCHES
+                )
+                sideways = True
+                self._sleep(0.8)
+                row = self._position_row(symbol, tab[1]) or row
+                target = self._market_button(row)
+            if target is None:
+                shot = self._save_debug_shot("tombol-market")
+                raise ScreenReadError(
+                    f"Tombol Market di baris posisi {symbol} tidak ditemukan. Foto layar: {shot}"
+                )
+            before = self._order_evidence().positions
             logger.warning("ORDER SUNGGUHAN: tutup posisi %s (Market)", symbol)
             self._click(target)
             self._sleep(self._settings.settle_delay_s)
+            still = self._position_row(symbol, tab[1])
+            after = self._order_evidence().positions
         finally:
-            self._ensure_front()
-            self._window.scroll_horizontal(*middle, -layout.POSITIONS_SCROLL_NOTCHES)
-            self._sleep(0.5)
-        if self._position_row(symbol) is not None:
+            if sideways:
+                self._ensure_front()
+                self._window.scroll_horizontal(*point, -layout.POSITIONS_SCROLL_NOTCHES)
+            if scrolled:
+                self._ensure_front()
+                self._window.scroll_up(*point)  # kembali ke atas halaman
+                self._sleep(0.5)
+        closed = still is None or (after is not None and before is not None and after < before)
+        if not closed:
             raise ScreenReadError(f"Posisi {symbol} masih terlihat di tab Posisi setelah ditutup")
         logger.info("Posisi %s sudah tertutup di Binance", symbol)
 
-    def _measure_positions_shift(self, tab: tuple[float, float]) -> float:
-        """Banner mendorong panel Posisi ke bawah: selisih tinggi tab dari tinggi normalnya."""
-        if layout.POSITIONS_TAB_Y is None:
-            return 0.0
-        shift = tab[1] - layout.POSITIONS_TAB_Y
-        return shift if abs(shift) >= _FORM_SHIFT_MIN else 0.0
+    def _scroll_page_down(self, point: tuple[int, int], notches: int) -> None:
+        self._ensure_front()
+        self._window.scroll_down(*point, notches)
+        self._sleep(0.8)
 
-    def _positions_table(self) -> tuple[float, float, float, float]:
-        return _shifted(layout.POSITIONS_TABLE_AREA, self._positions_shift)
+    def _position_row(self, symbol: str, below: float) -> float | None:
+        """Tinggi baris posisi `symbol` (relatif jendela) di bawah tab Posisi, atau None.
 
-    def _position_row(self, symbol: str) -> float | None:
-        """Tinggi baris posisi `symbol` (relatif jendela) di tabel Posisi, atau None."""
-        _, y0, _, y1 = self._positions_table()
-        for line in self._read_lines(self.rect.sub(*self._positions_table())):
-            if symbol in line.text.replace(" ", "").upper():
-                return y0 + line.y * (y1 - y0)
+        Dibatasi di kiri kolom form (x < 0,80) dan di bawah tab, supaya judul halaman koin
+        ("BRUSDT Perpetual") dan toast di kanan bawah tidak dikira baris posisi.
+        """
+        for line in self._read_lines(self.rect):
+            if (
+                line.y > below + 0.02
+                and line.x < 0.80
+                and symbol in line.text.replace(" ", "").upper()
+            ):
+                return line.y
+        return None
+
+    def _market_button(self, row_y: float) -> tuple[float, float] | None:
+        """Tombol "Market" di baris posisi (sejajar baris, di kiri kolom form), atau None."""
+        for line in self._read_lines(self.rect):
+            match = _MARKET_CLOSE.search(line.text)
+            if not match or abs(line.y - row_y) >= 0.02 or line.x >= 0.80:
+                continue
+            x = line.x
+            if line.width and len(line.text) > len(match.group()):
+                mid = (match.start() + match.end()) / 2
+                x = line.x - line.width / 2 + line.width * mid / len(line.text)
+            return x, line.y
         return None
 
     def _capture(self, area: Rect, path: Path) -> Path:
