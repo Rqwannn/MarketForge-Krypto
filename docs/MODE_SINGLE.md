@@ -54,7 +54,7 @@ mengetik sungguhan.
 4. **Pasar → Futures**, urutkan "Perubahan 24jam" sampai OCR memastikan urutan dari kenaikan
    tertinggi; klik ulang tab Futures bila daftar belum tampil.
 5. Untuk setiap rank: buka halaman trade, baca nama pair (setiap pair dinilai sekali).
-6. Saringan biaya: pair USDT, funding, spread (dan kenaikan minimal bila `MIN_NAIK` diisi).
+6. Saringan biaya: pair USDT, spread (dan kenaikan minimal bila `MIN_NAIK` diisi). Funding rate tidak dinilai.
 7. Klik "Grafik" dan "15 mnt" (dicari dengan OCR), tunggu grafik termuat, screenshot, lalu
    **Haiku menghitung berapa kali MA7 di bawah MA25** → JANGAN / TUNGGU / OK.
 8. Bila OK: ukuran posisi (margin × leverage), baca leverage (peringatan bila bukan
@@ -76,7 +76,7 @@ Contoh jawaban Haiku dari uji nyata (12 Okt 2026, tanpa API):
 
 | Lokasi | Isi |
 |---|---|
-| `engine/journal/sop.jsonl` | Satu baris per koin yang dinilai: status (`skipped`, `open`, `target`, `stop`, `timeout`), alasan, hitungan pola AI dan data, keputusan, funding, spread, modal, margin, leverage, harga masuk/keluar/tertinggi, hasil bersih (% posisi, USDT, % modal) |
+| `engine/journal/sop.jsonl` | Satu baris per koin yang dinilai: status (`skipped`, `open`, `target`, `stop`, `timeout`), alasan, hitungan pola AI dan data, keputusan, spread, modal, margin, leverage, harga masuk/keluar/tertinggi, hasil bersih (% posisi, USDT, % modal) |
 | `engine/screenshots/<waktu>_<PAIR>_rank<N>.png` | Halaman trade saat dinilai |
 | `engine/screenshots/<waktu>_<PAIR>_rank<N>_15m.png` | Grafik 15 menit yang dibaca Haiku |
 | `engine/logs/bot.log` | Log lengkap |

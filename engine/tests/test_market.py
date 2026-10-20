@@ -20,7 +20,6 @@ RESPONSES: dict[str, Any] = {
         ]
     },
     "ticker/bookTicker": {"bidPrice": "0.10831", "askPrice": "0.10833"},
-    "premiumIndex": {"lastFundingRate": "-0.00000795"},
     "ticker/24hr": {"priceChangePercent": "54.26"},
     "klines": [[0, "1", "2", "0.5", "1.5", "100", 899999]],
 }
@@ -41,7 +40,8 @@ def test_rules_quote_and_klines_are_parsed() -> None:
 
     assert market.rules("STRKUSDT").step == 0.1
     quote = market.quote("STRKUSDT")
-    assert (quote.change_pct, quote.funding_rate) == (54.26, -0.00000795)
+    assert quote.change_pct == 54.26
+    assert not any("premiumIndex" in u for u in urls)  # funding rate tidak diambil lagi
     assert quote.spread_pct == pytest.approx(0.0185, abs=0.0005)
     assert market.klines("STRKUSDT", "15m", limit=40)[0].high == 2.0
     assert any("interval=15m" in u and "limit=40" in u for u in urls)

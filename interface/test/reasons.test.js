@@ -33,19 +33,24 @@ test('garis berdekatan dijelaskan sebagai alasan menunggu, bukan "baru sekali di
   assert.equal(step(card, 'slot').state, 'skip');
 });
 
-test('pola OK tetapi funding terlalu negatif: batal karena biaya', () => {
-  const card = explain(GTC);
+test('catatan lama yang dilewati aturan funding dijelaskan sebagai aturan lama', () => {
+  const card = explain(GTC, { plain: () => 'aturan funding lama' });
   assert.equal(card.tone, 'bad');
   assert.equal(card.stoppedAt, 'funding');
+  assert.match(step(card, 'funding').title, /lama, sudah dihapus/);
+  assert.equal(card.because, 'aturan funding lama');
   assert.equal(step(card, 'pola').state, 'pass');
-  assert.match(card.because, /-0,3277%.*short membayar.*-0,10%/);
   assert.equal(step(card, 'spread').state, 'pass');
+  assert.equal(step(card, 'order'), undefined);
 });
 
-test('funding buruk pada koin yang polanya sudah ditolak hanya informasi', () => {
-  const card = explain({ ...GTC, verdict: 'jangan', reason: 'pola garis kuning JANGAN', ai: { below_count: 0 } });
-  assert.equal(step(card, 'funding').state, 'info');
-  assert.equal(card.stoppedAt, 'pola');
+test('funding rate tidak pernah menyaring koin baru', () => {
+  const card = explain({ ...GTC, status: 'open', reason: '' });
+  assert.equal(step(card, 'funding'), undefined);
+  assert.equal(card.tone, 'good');
+  const pattern = explain({ ...GTC, verdict: 'jangan', reason: 'pola garis kuning JANGAN', ai: { below_count: 0 } });
+  assert.equal(step(pattern, 'funding'), undefined);
+  assert.equal(pattern.stoppedAt, 'pola');
 });
 
 test('baru sekali di bawah dan jangan short punya penjelasan sendiri', () => {
@@ -116,6 +121,7 @@ test('ringkasan AI dipisah dari daftar bacaan', () => {
 });
 
 test('limits dari engine menimpa angka bawaan', () => {
-  const card = explain({ ...GTC, limits: { min_funding_pct: -1 } });
-  assert.equal(step(card, 'funding').state, 'pass');
+  const wide = { status: 'skipped', verdict: 'ok', spread_pct: 0.4, ai: { below_count: 3, below_recent: true } };
+  assert.equal(step(explain(wide), 'spread').state, 'fail');
+  assert.equal(step(explain({ ...wide, limits: { max_spread_pct: 0.5 } }), 'spread').state, 'pass');
 });

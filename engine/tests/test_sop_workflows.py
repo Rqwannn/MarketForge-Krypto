@@ -121,42 +121,47 @@ def test_pattern_not_ok_means_no_entry(tmp_path: Path, pattern: Any, word: str) 
     assert nav.filled == [] and gate.plans == []
 
 
-@pytest.mark.parametrize(
-    ("quote", "reason"),
-    [(Quote(1.0, 1.0005, -0.002, 50.0), "funding"), (Quote(1.0, 1.01, 0.0001, 50.0), "spread")],
-)
-def test_cost_filters_reject_after_the_pattern_is_judged(
-    tmp_path: Path, quote: Quote, reason: str
-) -> None:
-    # Urutan SOP: pola, lalu biaya. Koin yang biayanya mahal tetap dibaca AI dan tampil lengkap
+def test_spread_filter_rejects_after_the_pattern_is_judged(tmp_path: Path) -> None:
+    # Urutan SOP: pola, lalu biaya. Koin yang spread-nya lebar tetap dibaca AI dan tampil lengkap
     # (grafik, penilaian), tapi tidak pernah dibuka.
     nav = FakeNavigator({1: "STRKUSDT"})
-    trader, gate, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=quote))
+    trader, gate, _, _ = make_trader(tmp_path, nav, FakeMarket(quote=Quote(1.0, 1.01, 50.0)))
     analyzer = FakePatternAnalyzer(OK)
     entry = trader.trade(1, "STRKUSDT", source(analyzer))
-    assert entry.status == "skipped" and reason in entry.reason
+    assert entry.status == "skipped" and "spread" in entry.reason
     assert len(analyzer.calls) == 1 and entry.verdict == "ok" and entry.screenshots
     assert nav.filled == [] and gate.plans == []
 
 
 def test_default_cost_limits_are_loose_until_the_sop_gives_numbers(tmp_path: Path) -> None:
-    # SOP V2 tidak menyebut angka. Koin ETF dengan spread 0,23% dan funding -0,08% tetap boleh.
-    etf = FakeMarket(quote=Quote(17.16, 17.20, -0.0008, 8.7))
+    # SOP V2 tidak menyebut angka. Koin ETF dengan spread 0,23% tetap boleh.
+    etf = FakeMarket(quote=Quote(17.16, 17.20, 8.7))
     trader, _, _, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}), etf)
     assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
-    assert (SopParams().max_spread_pct, SopParams().min_funding_pct) == (0.3, -0.1)
+    assert SopParams().max_spread_pct == 0.3
+
+
+def test_funding_rate_never_filters_a_coin(tmp_path: Path) -> None:
+    # Keputusan tim 20 Okt 2026: scalping singkat, funding rate tidak dipakai menyaring koin.
+    assert not hasattr(SopParams(), "min_funding_pct")
+    assert "funding_rate" not in Quote.__slots__
+    trader, _, _, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}))
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "open" and entry.funding_rate is None
+    event = coin_event(entry, SopParams())["event"]
+    assert not any("funding" in key for key in [*event, *event["limits"]])
 
 
 def test_pattern_reason_wins_over_cost_reason_when_pattern_is_not_ok(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"})
-    wide = FakeMarket(quote=Quote(1.0, 1.01, 0.0001, 50.0))
+    wide = FakeMarket(quote=Quote(1.0, 1.01, 50.0))
     trader, _, _, _ = make_trader(tmp_path, nav, wide)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(NEVER)))
     assert entry.verdict == "jangan" and "spread" not in entry.reason
 
 
 def test_min_gain_filter_is_off_by_default_and_optional(tmp_path: Path) -> None:
-    calm = FakeMarket(quote=Quote(1.0, 1.0005, 0.0001, 5.0))
+    calm = FakeMarket(quote=Quote(1.0, 1.0005, 5.0))
     trader, _, _, _ = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}), calm)
     assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
     strict, _, _, _ = make_trader(
@@ -212,11 +217,11 @@ def test_the_number_of_open_positions_is_not_limited(tmp_path: Path) -> None:
 def test_second_coin_only_when_first_is_not_losing(tmp_path: Path) -> None:
     trader, _, journal, market = make_trader(tmp_path, FakeNavigator({1: "STRKUSDT"}))
     journal.append(open_trade("CFXUSDT", entry_price=1.0))
-    market.quotes["CFXUSDT"] = Quote(bid=1.009, ask=1.01, funding_rate=0.0, change_pct=40.0)
+    market.quotes["CFXUSDT"] = Quote(bid=1.009, ask=1.01, change_pct=40.0)
     losing = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert "CFXUSDT sedang rugi" in losing.reason
 
-    market.quotes["CFXUSDT"] = Quote(bid=0.99, ask=0.991, funding_rate=0.0, change_pct=40.0)
+    market.quotes["CFXUSDT"] = Quote(bid=0.99, ask=0.991, change_pct=40.0)
     assert trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK))).status == "open"
 
 
@@ -628,6 +633,26 @@ def test_journal_report_lists_ai_analyses_with_their_chart(tmp_path: Path) -> No
     assert coin_event(journal.load()[0])["event"]["chart"] == "screenshots/a_rank2_15m.png"
 
 
+def test_journal_report_sends_old_analyses_too_with_the_total(tmp_path: Path) -> None:
+    """Riwayat lama tetap terlihat: bukan hanya 30 terakhir (aplikasi menampilkannya bertahap)."""
+    journal = Journal(tmp_path / "sop.jsonl")
+    for i in range(45):
+        journal.append(
+            JournalEntry(
+                id=f"a{i}", created_at=float(i), symbol=f"C{i}USDT", rank=1, verdict="tunggu"
+            )
+        )
+        journal.append(JournalEntry(id=f"x{i}", created_at=i + 0.5, symbol="XUSDT", rank=2))
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(), journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 99.0
+    ).run()  # type: ignore[arg-type]
+    report = json.loads(out[0])
+    assert report["analyses_total"] == 45  # yang tidak dinilai AI tidak dihitung
+    assert [a["symbol"] for a in report["analyses"]][:2] == ["C0USDT", "C1USDT"]  # yang tertua ikut
+    assert len(report["analyses"]) == 45
+
+
 def test_journal_report_still_works_when_binance_api_is_blocked(tmp_path: Path) -> None:
     class BlockedMarket(FakeMarket):
         def klines(self, symbol: str, interval: str, **_: object) -> list[Any]:
@@ -689,7 +714,7 @@ def run_positions(journal: Journal, market: FakeMarket, close: str | None = None
 def test_positions_lists_open_trades_with_unrealized_result(tmp_path: Path) -> None:
     journal = Journal(tmp_path / "sop.jsonl")
     journal.append(open_trade("CKBUSDT", entry_price=1.0))
-    market = FakeMarket(quote=Quote(bid=0.97, ask=0.98, funding_rate=0.0001, change_pct=50.0))
+    market = FakeMarket(quote=Quote(bid=0.97, ask=0.98, change_pct=50.0))
     market.minute_candles = [candle(1.0, 1.005, 0.99, 0.99, 1, 1)]  # belum kena target/stop
     result = run_positions(journal, market)
     [position] = result["positions"]
@@ -703,7 +728,7 @@ def test_sell_closes_one_pair_at_the_ask_without_touching_binance(tmp_path: Path
     journal = Journal(tmp_path / "sop.jsonl")
     journal.append(open_trade("CKBUSDT", entry_price=1.0))
     journal.append(open_trade("WUSDT", entry_price=1.0))
-    market = FakeMarket(quote=Quote(bid=0.98, ask=0.99, funding_rate=0.0001, change_pct=50.0))
+    market = FakeMarket(quote=Quote(bid=0.98, ask=0.99, change_pct=50.0))
     result = run_positions(journal, market, close="CKBUSDT")
     assert [c["symbol"] for c in result["closed"]] == ["CKBUSDT"]
     assert result["closed"][0]["pnl_pct"] == pytest.approx(0.9)  # beli kembali di ask 0,99
@@ -1015,9 +1040,9 @@ def test_tebbit_auto_sells_from_the_screen_price_when_the_target_is_reached(
     held = open_trade("SKDDUSDT", entry_price=1.0)  # jual otomatis di 0,98 (open_trade)
     held.created_at = NOW.timestamp() - 600
     journal.append(held)
-    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.991, funding_rate=0.0, change_pct=20.0)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.991, change_pct=20.0)
     assert trader.refresh_journal()[0].status == "open"  # belum sampai target: tahan
-    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, funding_rate=0.0, change_pct=20.0)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, change_pct=20.0)
     [sold] = trader.refresh_journal()
     assert (sold.status, sold.exit_price) == ("target", 0.976)
     assert journal.load()[0].status == "target"
@@ -1037,7 +1062,7 @@ def test_real_fund_auto_sell_closes_on_the_exchange_or_keeps_the_position_open(
     held.created_at = NOW.timestamp() - 600
     held.real = True  # posisi sungguhan (tombol Short ditekan)
     journal.append(held)
-    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, funding_rate=0.0, change_pct=20.0)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.975, ask=0.976, change_pct=20.0)
 
     class Refusing(FakeNavigator):
         def close_position(self, symbol: str) -> None:
@@ -1123,15 +1148,13 @@ def test_once_mode_with_real_money_keeps_watching_until_the_position_is_sold(
     held = open_trade("SKDDUSDT", entry_price=1.0)
     held.created_at, held.real = NOW.timestamp() - 600, True
     journal.append(held)
-    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=20.0)
+    market.quotes["SKDDUSDT"] = Quote(bid=0.99, ask=0.995, change_pct=20.0)
     sleeps: list[float] = []
 
     def sleep(seconds: float) -> None:
         sleeps.append(seconds)
         if len(sleeps) == 3:  # harga akhirnya turun ke target di pengecekan ketiga
-            market.quotes["SKDDUSDT"] = Quote(
-                bid=0.97, ask=0.975, funding_rate=0.0, change_pct=20.0
-            )
+            market.quotes["SKDDUSDT"] = Quote(bid=0.97, ask=0.975, change_pct=20.0)
 
     SingleWorkflow(
         nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=sleep
@@ -1252,7 +1275,7 @@ def test_two_positions_at_target_are_sold_one_after_the_other_with_a_fresh_price
     journal.append(_real_position("AUSDT"))
     journal.append(_real_position("BUSDT"))
     for symbol in ("AUSDT", "BUSDT"):  # keduanya sudah di target (0,98)
-        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, change_pct=1.0)
 
     order: list[str] = []
 
@@ -1260,7 +1283,7 @@ def test_two_positions_at_target_are_sold_one_after_the_other_with_a_fresh_price
         def close_position(self, symbol: str) -> None:
             order.append(symbol)
             # Sesudah posisi pertama dijual, harga posisi kedua memantul di atas target.
-            market.quotes["BUSDT"] = Quote(bid=0.995, ask=1.0, funding_rate=0.0, change_pct=1.0)
+            market.quotes["BUSDT"] = Quote(bid=0.995, ask=1.0, change_pct=1.0)
 
     trader._nav = Seller({})  # type: ignore[assignment]
     done = {e.symbol: e.status for e in trader.refresh_journal()}
@@ -1278,7 +1301,7 @@ def test_a_second_position_still_at_target_is_sold_after_the_first_finishes(
     journal.append(_real_position("AUSDT"))
     journal.append(_real_position("BUSDT"))
     for symbol in ("AUSDT", "BUSDT"):
-        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+        market.quotes[symbol] = Quote(bid=0.97, ask=0.975, change_pct=1.0)
     done = {e.symbol: e.status for e in trader.refresh_journal()}
     assert done == {"AUSDT": "target", "BUSDT": "target"}
     assert nav.calls.count("close_position:AUSDT") == nav.calls.count("close_position:BUSDT") == 1
@@ -1294,7 +1317,7 @@ def test_a_position_another_bot_already_sold_is_not_sold_again(
     sold = _real_position("AUSDT")
     sold.status, sold.exit_price, sold.closed_at, sold.pnl_pct = "target", 0.975, 1.0, 2.5
     journal.append(sold)  # bot lain sudah menjual dan mencatatnya
-    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, change_pct=1.0)
     trader.refresh_journal()
     assert nav.calls == []  # tidak ada klik Market kedua untuk posisi yang sudah tertutup
 
@@ -1384,13 +1407,13 @@ def test_real_positions_keep_being_watched_even_when_every_round_fails(
     nav = _FlakyList({})
     trader, _, journal, _ = make_trader(tmp_path, nav, market)
     journal.append(_real_position("AUSDT"))
-    market.quotes["AUSDT"] = Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=1.0)
+    market.quotes["AUSDT"] = Quote(bid=0.99, ask=0.995, change_pct=1.0)
     sleeps: list[float] = []
 
     def sleep(seconds: float) -> None:
         sleeps.append(seconds)
         if len(sleeps) == 40:  # lebih dari 5 putaran gagal: bot tidak boleh berhenti sendiri
-            market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+            market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, change_pct=1.0)
         if len(sleeps) == 60:
             raise KeyboardInterrupt
 
@@ -1412,7 +1435,7 @@ def test_once_mode_failure_is_reported_after_real_positions_are_safe(
     nav = _FlakyList({})
     trader, _, journal, _ = make_trader(tmp_path, nav, market)
     journal.append(_real_position("AUSDT"))
-    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    market.quotes["AUSDT"] = Quote(bid=0.97, ask=0.975, change_pct=1.0)
     workflow = SingleWorkflow(
         nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], interval_s=0, sleep=lambda s: None
     )  # type: ignore[arg-type]
@@ -1424,7 +1447,7 @@ def test_once_mode_failure_is_reported_after_real_positions_are_safe(
 
 
 def test_coin_events_and_the_history_carry_the_figures_behind_the_decision(tmp_path: Path) -> None:
-    """Kartu "kenapa" di aplikasi memakai angka ini: kenaikan, funding, spread, jarak MA, batas."""
+    """Kartu "kenapa" di aplikasi memakai angka ini: kenaikan, spread, jarak MA, batas."""
     journal = Journal(tmp_path / "sop.jsonl")
     entry = JournalEntry(
         id="g",
@@ -1432,23 +1455,23 @@ def test_coin_events_and_the_history_carry_the_figures_behind_the_decision(tmp_p
         symbol="GTCUSDT",
         rank=2,
         verdict="ok",
-        reason="funding -0.3277% terlalu negatif (short membayar)",
+        reason="spread 0.400% > 0.3%",
         change_pct=20.5,
-        funding_rate=-0.00327726,
-        spread_pct=0.02,
+        spread_pct=0.4,
         ma_gap_pct=-6.9,
         pattern_ai={"below_count": 3, "below_now": False, "below_recent": True},
         pattern_data={"below_count": 3},
         leverage=2,
     )
     journal.append(entry)
-    params = SopParams(min_funding_pct=-0.2)
+    params = SopParams(max_spread_pct=0.5)
 
     live = coin_event(entry, params)["event"]
-    assert live["change_pct"] == 20.5 and live["funding_rate"] == -0.00327726
-    assert live["spread_pct"] == 0.02 and live["ma_gap_pct"] == -6.9
+    assert live["change_pct"] == 20.5 and "funding_rate" not in live
+    assert live["spread_pct"] == 0.4 and live["ma_gap_pct"] == -6.9
     assert live["ai"] == {"below_count": 3, "below_now": False, "below_recent": True}
-    assert live["limits"]["min_funding_pct"] == -0.2 and live["limits"]["min_crosses"] == 2
+    assert live["limits"]["max_spread_pct"] == 0.5 and live["limits"]["min_crosses"] == 2
+    assert "min_funding_pct" not in live["limits"]
     assert "limits" not in coin_event(entry)["event"]  # tanpa params: aplikasi pakai bawaan
 
     out: list[str] = []
@@ -1456,7 +1479,7 @@ def test_coin_events_and_the_history_carry_the_figures_behind_the_decision(tmp_p
         params, journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
     ).run()  # type: ignore[arg-type]
     (analysis,) = json.loads(out[0])["analyses"]
-    assert analysis["funding_rate"] == -0.00327726 and analysis["ma_gap_pct"] == -6.9
+    assert "funding_rate" not in analysis and analysis["ma_gap_pct"] == -6.9
     assert analysis["limits"]["max_spread_pct"] == params.max_spread_pct
     assert analysis["data"] == {"below_count": 3}
 
@@ -1560,7 +1583,7 @@ def test_positions_list_uses_the_last_read_price_when_the_screen_is_not_open(
 def test_positions_list_marks_a_fresh_price_as_not_stale(tmp_path: Path) -> None:
     journal = Journal(tmp_path / "sop.jsonl")
     journal.append(open_trade("CKBUSDT"))
-    market = ClosedScreenMarket(quote=Quote(bid=0.97, ask=0.98, funding_rate=0.0, change_pct=1.0))
+    market = ClosedScreenMarket(quote=Quote(bid=0.97, ask=0.98, change_pct=1.0))
     market.reachable = True
     [position] = run_positions(journal, market)["positions"]
     assert position["price"] == 0.98 and position["price_stale"] is False
@@ -1573,7 +1596,7 @@ def test_price_check_remembers_the_price_for_the_positions_list(tmp_path: Path) 
 
     journal = Journal(tmp_path / "sop.jsonl")
     journal.append(open_trade("CKBUSDT", entry_price=1.0))
-    market = ClosedScreenMarket(quote=Quote(bid=0.99, ask=0.995, funding_rate=0.0, change_pct=1.0))
+    market = ClosedScreenMarket(quote=Quote(bid=0.99, ask=0.995, change_pct=1.0))
     market.reachable = True
     refresh_by_price(journal, market, 0.1, NOW.timestamp())  # type: ignore[arg-type]
     saved = journal.load()[0]

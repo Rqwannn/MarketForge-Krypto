@@ -17,7 +17,7 @@ hanya siapa yang memanggil AI. Kode intinya ada di `engine/src/binance_bot/workf
 |---|---|---|
 | 1. Pantau top 5 Futures | Pasar → Futures → urutkan "Perubahan 24jam" (diverifikasi OCR) → buka rank 1..5 → baca pair di halaman trade | Layar Binance + OCR macOS |
 | 2. Baca garis kuning (MA7) | Tab "Grafik" dan tombol "15 mnt" dicari dengan OCR, tunggu grafik termuat, screenshot, **Haiku menghitung berapa kali MA7 di bawah MA25 dan menilai apakah kedua garis berdekatan** (Binance); jarak garis (%) dihitung dari candle | AI visual (default) atau data candle (`SINYAL=data`) |
-| 3. Cek biaya | Lewati bila funding terlalu negatif atau spread lebar | API publik Binance |
+| 3. Cek biaya | Lewati bila spread lebar. Funding rate **tidak** dinilai (keputusan tim 20 Okt 2026: scalping singkat) | API publik Binance |
 | 4. Cek slot | Jumlah posisi tidak dibatasi (keputusan 15 Okt); koin berikutnya hanya bila posisi terbuka tidak sedang rugi | Jurnal + harga terkini |
 | 5. Masuk short 2x, margin 50% | Ukuran posisi, isi kolom **Jumlah**, pintu order **dry run** | Layar Binance |
 | 6. Monitor dan jual otomatis | Posisi ditutup (uji kertas) begitu harga turun 3% dari harga masuk; tanpa stop-loss, tanpa batas waktu, batas rugi terakhir = likuidasi (+50% pada 2x). Binance: candle 1 menit, dicek tiap menit selama bot menunggu putaran. Tebbit: harga dibaca dari layar (OCR, tanpa AI) tiap 5 menit. Tombol tutup posisi di bursa **tidak ditekan**. Posisi > 1 hari ditandai untuk ditinjau | API publik Binance / layar Tebbit |
@@ -61,7 +61,8 @@ seberapa sering AI dan data sepakat. Angka itu dasar untuk memilih penentu (`SIN
 | Batas waktu | (tidak ada) | tidak dipakai; posisi > 1 hari ditandai untuk ditinjau | Beliau (V3) |
 | Biaya | `--biaya` | 0,1% per putaran | Riwayat |
 | Kenaikan minimal 24 jam | `MIN_NAIK` | 0 (tidak disaring; V2 tidak mensyaratkan) | Opsional |
-| Spread maksimal / funding minimal | `--maks-spread`, `--min-funding` | 0,3% / -0,1% | Usulan engine, sengaja longgar: SOP V2 hanya menyebut "spread lebar" dan "funding sangat negatif" tanpa angka (menunggu Pak Saputra) |
+| Spread maksimal | `--maks-spread` | 0,3% | Usulan engine, sengaja longgar: SOP V2 hanya menyebut "spread lebar" tanpa angka (menunggu Pak Saputra) |
+| Funding rate | (tidak ada) | tidak dipakai menyaring koin | Keputusan tim 20 Okt 2026 (scalping singkat); `--min-funding` dihapus |
 | Modal | `MODAL` | wajib (USDT) | Pengguna |
 | Ukuran order manual | `JUMLAH` | kosong (pakai margin × leverage), dalam USDT | Pengguna |
 
@@ -85,8 +86,10 @@ Tahap modal kecil di PDF memakai margin 25%: `MARGIN=25`.
 - Tebbit tidak punya candle: harga ask dibaca dari layar tiap 5 menit (OCR, tanpa AI); begitu
   ask di target atau lebih rendah, posisi dijual di ask itu.
 - **Harga tertinggi dan terendah setelah masuk** dicatat sampai posisi selesai.
-- Hasil bersih = selisih harga − fee 0,1% + funding (short menerima funding positif dan
-  membayar funding negatif), dilaporkan juga dalam **% modal**, bukan ROI aplikasi.
+- Hasil bersih = selisih harga − fee 0,1% + funding yang benar-benar dibayar selama posisi
+  terbuka (short menerima funding positif dan membayar funding negatif), dilaporkan juga dalam
+  **% modal**, bukan ROI aplikasi. Ini hanya pencatatan biaya nyata; funding tidak ikut
+  menentukan masuk atau keluar.
 - **Titik impas** = (rugi + biaya) ÷ ((target − biaya) + (rugi + biaya)), dengan rugi = rata-rata
   kenaikan harga yang ditanggung posisi rugi. Sebelum ada rugi, dipakai contoh V3 (STRK +21,8%):
   target 3% → **88%** (grafik Titik impas V3).
@@ -134,7 +137,6 @@ Pak Saputra) yang dihitung; setiap grafik dibaca AI 5 kali dan diambil nilai ten
 | Angka | Nilai sekarang | Catatan |
 |---|---|---|
 | Spread maksimal | 0,3% | SOP hanya "spread lebar". Koin ETF (UVXY, SQQQ) spread normalnya 0,1-0,25% |
-| Funding minimal | -0,1% | SOP hanya "funding sangat negatif" |
 | "Berkali-kali" turun | minimal 2 kali | Usulan di SOP sendiri |
 | "Baru-baru ini" turun | 24 lilin (6 jam) | Contoh MAGIC 12 Okt memenuhi; contoh MAGIC 10 Okt (boleh menurut beliau) **tidak** |
 | "Koin pertama tidak rugi" | harga bid lebih tinggi dari harga masuk = rugi | Selisih spread saja (0,1%) sudah dihitung rugi, sehingga koin kedua sering batal |
@@ -147,7 +149,7 @@ Pertanyaan untuk Pak Saputra:
    tidak ikut)?
 3. "Berkali-kali di bawah": minimal berapa kali, dan harus baru-baru ini (berapa jam)?
 4. Garis kuning dibandingkan dengan MA25 saja, atau juga MA99 dan harga?
-5. Batas spread dan funding: berapa yang dianggap "lebar" dan "sangat negatif"?
+5. Batas spread: berapa yang dianggap "lebar"? (Funding sudah diputuskan tim: tidak dipakai.)
 6. "Koin pertama tidak sedang rugi": apakah ada toleransi kecil (mis. 0,2%)?
 
 ## Perlu disepakati dengan beliau

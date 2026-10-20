@@ -109,8 +109,9 @@ function plain(text) {
     [/belum memulai putaran/, 'Pemimpin belum memulai putaran baru, tidak ada tindakan'],
     [/sudah diikuti di putaran ini/, 'Koin ini sudah diikuti dari Top lain di putaran ini'],
     [/sudah ada posisi uji/, 'Koin ini sudah punya posisi yang berjalan'],
-    [/funding (-?[\d.]+)%/i, (m) => `Biaya funding terlalu mahal (${m[1].replace('.', ',')}%): short membayar`],
-    [/funding/i, 'Biaya funding sedang terlalu mahal'],
+    // Catatan lama: aturan funding sudah dihapus 20 Okt 2026, bot tidak menyaring funding lagi.
+    [/funding (-?[\d.]+)%/i, (m) => `Dilewati aturan funding lama (${m[1].replace('.', ',')}%), aturan ini sudah dihapus`],
+    [/funding/i, 'Dilewati aturan funding lama, aturan ini sudah dihapus'],
     [/spread ([\d.]+)% > ([\d.]+)%/i, (m) => `Selisih harga beli dan jual terlalu lebar (${m[1].replace('.', ',')}%, batas ${m[2].replace('.', ',')}%)`],
     [/spread/i, 'Selisih harga beli dan jual terlalu lebar'],
     [/naik .*dalam 24 jam|naik [\d.]+% </, 'Kenaikan 24 jam belum cukup'],
@@ -705,13 +706,13 @@ function advanceFlow(entry) {
   }
   const opened = m.match(/^Top gainer #(\d+): (\S+)/);
   if (opened && follower) {
-    setFlow(2, `Top ${opened[1]}: ${opened[2]} · cek funding, spread, dan slot posisi`);
+    setFlow(2, `Top ${opened[1]}: ${opened[2]} · cek spread dan slot posisi`);
     return;
   }
   if (opened) {
     flow.symbol = opened[2];
     setFlow(1, leader ? `Top ${opened[1]}: ${opened[2]} · membuka grafik 15 menit`
-      : `Top ${opened[1]}: ${opened[2]} · cek funding, spread, dan slot posisi`);
+      : `Top ${opened[1]}: ${opened[2]} · cek spread dan slot posisi`);
     return;
   }
   if (/_15m\.png/.test(m) && !follower) {
@@ -1100,11 +1101,10 @@ async function loadJournal() {
         el('td', { class: 'num', textContent: price(t.exit_price) }),
         el('td', { class: `num ${signClass(t.pnl_capital_pct)}`, textContent: percent(t.pnl_capital_pct) }));
     });
-    $('analyses').replaceChildren(...(report.analyses?.length
-      ? [...report.analyses].reverse().map(analysisItem)
-      : [el('li', { class: 'idle', textContent: activeRange().from || activeRange().to
-        ? 'Tidak ada koin yang dinilai AI pada rentang waktu ini.'
-        : 'Belum ada koin yang dinilai AI di platform ini.' })]));
+    HIST.all = [...(report.analyses || [])].reverse();
+    HIST.total = report.analyses_total ?? HIST.all.length;
+    HIST.page = 1;
+    renderHistory();
 
     $('trades').replaceChildren(...(rows.length ? rows
       : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: activeRange().from || activeRange().to
@@ -1120,12 +1120,73 @@ async function loadJournal() {
 }
 loaders.journal = loadJournal;
 
+// Riwayat analisis AI: semua yang dikirim engine (terbaru dulu), 30 per halaman, bisa disaring.
+const HIST = { all: [], total: 0, page: 1 };
+
+function historyFilter() {
+  return { search: $('history-search').value, verdict: $('history-verdict').value };
+}
+
+function renderHistory() {
+  const { filterAnalyses, pageSlice, pageCount, countText } = window.History;
+  const filter = historyFilter();
+  const filtered = Boolean(filter.search.trim() || filter.verdict);
+  const matched = filterAnalyses(HIST.all, filter);
+  const { page, items } = pageSlice(matched, HIST.page);
+  HIST.page = page;
+  let empty = 'Belum ada koin yang dinilai AI di platform ini.';
+  if (filtered) empty = 'Tidak ada analisis yang cocok. Ubah pencarian atau saringan keputusan.';
+  else if (activeRange().from || activeRange().to) empty = 'Tidak ada koin yang dinilai AI pada rentang waktu ini.';
+  $('analyses').replaceChildren(...(matched.length
+    ? items.map(analysisItem)
+    : [el('li', { class: 'idle', textContent: empty })]));
+  let note = countText(page, matched.length, HIST.all.length, filtered);
+  if (HIST.total > HIST.all.length) {
+    note += ` (${HIST.all.length} terbaru dari ${HIST.total}; pakai filter tanggal untuk yang lebih lama)`;
+  }
+  $('history-count').textContent = note;
+  renderPager(page, pageCount(matched.length));
+}
+
+/** Navigasi halaman: < 1 2 3 4 5 … 12 >. Tersembunyi bila hanya satu halaman. */
+function renderPager(page, pages) {
+  const pager = $('history-pager');
+  pager.hidden = pages <= 1;
+  if (pager.hidden) { pager.replaceChildren(); return; }
+  const go = (n) => {
+    HIST.page = n;
+    renderHistory();
+    $('history-search').closest('.card').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+  const arrow = (label, n, disabled, path) => {
+    const b = el('button', { type: 'button', class: 'pg-arrow', title: label, disabled },
+      svg('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' }, svg('path', { d: path })));
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', () => go(n));
+    return b;
+  };
+  pager.replaceChildren(
+    arrow('Halaman sebelumnya', page - 1, page === 1, 'M15 6l-6 6 6 6'),
+    ...window.History.pageItems(page, pages).map((n) => {
+      if (n === '…') return el('span', { class: 'pg-gap', textContent: '…' });
+      const b = el('button', { type: 'button', class: n === page ? 'pg-num on' : 'pg-num', textContent: String(n) });
+      if (n === page) b.setAttribute('aria-current', 'page');
+      b.addEventListener('click', () => go(n));
+      return b;
+    }),
+    arrow('Halaman berikutnya', page + 1, page === pages, 'M9 6l6 6-6 6'));
+}
+
+$('history-search').addEventListener('input', () => { HIST.page = 1; renderHistory(); });
+$('history-verdict').addEventListener('change', () => { HIST.page = 1; renderHistory(); });
+
 /** Satu hasil analisis di riwayat: grafik, status, alasan singkat, dan ringkasan AI. */
 function analysisItem(a) {
   const [label, css] = VERDICT[a.verdict] || ['Tidak dibaca', ''];
   const when = new Date(a.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const example = a.status === 'contoh';
-  const action = example ? a.reason : a.status === 'open' || STATUS[a.status] ? 'Short uji kertas dibuka' : plain(a.reason);
+  const opened = a.real ? 'Short sungguhan dibuka' : 'Short uji kertas dibuka';
+  const action = example ? a.reason : a.status === 'open' || STATUS[a.status] ? opened : plain(a.reason);
   const where = example ? 'Gambar contoh' : `Top ${a.rank} · ${ROLE_NAME[a.role] || 'Sendiri'}`;
   return el('li', { class: 'hist-item' },
     chartThumb(a.chart, `${a.symbol} · ${label}`) || el('span', { class: 'chart-thumb none', textContent: 'Tanpa grafik' }),
@@ -1137,7 +1198,7 @@ function analysisItem(a) {
       a.old_rule ? el('p', { class: 'hist-old', textContent: 'Dinilai dengan aturan lama (tanpa syarat 6 jam terakhir). Dengan aturan sekarang hasilnya bisa berbeda.' }) : null,
       el('p', { class: 'hist-act', textContent: action }),
       a.summary ? el('small', { textContent: `AI: ${a.summary}` }) : null,
-      el('div', { class: 'hist-actions' }, a.status === 'contoh' ? null : whyButton(a, 'Kenapa begini?'), historyDelete(a))));
+      el('div', { class: 'hist-actions' }, a.status === 'contoh' ? null : whyButton(a, 'Detail'), historyDelete(a))));
 }
 
 const NOT_TRADES = ['skipped', 'contoh'];

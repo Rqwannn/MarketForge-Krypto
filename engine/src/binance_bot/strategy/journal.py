@@ -32,7 +32,7 @@ class JournalEntry:
     role: str = "single"  # single (Sendiri) | follower (Pengikut) | contoh (gambar contoh)
     reason: str = ""
     change_pct: float | None = None
-    funding_rate: float | None = None
+    funding_rate: float | None = None  # catatan lama: saringan funding sudah dihapus (20 Okt 2026)
     spread_pct: float | None = None
     pattern_ai: dict[str, Any] | None = None  # {"below_count", "below_now"} dari AI
     pattern_data: dict[str, Any] | None = None  # sama, dihitung dari candle
