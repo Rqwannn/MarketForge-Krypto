@@ -301,34 +301,52 @@ function setupForm() {
     renderModal();
     saveForm();
   });
-  $('modal-max').addEventListener('click', () => {
-    form.modal = isMaxModal(form.modal) ? '' : 'max';
-    renderModal();
-    saveForm();
-    if (!isMaxModal(form.modal)) $('modal').focus();
-  });
+  for (const [kind, id] of [['setengah', 'modal-half'], ['max', 'modal-max']]) {
+    $(id).addEventListener('click', () => {
+      form.modal = balanceModal(form.modal) === kind ? '' : kind;
+      renderModal();
+      saveForm();
+      if (!balanceModal(form.modal)) $('modal').focus();
+    });
+  }
 }
 
-/** Modal 'max' = seluruh saldo USDT tersedia, dibaca bot dari form order saat akan masuk. */
-const isMaxModal = (modal) => String(modal || '').trim().toLowerCase() === 'max';
+/**
+ * Modal dari saldo, dibaca bot dari form order saat akan masuk: 'max' = seluruh saldo USDT
+ * tersedia, 'setengah' = 50%-nya (saldo 600 -> modal 300). Selain itu null (modal angka USDT).
+ */
+const BALANCE_LABEL = { max: 'Max', setengah: '50%' };
+function balanceModal(modal) {
+  const key = String(modal || '').trim().toLowerCase();
+  if (key === 'max') return 'max';
+  return key === 'setengah' || key === '50%' ? 'setengah' : null;
+}
 
-/** Teks modal untuk dibaca orang: "100 USDT" atau "Max (seluruh saldo)". */
-const modalText = (modal) => (isMaxModal(modal) ? 'Max (seluruh saldo)' : `${modal} USDT`);
+/** Teks modal untuk dibaca orang: "100 USDT", "Max (seluruh saldo)", atau "50% saldo". */
+function modalText(modal) {
+  const kind = balanceModal(modal);
+  if (kind === 'max') return 'Max (seluruh saldo)';
+  return kind === 'setengah' ? '50% saldo (setengah)' : `${modal} USDT`;
+}
+
+const MODAL_NOTE = {
+  max: 'Modal = seluruh saldo USDT tersedia saat bot masuk. Tiap posisi memakai separuhnya, leverage 2x.',
+  setengah: 'Modal = setengah saldo USDT tersedia saat bot masuk (saldo 600 → modal 300). Tiap posisi memakai separuh modal, leverage 2x.',
+};
 
 function renderModal() {
-  const max = isMaxModal(form.modal);
+  const kind = balanceModal(form.modal);
   const input = $('modal');
-  if (max) input.value = 'Max';
-  else if (input.value.trim().toLowerCase() === 'max') input.value = '';
+  if (kind) input.value = BALANCE_LABEL[kind];
+  else if (balanceModal(input.value)) input.value = '';
   else if (input.value !== form.modal) input.value = form.modal;
-  input.readOnly = max;
-  input.classList.toggle('is-max', max);
-  const button = $('modal-max');
-  button.classList.toggle('on', max);
-  button.setAttribute('aria-pressed', String(max));
-  $('modal-note').textContent = max
-    ? 'Modal = seluruh saldo USDT tersedia saat bot masuk. Tiap posisi memakai separuhnya, leverage 2x.'
-    : 'Tiap posisi memakai separuh modal, leverage 2x.';
+  input.readOnly = Boolean(kind);
+  input.classList.toggle('is-max', Boolean(kind));
+  for (const [key, id] of [['setengah', 'modal-half'], ['max', 'modal-max']]) {
+    $(id).classList.toggle('on', kind === key);
+    $(id).setAttribute('aria-pressed', String(kind === key));
+  }
+  $('modal-note').textContent = MODAL_NOTE[kind] || 'Tiap posisi memakai separuh modal, leverage 2x.';
 }
 
 // --------------------------------------------------------------------------- jalankan dan hentikan
@@ -405,9 +423,13 @@ function askReal({ follower = false, leaderName = '', modal = '' } = {}) {
   const chosen = modal || form.modal || '';
   const capital = Number(String(chosen).replace(',', '.'));
   const usdt = (v) => `${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })} USDT`;
-  if (isMaxModal(chosen)) {
+  const kind = balanceModal(chosen);
+  if (kind === 'max') {
     $('real-notional').textContent = 'Seluruh saldo USDT tersedia';
     $('real-margin').textContent = 'Separuh saldo tersedia';
+  } else if (kind === 'setengah') {
+    $('real-notional').textContent = 'Setengah saldo USDT tersedia';
+    $('real-margin').textContent = 'Seperempat saldo tersedia';
   } else {
     $('real-notional').textContent = capital > 0 ? usdt(capital) : '–';
     $('real-margin').textContent = capital > 0 ? usdt(capital / 2) : '50% modal';
@@ -1865,7 +1887,8 @@ function showInvite(invite) {
   pendingInvite = invite;
   $('invite-title').textContent = `${invite.leaderName} mengajak laptop ini`;
   $('invite-text').textContent = `Menjadi Pengikut untuk ${invite.rank === '*' ? 'semua Top yang dimainkan pemimpin' : rankLabel(invite.rank)}. Bot laptop ini akan mulai otomatis setiap pemimpin memulai putaran, memakai hasil AI dari pemimpin.`;
-  $('invite-modal').value = isMaxModal(form.modal) ? 'Max' : form.modal; // ketik angka atau Max
+  const kind = balanceModal(form.modal);
+  $('invite-modal').value = kind ? BALANCE_LABEL[kind] : form.modal; // ketik angka, 50%, atau Max
   $('invite-error').textContent = '';
   $('invite').hidden = false;
   $('invite-modal').focus();

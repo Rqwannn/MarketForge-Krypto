@@ -22,8 +22,9 @@ REFERENCE_LOSS_PCT = 21.8
 @dataclass(frozen=True, slots=True)
 class SopParams:
     capital_usdt: float | None = None  # modal (USDT)
-    # Modal Max: modal = saldo USDT tersedia di form order, dibaca ulang setiap akan masuk posisi.
-    capital_max: bool = False
+    # Modal dari saldo: modal = bagian ini x saldo USDT tersedia di form order, dibaca ulang setiap
+    # akan masuk posisi (1,0 = Max, 0,5 = Setengah). None = modal tetap `capital_usdt`.
+    capital_share: float | None = None
     order_usdt: float | None = None  # JUMLAH manual: ukuran order USDT (menimpa margin x leverage)
     margin_pct: float = 50.0  # beliau: margin 50% modal per posisi
     leverage: int = 2  # beliau: 2x (nilai posisi per koin = 100% modal)
@@ -43,8 +44,10 @@ class SopParams:
 
     def validate(self) -> None:
         errors = []
-        if self.capital_usdt is None and self.order_usdt is None and not self.capital_max:
-            errors.append("isi MODAL (USDT atau max) atau JUMLAH (USDT)")
+        if self.capital_usdt is None and self.order_usdt is None and self.capital_share is None:
+            errors.append("isi MODAL (USDT, max, atau setengah) atau JUMLAH (USDT)")
+        if self.capital_share is not None and not 0 < self.capital_share <= 1:
+            errors.append("bagian saldo untuk modal harus di antara 0 dan 1")
         if self.capital_usdt is not None and self.capital_usdt <= 0:
             errors.append("MODAL harus lebih dari 0")
         if self.order_usdt is not None and self.order_usdt <= 0:

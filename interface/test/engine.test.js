@@ -32,6 +32,14 @@ test('pengikut: satu top gainer dan modal (alamat hub dari .env admin)', () => {
   ]);
 });
 
+test('modal 50%: setengah saldo tersedia, untuk Sendiri dan Pengikut', () => {
+  for (const modal of ['setengah', '50%', ' Setengah ']) {
+    assert.deepEqual(buildArgs('single', { ranks: [1], modal }).slice(-2), ['--modal', 'setengah']);
+  }
+  assert.deepEqual(buildArgs('follower', { rank: 2, modal: '50%' }).slice(-2), ['--modal', 'setengah']);
+  assert.throws(() => buildArgs('single', { ranks: [1], modal: '25%' }), InputError);
+});
+
 test('modal Max: seluruh saldo tersedia, untuk Sendiri dan Pengikut', () => {
   assert.deepEqual(buildArgs('single', { ranks: [1], modal: 'max' }).slice(-2), ['--modal', 'max']);
   assert.deepEqual(buildArgs('follower', { rank: 2, modal: ' Max ' }).slice(-2), ['--modal', 'max']);

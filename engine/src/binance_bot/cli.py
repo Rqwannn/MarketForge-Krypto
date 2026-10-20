@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -71,17 +71,26 @@ def parse_number(text: str) -> str:
     return text
 
 
-MAX_CAPITAL = "max"
+# Modal dari saldo USDT tersedia di bursa (dibaca saat masuk posisi): bagian saldo yang dipakai.
+BALANCE_SHARES = {"max": 1.0, "setengah": 0.5}
 
 
-def parse_capital(text: str) -> float | str:
-    """Modal USDT, atau "max" = seluruh saldo USDT tersedia di bursa saat masuk posisi."""
-    if text.strip().lower() == MAX_CAPITAL:
-        return MAX_CAPITAL
+@dataclass(frozen=True, slots=True)
+class BalanceShare:
+    """Modal = `share` x saldo USDT tersedia saat bot akan masuk posisi."""
+
+    share: float
+
+
+def parse_capital(text: str) -> float | BalanceShare:
+    """Modal USDT, "max" (seluruh saldo tersedia), atau "setengah" (50% saldo tersedia)."""
+    share = BALANCE_SHARES.get(text.strip().lower())
+    if share is not None:
+        return BalanceShare(share)
     try:
         return float(text.replace(",", "."))
     except ValueError:
-        raise argparse.ArgumentTypeError("isi angka USDT, mis. 100, atau max") from None
+        raise argparse.ArgumentTypeError("isi angka USDT, mis. 100, max, atau setengah") from None
 
 
 def parse_price(text: str) -> float:
@@ -129,7 +138,7 @@ def _sop_options() -> argparse.ArgumentParser:
     g.add_argument(
         "--modal",
         type=parse_capital,
-        help="Modal USDT, atau max = seluruh saldo USDT tersedia (dibaca dari form order)",
+        help="Modal USDT, max (seluruh saldo tersedia), atau setengah (50%% saldo tersedia)",
     )
     g.add_argument(
         "--jumlah", type=float, help="Ukuran order manual dalam USDT (menimpa margin x leverage)"
@@ -170,8 +179,8 @@ def _sop_options() -> argparse.ArgumentParser:
 
 def params_from(args: argparse.Namespace) -> SopParams:
     return SopParams(
-        capital_usdt=None if args.modal == MAX_CAPITAL else args.modal,
-        capital_max=args.modal == MAX_CAPITAL,
+        capital_usdt=None if isinstance(args.modal, BalanceShare) else args.modal,
+        capital_share=args.modal.share if isinstance(args.modal, BalanceShare) else None,
         order_usdt=args.jumlah,
         margin_pct=args.margin,
         leverage=args.leverage,

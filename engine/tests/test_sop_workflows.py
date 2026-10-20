@@ -1236,7 +1236,7 @@ def test_max_capital_uses_the_whole_available_balance_with_the_sop_formula(
     # Modal Max: modal = saldo tersedia; rumus SOP tetap (margin 50% modal, 2x -> nilai = modal).
     nav = FakeNavigator({1: "STRKUSDT"})
     nav.available = 107.48
-    trader, gate, journal, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    trader, gate, journal, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_share=1.0)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert entry.status == "open" and entry.capital_usdt == 107.48
     assert nav.filled == ["107,48"] and gate.plans[0].order_text == "107,48"
@@ -1245,10 +1245,32 @@ def test_max_capital_uses_the_whole_available_balance_with_the_sop_formula(
     assert journal.load()[0].capital_usdt == 107.48  # hasil % modal dihitung dari saldo itu
 
 
+@pytest.mark.parametrize(("balance", "capital"), [(500.0, 250.0), (600.0, 300.0), (750.0, 375.0)])
+def test_half_capital_uses_half_of_the_available_balance(
+    tmp_path: Path, balance: float, capital: float
+) -> None:
+    """Modal Setengah: saldo 600 -> modal 300, saldo 750 -> modal 375; rumus SOP tetap."""
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = balance
+    trader, gate, journal, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_share=0.5)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "open" and entry.capital_usdt == capital
+    assert gate.plans[0].margin_usdt == pytest.approx(capital / 2, abs=0.1)  # separuh modal, 2x
+    assert journal.load()[0].capital_usdt == capital
+
+
+def test_half_capital_names_itself_when_the_balance_cannot_be_read(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    nav.available = None
+    trader, _, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_share=0.5)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.status == "skipped" and "Modal 50% saldo" in entry.reason
+
+
 def test_max_capital_skips_the_coin_when_the_balance_cannot_be_read(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"})
     nav.available = None  # mis. Tebbit: saldo belum bisa dibaca dari layar
-    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_share=1.0)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert entry.status == "skipped" and "Modal Max" in entry.reason
     assert nav.filled == [] and gate.plans == []
@@ -1257,7 +1279,7 @@ def test_max_capital_skips_the_coin_when_the_balance_cannot_be_read(tmp_path: Pa
 def test_max_capital_with_an_empty_balance_says_so(tmp_path: Path) -> None:
     nav = FakeNavigator({1: "STRKUSDT"})
     nav.available = 0.0  # mis. saldo Tebbit 0.0000 USDT
-    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_max=True)
+    trader, gate, _, _ = make_trader(tmp_path, nav, capital_usdt=None, capital_share=1.0)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert entry.status == "skipped" and "saldo tersedia 0 USDT" in entry.reason
     assert gate.plans == []

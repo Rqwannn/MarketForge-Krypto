@@ -201,6 +201,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .money .max:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
 .money .max.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .money .max:disabled { opacity: 0.4; cursor: not-allowed; }
+.money .max + .max { margin-left: 6px; }
 
 .chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .chips button {

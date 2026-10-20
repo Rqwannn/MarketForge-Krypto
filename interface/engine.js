@@ -128,12 +128,16 @@ function manualCloseArgs(symbol, exitPrice, pnlUsdt) {
   return args;
 }
 
-/** Modal USDT, atau 'max' = seluruh saldo USDT tersedia (dibaca engine dari form order Binance/Tebbit). */
+// Modal dari saldo USDT tersedia (dibaca engine dari form order Binance/Tebbit saat akan masuk).
+const BALANCE_MODALS = { max: 'max', setengah: 'setengah', '50%': 'setengah', half: 'setengah' };
+
+/** Modal USDT, 'max' (seluruh saldo tersedia), atau 'setengah' (50% saldo tersedia). */
 function modalOf(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
-    throw new InputError('Isi modal dalam USDT atau pilih Max');
+    throw new InputError('Isi modal dalam USDT atau pilih 50% / Max');
   }
-  if (String(value).trim().toLowerCase() === 'max') return 'max';
+  const share = BALANCE_MODALS[String(value).trim().toLowerCase()];
+  if (share) return share;
   return String(number(value, 'Modal', 1, 1e9));
 }
 

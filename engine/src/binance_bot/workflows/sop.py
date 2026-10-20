@@ -312,20 +312,23 @@ class SopTrader:
                 f"saldo tersedia {available:.2f} USDT kurang dari margin {margin_usdt:.2f} USDT"
             )
 
-    def _capital_from_balance(self, entry: JournalEntry) -> SopParams:
-        """Modal Max: modal = saldo USDT tersedia di form order SAAT INI (rumus SOP tetap).
+    def _capital_from_balance(self, entry: JournalEntry, share: float) -> SopParams:
+        """Modal Max / Setengah: modal = `share` x saldo USDT tersedia di form order SAAT INI
+        (rumus SOP tetap: tiap posisi memakai separuh modal, 2x).
 
         Dibaca ulang setiap koin, jadi posisi berikutnya memakai sisa saldo setelah margin posisi
         sebelumnya terpakai. Tidak terbaca atau kosong = tidak masuk.
         """
+        label = "Modal Max" if share >= 1 else f"Modal {share * 100:g}% saldo"
         available = self._nav.available_usdt()
         if available is None:
-            raise _Skip("Modal Max: saldo tersedia tidak terbaca di form order")
+            raise _Skip(f"{label}: saldo tersedia tidak terbaca di form order")
         if available <= 0:
-            raise _Skip("Modal Max: saldo tersedia 0 USDT")
-        logger.info("Modal Max: saldo tersedia %.2f USDT dipakai sebagai modal", available)
-        entry.capital_usdt = available
-        return replace(self.params, capital_usdt=available, capital_max=False)
+            raise _Skip(f"{label}: saldo tersedia 0 USDT")
+        capital = round(available * share, 2)
+        logger.info("%s: saldo tersedia %.2f USDT, modal %.2f USDT", label, available, capital)
+        entry.capital_usdt = capital
+        return replace(self.params, capital_usdt=capital, capital_share=None)
 
     def real_positions_open(self) -> int:
         """Jumlah posisi uang sungguhan yang masih terbuka (yang wajib diawasi sampai terjual)."""
@@ -591,8 +594,8 @@ class SopTrader:
             raise _Skip(blocker)
 
         # Ukuran posisi: margin % modal x leverage.
-        if params.capital_max:
-            params = self._capital_from_balance(entry)
+        if params.capital_share is not None:
+            params = self._capital_from_balance(entry, params.capital_share)
         rules = self._market.rules(symbol)
         price = quote.bid  # short menjual ke harga bid
         sizing = size_position(params, price, rules, self._settings.decimal_separator)
@@ -640,8 +643,8 @@ class SopTrader:
             "#%d %s MASUK %s: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
             "di %g (turun %g%%), tanpa stop-loss dan tanpa batas waktu",
             entry.rank,
-            "UANG SUNGGUHAN" if entry.real else "UJI KERTAS",
             symbol,
+            "UANG SUNGGUHAN" if entry.real else "UJI KERTAS",
             sizing.order_text,
             price,
             params.leverage,

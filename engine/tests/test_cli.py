@@ -71,13 +71,20 @@ def test_leader_and_follower_arguments() -> None:
 @pytest.mark.parametrize("command", ["single", "follower"])
 def test_modal_max_means_the_whole_available_balance(command: str) -> None:
     params = params_from(build_parser().parse_args([command, "--modal", "Max"]))
-    assert (params.capital_max, params.capital_usdt) == (True, None)
+    assert (params.capital_share, params.capital_usdt) == (1.0, None)
     params.validate()  # Max cukup sebagai modal
     assert (
         params_from(build_parser().parse_args([command, "--modal", "150,5"])).capital_usdt == 150.5
     )
     with pytest.raises(SystemExit):
         build_parser().parse_args([command, "--modal", "semua"])
+
+
+@pytest.mark.parametrize("command", ["single", "follower"])
+def test_modal_setengah_means_half_of_the_available_balance(command: str) -> None:
+    params = params_from(build_parser().parse_args([command, "--modal", "Setengah"]))
+    assert (params.capital_share, params.capital_usdt) == (0.5, None)
+    params.validate()
 
 
 def test_unexpected_error_is_logged_with_traceback(
