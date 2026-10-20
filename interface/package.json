@@ -1,8 +1,9 @@
 {
   "name": "marketforge-desktop",
+  "productName": "MarketForge Kripto",
   "version": "0.1.0",
   "private": true,
-  "description": "Aplikasi desktop untuk engine SOP V2 Short Top Gainers (uji kertas).",
+  "description": "MarketForge Kripto: aplikasi desktop bot Short Top Gainers.",
   "main": "main.js",
   "scripts": {
     "start": "node start.js",

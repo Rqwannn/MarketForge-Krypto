@@ -30,6 +30,10 @@ class ScreenReadError(BotError):
     """Teks yang dibutuhkan (mis. nama koin) tidak terbaca dari layar."""
 
 
+class PositionNotFoundError(ScreenReadError):
+    """Baris posisi koin tidak ada di tab Posisi bursa (mis. sudah ditutup manual)."""
+
+
 class AnalysisError(BotError):
     """Analisis grafik oleh model gagal atau jawabannya tidak sesuai skema."""
 

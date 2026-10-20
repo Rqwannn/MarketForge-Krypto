@@ -242,3 +242,13 @@ test('exitNotice: selesai normal, dihentikan pengguna, dan kendala dibedakan', (
   assert.equal(exitNotice({ code: 1, signal: null, stopped: false }).kind, 'error');
   assert.equal(exitNotice().kind, 'error');
 });
+
+test('catat tutup manual: pair, harga wajib, hasil opsional dan boleh minus', () => {
+  const { manualCloseArgs } = require('../engine');
+  assert.deepEqual(manualCloseArgs('ariausdt', '0,04747', '+0,60'), ['posisi', '--catat-manual', 'ARIAUSDT', '--harga', '0.04747', '--hasil=0.6']);
+  assert.deepEqual(manualCloseArgs('BTWUSDT', '2.3422', '-1,25').slice(-1), ['--hasil=-1.25']);
+  assert.deepEqual(manualCloseArgs('BTWUSDT', '2.3422', ''), ['posisi', '--catat-manual', 'BTWUSDT', '--harga', '2.3422']);
+  for (const [symbol, priceText] of [['ARIA; rm -rf', '1'], ['ARIAUSDT', ''], ['ARIAUSDT', '0'], ['ARIAUSDT', 'abc']]) {
+    assert.throws(() => manualCloseArgs(symbol, priceText), InputError, `${symbol} ${priceText}`);
+  }
+});

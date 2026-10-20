@@ -30,6 +30,7 @@ from binance_bot.config import Settings
 from binance_bot.exceptions import (
     AppNotRunningError,
     AppTimeoutError,
+    PositionNotFoundError,
     SafetyError,
     ScreenReadError,
     WindowError,
@@ -1080,7 +1081,7 @@ class BinanceNavigator:
                     f"Baris posisi {symbol} tidak terlihat: banner di halaman koin ini mendorong "
                     "panel Posisi keluar jendela. Buka halaman koin tanpa banner dan coba lagi."
                 )
-            raise ScreenReadError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
+            raise PositionNotFoundError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
         middle = self.rect.point_at((x0 + x1) / 2, row_y)
         self._ensure_front()
         self._window.scroll_horizontal(*middle, layout.POSITIONS_SCROLL_NOTCHES)

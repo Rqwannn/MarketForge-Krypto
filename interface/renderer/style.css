@@ -182,7 +182,8 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 
 .money { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 0 14px; }
 .money:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.money input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: 600 20px/1 var(--mono); padding: 9px 0; }
+.money { min-width: 0; }
+.money input { flex: 1; width: 0; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: 600 20px/1 var(--mono); padding: 9px 0; }
 .money span { color: var(--faint); font-size: 12px; font-weight: 600; }
 .money input.is-max { color: var(--accent); cursor: default; }
 .money input.is-max + span { visibility: hidden; }
@@ -681,3 +682,33 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 @media (max-width: 640px) { .world-clocks { grid-template-columns: repeat(2, minmax(0, 1fr)); } .world-line { --lead: 0px; } .wl-label { position: static; width: auto; margin-right: 8px; } }
 
 .price-age { display: block; color: var(--faint); font: 11px var(--font, inherit); white-space: nowrap; }
+
+/* Kesehatan laptop (Pantau): peringatan jaringan, charger, tidur, posisi tanpa bot. */
+.health { display: grid; gap: 8px; }
+.health-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 13.5px; line-height: 1.45; }
+.health-item i { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--faint); }
+.health-item.bad { border-color: rgba(255, 122, 127, 0.35); background: var(--red-soft); color: var(--red); }
+.health-item.bad i { background: var(--red); }
+.health-item.warn { border-color: rgba(246, 180, 75, 0.35); background: var(--amber-soft); color: var(--amber); }
+.health-item.warn i { background: var(--amber); }
+.health-item.ok { color: var(--muted); }
+.health-item.ok i { background: var(--green); }
+
+/* Posisi berjalan (Pantau). */
+.live-limit { display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12.5px; white-space: nowrap; }
+.live-limit select { font: inherit; color: var(--text); background: var(--card-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 8px; }
+.live-list { display: grid; gap: 6px; }
+.live-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
+.live-row:hover { border-color: var(--accent); }
+.live-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.live-row.gone { border-color: rgba(246, 180, 75, 0.45); }
+.live-row .sym { font: 600 14px var(--mono); }
+.live-row .badge-real, .live-row .badge-paper { margin-left: 0; }
+.badge-paper { padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
+.live-pnl { margin-left: auto; font: 600 13.5px var(--mono); }
+.live-note { min-width: 150px; color: var(--faint); font-size: 12.5px; text-align: right; }
+.live-row.gone .live-note { color: var(--amber); }
+.table td.actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.secondary.small { padding: 5px 10px; font-size: 12.5px; }
+.gone-note { color: var(--amber); font-size: 12px; }
+@media (max-width: 560px) { .live-row { flex-wrap: wrap; } .live-note { min-width: 0; width: 100%; text-align: left; } .live-limit { white-space: normal; } }

@@ -21,7 +21,13 @@ from binance_bot.analysis import PatternReading
 from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
-from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError, ScreenReadError
+from binance_bot.exceptions import (
+    BotError,
+    MarketDataError,
+    NoHistoryError,
+    PositionNotFoundError,
+    ScreenReadError,
+)
 from binance_bot.filelock import exclusive
 from binance_bot.logging_setup import event
 from binance_bot.market import MarketData
@@ -200,6 +206,16 @@ def _sell_due_positions(
                 if result.is_closed:
                     try:
                         closer.close_position(entry.symbol)
+                    except PositionNotFoundError:
+                        # Jurnal mencatat terbuka, bursa tidak: biasanya ditutup manual. Aplikasi
+                        # menanyakannya ke pengguna; bot tidak mengubah catatan sendiri.
+                        logger.warning(
+                            "Posisi %s tidak ada lagi di tab Posisi Binance: kemungkinan sudah "
+                            "ditutup manual. Catat penutupannya di menu Posisi bila benar.",
+                            entry.symbol,
+                            extra=event("position_missing", symbol=entry.symbol),
+                        )
+                        result = entry
                     except BotError as exc:
                         logger.error(
                             "Jual otomatis %s GAGAL di bursa, posisi tetap terbuka: %s",

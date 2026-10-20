@@ -10,9 +10,11 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from typing import Any
 
 from binance_bot.exceptions import BotError, MarketDataError, NoHistoryError
+from binance_bot.filelock import exclusive
 from binance_bot.market import MarketData
 from binance_bot.strategy import (
     Journal,
@@ -29,6 +31,15 @@ logger = logging.getLogger(__name__)
 ALL = "semua"
 
 
+@dataclass(frozen=True, slots=True)
+class ManualClose:
+    """Posisi yang sudah ditutup sendiri di bursa: harga tutup dan (opsional) hasil USDT bursa."""
+
+    symbol: str
+    exit_price: float
+    pnl_usdt: float | None = None
+
+
 class PositionsWorkflow:
     name = "posisi"
 
@@ -42,6 +53,8 @@ class PositionsWorkflow:
         check: bool = False,  # Tebbit: baca harga dari layar sekarang (jual otomatis bila target)
         closer: PositionCloser | None = None,  # Real Fund Trading: tutup posisi di bursa
         watch_s: float = 0.0,  # >0: pantau terus (jual otomatis) sampai tidak ada posisi terbuka
+        read_only: bool = False,  # hanya baca jurnal + harga (aplikasi, tiap menit): tanpa menulis
+        manual: ManualClose | None = None,  # catat posisi yang sudah ditutup sendiri di bursa
         sleep: Callable[[float], None] = time.sleep,
         output: Callable[[str], None] = print,
         wall_clock: Callable[[], float] = time.time,
@@ -53,6 +66,8 @@ class PositionsWorkflow:
         self._check = check
         self._closer = closer
         self._watch_s = watch_s
+        self._read_only = read_only
+        self._manual = manual
         self._sleep = sleep
         self._output = output
         self._wall_clock = wall_clock
@@ -61,7 +76,73 @@ class PositionsWorkflow:
         if self._watch_s > 0:
             self._watch()
             return
+        if self._manual is not None:
+            self._record_manual(self._manual)
+            return
+        if self._read_only:
+            entries = self._journal.load()
+            self._output(
+                json.dumps(
+                    {
+                        "warning": None,
+                        "closed": [],
+                        "positions": [self._open_dict(e) for e in entries if e.status == "open"],
+                    },
+                    default=str,
+                )
+            )
+            return
         self._run_once()
+
+    def _record_manual(self, manual: ManualClose) -> None:
+        """Posisi sudah ditutup sendiri di bursa: catat harga tutup (dan hasil dari bursa bila ada).
+
+        Tidak menyentuh bursa. Memakai kunci penjualan yang sama dengan bot, jadi tidak bentrok
+        dengan jual otomatis yang sedang berjalan.
+        """
+        now = self._wall_clock()
+        with exclusive(self._journal.path.with_suffix(".sell.lock")):
+            entries = self._journal.load()
+            index = next(
+                (
+                    i
+                    for i, e in enumerate(entries)
+                    if e.status == "open" and e.symbol == manual.symbol
+                ),
+                None,
+            )
+            if index is None:
+                error = f"Tidak ada posisi terbuka untuk {manual.symbol}"
+                self._output(json.dumps({"error": error, "closed": [], "positions": []}))
+                return
+            closed = close_short_now(
+                entries[index], manual.exit_price, now, [], self._params.fee_pct
+            )
+            if manual.pnl_usdt is not None and closed.notional:
+                # Hasil dari Riwayat Posisi bursa lebih tepat (harga masuk asli, fee, funding).
+                closed = replace(
+                    closed,
+                    pnl_usdt=manual.pnl_usdt,
+                    pnl_pct=100 * manual.pnl_usdt / closed.notional,
+                )
+            closed.reason = (
+                f"{closed.reason}. " if closed.reason else ""
+            ) + "Ditutup manual di bursa, dicatat lewat aplikasi"
+            entries[index] = closed
+            self._journal.save(entries)
+        logger.warning(
+            "Posisi %s dicatat ditutup manual di %g: %+.2f USDT (%+.2f%% modal)",
+            closed.symbol,
+            manual.exit_price,
+            closed.pnl_usdt or 0,
+            closed.pnl_capital_pct or 0,
+        )
+        result = {
+            "warning": None,
+            "closed": [self._closed_dict(closed)],
+            "positions": [self._open_dict(e) for e in entries if e.status == "open"],
+        }
+        self._output(json.dumps(result, default=str))
 
     def _watch(self) -> None:
         """Pantau posisi terbuka saja (tanpa membuka posisi baru): jual otomatis saat target."""
@@ -188,6 +269,14 @@ class PositionsWorkflow:
             "price_stale": False,  # True = harga terakhir yang tersimpan, bukan bacaan sekarang
             "pnl_pct": None,
             "pnl_capital_pct": None,
+            "pnl_usdt": None,
+            "to_target_pct": None,  # harga masih harus turun sekian persen sampai jual otomatis
+            # Rugi terdalam sejak masuk: dari harga tertinggi yang tercatat (melawan short).
+            "worst_pnl_pct": (
+                self._pnl_pct(entry, entry.max_price)
+                if entry.max_price and entry.entry_price
+                else None
+            ),
         }
         read_at: float | None = self._wall_clock()
         try:
@@ -199,14 +288,24 @@ class PositionsWorkflow:
                 return data
             ask, read_at = entry.last_price, entry.last_price_at
             data["price_stale"] = True
-        assert entry.entry_price
-        pnl_pct = 100 * (entry.entry_price - ask) / entry.entry_price - self._params.fee_pct
+        pnl_pct = self._pnl_pct(entry, ask)
         data["price"] = ask
         data["price_at"] = read_at
         data["pnl_pct"] = pnl_pct
+        if entry.notional:
+            data["pnl_usdt"] = entry.notional * pnl_pct / 100
         if entry.notional and entry.capital_usdt:
             data["pnl_capital_pct"] = entry.notional * pnl_pct / entry.capital_usdt
+        if entry.target_price and ask > 0:
+            data["to_target_pct"] = max(0.0, 100 * (ask - entry.target_price) / ask)
+        worst = data["worst_pnl_pct"]  # harga sekarang bisa lebih buruk dari yang sudah tercatat
+        data["worst_pnl_pct"] = pnl_pct if worst is None else min(worst, pnl_pct)
         return data
+
+    def _pnl_pct(self, entry: JournalEntry, price: float) -> float:
+        """Hasil short dalam persen nilai posisi bila ditutup di `price` (setelah fee)."""
+        assert entry.entry_price
+        return 100 * (entry.entry_price - price) / entry.entry_price - self._params.fee_pct
 
     @staticmethod
     def _closed_dict(entry: JournalEntry) -> dict[str, Any]:

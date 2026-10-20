@@ -196,6 +196,7 @@ const loaders = {};
 function showPage(name) {
   for (const item of document.querySelectorAll('.menu-item')) item.classList.toggle('active', item.dataset.page === name);
   for (const page of document.querySelectorAll('.page')) page.hidden = page.id !== `page-${name}`;
+  window.scrollTo(0, 0); // halaman baru selalu mulai dari atas, bukan posisi gulir halaman lama
   loaders[name]?.();
 }
 for (const item of document.querySelectorAll('.menu-item')) item.addEventListener('click', () => showPage(item.dataset.page));
@@ -1251,7 +1252,13 @@ $('pos-check').addEventListener('click', async () => {
 });
 
 async function loadOwnPositions(canSell) {
-  const result = await window.bot.positions.list();
+  renderOwnPositions(await window.bot.positions.list(), canSell);
+}
+
+let ownCanSell = false;
+function renderOwnPositions(result, canSell = ownCanSell) {
+  ownCanSell = canSell;
+  const missingSet = new Set(healthState.missing || []);
   posNotice(result.warning ? `Harga ${platform?.name || 'Binance'} belum bisa diambil; hasil sementara tidak tampil.` : '', 'warn');
   $('pos-close-all').disabled = !result.positions.length;
   ownRealOpen = result.positions.some((p) => p.real);
@@ -1265,14 +1272,19 @@ async function loadOwnPositions(canSell) {
       p.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null,
       el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
     el('td', { class: 'num', textContent: price(p.entry_price) }),
-    el('td', { class: 'num' }, price(p.price), priceAge(p)),
-    el('td', { class: `num ${signClass(p.pnl_capital_pct)}`, textContent: p.pnl_capital_pct === null ? '–' : `${percent(p.pnl_capital_pct)} modal` }),
-    el('td', { class: 'num', textContent: price(p.target_price) }),
-    el('td', { class: 'num' }, canSell
-      ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol, p.real === true) })
-      : el('span', { class: 'locked', textContent: 'Ditutup pemimpin' }))));
+    el('td', { class: 'num' }, price(p.price), priceAge(p) || (p.price_at ? el('small', { class: 'price-age', textContent: `dicek ${clock(p.price_at)}` }) : null)),
+    el('td', { class: `num ${signClass(p.pnl_capital_pct)}` }, p.pnl_capital_pct === null || p.pnl_capital_pct === undefined ? '–' : `${percent(p.pnl_capital_pct)} modal`,
+      typeof p.pnl_usdt === 'number' ? el('small', { class: 'price-age', textContent: usdtText(p.pnl_usdt) }) : null),
+    el('td', { class: 'num' }, typeof p.worst_pnl_pct === 'number' && p.worst_pnl_pct < 0 ? `-${pctText(p.worst_pnl_pct)}` : '–'),
+    el('td', { class: 'num' }, price(p.target_price), el('small', { class: 'price-age', textContent: targetText(p) })),
+    el('td', { class: 'num actions' },
+      missingSet.has(p.symbol) ? el('small', { class: 'gone-note', textContent: 'Tidak ada lagi di Binance' }) : null,
+      p.real && canSell ? el('button', { class: 'secondary small', textContent: 'Tutup manual?', title: 'Catat posisi yang sudah kamu tutup sendiri di bursa', onclick: () => askManual(p.symbol) }) : null,
+      canSell
+        ? el('button', { class: 'sell', textContent: 'Sell', onclick: () => sellOwn(p.symbol, p.real === true) })
+        : el('span', { class: 'locked', textContent: 'Ditutup pemimpin' }))));
   $('pos-table').replaceChildren(...(rows.length ? rows
-    : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 6, textContent: 'Tidak ada posisi yang terbuka.' }))]));
+    : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: 'Tidak ada posisi yang terbuka.' }))]));
 }
 
 async function sellOwn(symbol, real = false) {
@@ -1336,12 +1348,130 @@ async function sellTeam(target, symbol, label) {
   }
 }
 
+// --------------------------------------------------------------------------- kesehatan dan posisi berjalan
+
+const LOSS_KEY = 'marketforge.lossLimit.v1';
+let healthState = { warnings: [], missing: [] };
+let livePositions = [];
+
+const usdtText = (v) => (typeof v === 'number' ? `${v > 0 ? '+' : ''}${v.toFixed(2).replace('.', ',')} USDT` : '–');
+const pctText = (v) => (typeof v === 'number' ? `${Math.abs(v).toFixed(1).replace('.', ',')}%` : '–');
+
+/** Peringatan laptop di atas halaman Pantau; baris "aman" hanya saat ada yang dipantau. */
+function renderHealth() {
+  const box = $('health');
+  const h = healthState;
+  const items = (h.warnings || []).map((w) => el('div', { class: `health-item ${w.level}` },
+    el('i', { 'aria-hidden': 'true' }), el('span', { textContent: w.text })));
+  if (!items.length && (h.running || livePositions.length)) {
+    const site = platform?.name || 'Binance';
+    const parts = [h.network === 'ok' ? `Jaringan ${site} aman` : null, h.onBattery ? null : 'charger terpasang',
+      h.keepAwake ? 'laptop dijaga tetap menyala selama bot berjalan' : null].filter(Boolean);
+    if (parts.length) items.push(el('div', { class: 'health-item ok' }, el('i', { 'aria-hidden': 'true' }), el('span', { textContent: `${parts.join(' · ')}.` })));
+  }
+  box.replaceChildren(...items);
+  box.hidden = !items.length;
+}
+
+/** Jarak harga sekarang ke harga jual otomatis, dalam kalimat. */
+function targetText(p) {
+  if (typeof p.to_target_pct !== 'number') return '';
+  return p.to_target_pct <= 0 ? 'sudah di target' : `turun ${pctText(p.to_target_pct)} lagi`;
+}
+
+/** Ringkasan posisi di Pantau (uang sungguhan dulu): satu baris per koin, detail di Posisi. */
+function renderLive() {
+  const list = [...livePositions].sort((a, b) => Number(Boolean(b.real)) - Number(Boolean(a.real)));
+  $('live').hidden = !list.length;
+  const missingSet = new Set(healthState.missing || []);
+  $('live-list').replaceChildren(...list.map((p) => {
+    const gone = missingSet.has(p.symbol);
+    const note = gone ? 'Tidak ada lagi di Binance: catat di Posisi' : targetText(p) ? `Target: ${targetText(p)}` : '';
+    return el('button', { type: 'button', class: `live-row ${gone ? 'gone' : ''}`, title: 'Buka di halaman Posisi', onclick: () => showPage('positions') },
+      el('strong', { class: 'sym', textContent: p.symbol }),
+      el('span', { class: p.real ? 'badge-real' : 'badge-paper', textContent: p.real ? 'Uang sungguhan' : 'Uji kertas' }),
+      el('strong', { class: `live-pnl ${signClass(p.pnl_usdt)}`, textContent: usdtText(p.pnl_usdt) }),
+      el('span', { class: 'live-note', textContent: note }));
+  }));
+}
+
+function applyHealth(h) {
+  if (!h) return;
+  healthState = h;
+  renderHealth();
+  renderLive();
+}
+
+function applyPositions(positions) {
+  if (!Array.isArray(positions)) return;
+  livePositions = positions;
+  renderLive();
+  renderHealth();
+}
+
+function setupLossLimit() {
+  let saved = '0';
+  try { saved = localStorage.getItem(LOSS_KEY) || '0'; } catch { /* default */ }
+  const select = $('loss-limit');
+  select.value = saved;
+  window.bot.health.setLossLimit(Number(saved)).catch(() => {});
+  select.addEventListener('change', () => {
+    try { localStorage.setItem(LOSS_KEY, select.value); } catch { /* tidak diingat */ }
+    window.bot.health.setLossLimit(Number(select.value)).catch(() => {});
+  });
+}
+
+/** Dialog catat tutup manual (posisi yang sudah ditutup sendiri di bursa). */
+let manualSymbol = null;
+function askManual(symbol) {
+  manualSymbol = symbol;
+  $('manual-title').textContent = `${symbol} sudah ditutup di ${platform?.name || 'Binance'}?`;
+  $('manual-price').value = '';
+  $('manual-pnl').value = '';
+  $('manual-error').textContent = '';
+  $('manual-dialog').hidden = false;
+  $('manual-price').focus();
+}
+$('manual-cancel').addEventListener('click', () => { $('manual-dialog').hidden = true; });
+$('manual-save').addEventListener('click', async () => {
+  const button = $('manual-save');
+  button.disabled = true;
+  try {
+    const result = await window.bot.positions.recordManual(manualSymbol, $('manual-price').value, $('manual-pnl').value);
+    $('manual-dialog').hidden = true;
+    const c = result.closed?.[0];
+    window.bot.reportActivity({ text: c ? `Tutup manual dicatat: ${c.symbol}` : 'Tutup manual dicatat' }).catch(() => {});
+    if (!$('page-positions').hidden) {
+      await loadPositions();
+      posNotice(c ? `${c.symbol} dicatat ditutup manual (${percent(c.pnl_capital_pct)} modal).` : 'Dicatat.', 'good');
+    }
+  } catch (err) {
+    $('manual-error').textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('live-open').addEventListener('click', () => showPage('positions'));
+window.bot.health.onChanged(applyHealth);
+window.bot.health.get().then(applyHealth).catch(() => {});
+window.bot.positions.cached().then(applyPositions).catch(() => {});
+setupLossLimit();
+
 $('pos-refresh').addEventListener('click', loadPositions);
 $('pos-close-all').addEventListener('click', () => {
   if (currentRole() === 'leader') sellTeam('*', '*', 'semua posisi semua pengikut');
   else sellOwn('semua', ownRealOpen);
 });
-window.bot.positions.onChanged(() => {
+window.bot.positions.onChanged((payload) => {
+  if (payload?.positions) {
+    // Penyegaran tiap menit: gambar ulang dari data yang sudah dibaca (tanpa menjalankan engine lagi).
+    applyPositions(payload.positions);
+    if (!$('page-positions').hidden && !$('pos-own').hidden) {
+      renderOwnPositions({ warning: null, positions: payload.positions });
+    }
+    return;
+  }
   if (!$('page-positions').hidden) loadPositions();
 });
 

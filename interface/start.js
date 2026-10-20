@@ -17,7 +17,9 @@ try {
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 
-const child = spawn(electron, ['.'], { cwd: __dirname, env, stdio: 'inherit' });
+// macOS: salinan bundel bernama "MarketForge Kripto" (bar menu dan Dock), lihat brand.js.
+const executable = require('./brand').brandedExecutable(electron);
+const child = spawn(executable, ['.'], { cwd: __dirname, env, stdio: 'inherit' });
 child.on('exit', (code, signal) => {
   if (signal) process.kill(process.pid, signal);
   else process.exit(code ?? 0);

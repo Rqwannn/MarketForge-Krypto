@@ -54,7 +54,7 @@ from binance_bot.workflows import (
     day_bounds,
 )
 from binance_bot.workflows.base import TradingNavigator
-from binance_bot.workflows.positions import ALL
+from binance_bot.workflows.positions import ALL, ManualClose
 
 if TYPE_CHECKING:
     from binance_bot.tebbit_web.chrome_windows import WinChromeWindowController
@@ -82,6 +82,25 @@ def parse_capital(text: str) -> float | str:
         return float(text.replace(",", "."))
     except ValueError:
         raise argparse.ArgumentTypeError("isi angka USDT, mis. 100, atau max") from None
+
+
+def parse_price(text: str) -> float:
+    """Harga lebih dari 0, titik atau koma desimal ("0,04747")."""
+    try:
+        value = float(text.replace(",", "."))
+    except ValueError:
+        value = 0.0
+    if not value > 0:
+        raise argparse.ArgumentTypeError("harga harus angka lebih dari 0")
+    return value
+
+
+def parse_signed(text: str) -> float:
+    """Angka bertanda, mis. hasil "-1,25" atau "+0,60" USDT."""
+    try:
+        return float(text.replace(",", "."))
+    except ValueError:
+        raise argparse.ArgumentTypeError("isi angka, mis. 0,60 atau -1,25") from None
 
 
 def parse_rank(text: str) -> int:
@@ -265,6 +284,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Tebbit: baca harga posisi dari layar sekarang dan jual otomatis bila sudah target",
     )
+    positions.add_argument(
+        "--baca",
+        action="store_true",
+        help="Hanya baca posisi dan harga sekarang (tanpa menulis jurnal); untuk aplikasi",
+    )
+    positions.add_argument(
+        "--catat-manual",
+        metavar="PAIR",
+        help="Catat posisi PAIR yang sudah ditutup sendiri di bursa (wajib --harga)",
+    )
+    positions.add_argument("--harga", type=parse_price, help="Harga tutup rata-rata dari bursa")
+    positions.add_argument(
+        "--hasil", type=parse_signed, help="Hasil terealisasi USDT dari bursa (opsional)"
+    )
 
     sub.add_parser(
         "cek", help="Cek kesiapan laptop (izin, Binance, jendela, API, .env) dalam JSON."
@@ -434,6 +467,8 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             check=args.cek,
             closer=closer,
             watch_s=60.0 if args.pantau else 0.0,
+            read_only=args.baca,
+            manual=_manual_close(args),
         )
 
     if not tebbit:
@@ -535,6 +570,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 # Lokasi aplikasi dibaca lapisan sistem langsung dari variabel lingkungan OS (bukan dari Settings),
 # jadi nilai di `.env` perlu diteruskan ke sana; variabel OS yang sudah ada tetap menang.
 _PATH_KEYS = ("BOT_APP_PATH", "BOT_CHROME_PATH")
+
+
+def _manual_close(args: argparse.Namespace) -> ManualClose | None:
+    """`posisi --catat-manual PAIR --harga X [--hasil Y]` -> data penutupan manual."""
+    if not getattr(args, "catat_manual", None):
+        return None
+    if args.harga is None:
+        raise BotError("--catat-manual butuh --harga (harga tutup rata-rata dari bursa)")
+    return ManualClose(args.catat_manual.upper(), args.harga, args.hasil)
 
 
 def _export_path_settings(dotenv: dict[str, str]) -> None:

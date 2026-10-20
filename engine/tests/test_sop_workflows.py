@@ -13,6 +13,7 @@ from binance_bot.exceptions import (
     BotError,
     MarketDataError,
     NoHistoryError,
+    PositionNotFoundError,
     SafetyError,
     ScreenReadError,
 )
@@ -29,6 +30,7 @@ from binance_bot.workflows import (
     SingleWorkflow,
     SopTrader,
 )
+from binance_bot.workflows.positions import ManualClose
 from binance_bot.workflows.sop import coin_event
 from fakes import (
     NEVER,
@@ -1582,3 +1584,92 @@ def test_price_check_remembers_the_price_for_the_positions_list(tmp_path: Path) 
     market.reachable = False  # layar ditutup lagi: daftar Posisi memakai harga tersimpan
     [position] = run_positions(journal, market)["positions"]
     assert position["price"] == 0.995 and position["price_stale"] is True
+
+
+# ------------------------------------------------- kartu posisi, tutup manual, posisi yang hilang
+
+
+def test_read_only_listing_never_writes_the_journal(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    held = _real_position("ARIAUSDT", entry=1.0)
+    held.max_price = 1.32  # sempat naik 32% melawan short
+    journal.append(held)
+    before = journal.path.read_bytes()
+    out: list[str] = []
+    market = FakeMarket(quote=Quote(bid=1.04, ask=1.05, funding_rate=0.0, change_pct=1.0))
+    PositionsWorkflow(
+        SopParams(),
+        journal,
+        market,
+        read_only=True,
+        output=out.append,  # type: ignore[arg-type]
+    ).run()
+    [p] = json.loads(out[0])["positions"]
+    assert journal.path.read_bytes() == before  # aman dijalankan tiap menit di samping bot
+    assert p["pnl_pct"] == pytest.approx(-5.1)
+    assert p["pnl_usdt"] == pytest.approx(-5.1)  # nilai posisi 100 USDT
+    assert p["worst_pnl_pct"] == pytest.approx(-32.1)  # rugi terdalam sejak masuk
+    assert p["to_target_pct"] == pytest.approx(100 * (1.05 - 0.98) / 1.05)
+
+
+def _record_manual(journal: Journal, manual: ManualClose) -> dict[str, Any]:
+    out: list[str] = []
+    PositionsWorkflow(
+        SopParams(),
+        journal,
+        FakeMarket(),  # type: ignore[arg-type]
+        manual=manual,
+        output=out.append,
+        wall_clock=lambda: NOW.timestamp(),
+    ).run()
+    result: dict[str, Any] = json.loads(out[0])
+    return result
+
+
+def test_a_manual_close_is_recorded_with_the_exchange_result(tmp_path: Path) -> None:
+    # Seperti ARIA: ditutup sendiri di Binance di 0,04747, PNL terealisasi +0,60 USDT.
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(_real_position("ARIAUSDT", entry=0.0478091))
+    journal.append(_real_position("BTWUSDT"))
+    result = _record_manual(journal, ManualClose("ARIAUSDT", 0.04747, 0.60))
+    aria = next(e for e in journal.load() if e.symbol == "ARIAUSDT")
+    assert (aria.status, aria.exit_price, aria.pnl_usdt) == ("manual", 0.04747, 0.60)
+    assert aria.pnl_pct == pytest.approx(0.6)  # 0,60 dari nilai posisi 100 USDT
+    assert "Ditutup manual" in aria.reason
+    assert [p["symbol"] for p in result["positions"]] == ["BTWUSDT"]  # posisi lain tetap
+
+
+def test_a_manual_close_without_the_exchange_result_uses_the_price(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(_real_position("ARIAUSDT", entry=1.0))
+    _record_manual(journal, ManualClose("ARIAUSDT", 0.99))
+    [aria] = journal.load()
+    assert aria.pnl_pct == pytest.approx(0.9)  # turun 1% - fee 0,1%
+
+
+def test_a_manual_close_for_a_pair_without_an_open_position_is_refused(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "sop.jsonl")
+    journal.append(_real_position("ARIAUSDT"))
+    result = _record_manual(journal, ManualClose("BTWUSDT", 1.0))
+    assert "Tidak ada posisi terbuka untuk BTWUSDT" in result["error"]
+    assert [e.status for e in journal.load()] == ["open"]
+
+
+def test_a_position_missing_on_the_exchange_is_reported_not_closed(
+    tmp_path: Path, live_money: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Ditutup manual di Binance, jurnal masih terbuka: bot memberi tahu aplikasi, tidak mencatat.
+    market = ScreenOnlyMarket()
+
+    class Gone(FakeNavigator):
+        def close_position(self, symbol: str) -> None:
+            raise PositionNotFoundError(f"Posisi {symbol} tidak ada di tab Posisi Binance")
+
+    trader, _, journal, _ = make_trader(tmp_path, Gone({}), market)
+    journal.append(_real_position("ARIAUSDT"))
+    market.quotes["ARIAUSDT"] = Quote(bid=0.97, ask=0.975, funding_rate=0.0, change_pct=1.0)
+    caplog.set_level("INFO")
+    trader.refresh_journal()
+    events = [r.event for r in caplog.records if hasattr(r, "event")]
+    assert {"type": "position_missing", "symbol": "ARIAUSDT"} in events
+    assert [e.status for e in journal.load()] == ["open"]

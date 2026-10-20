@@ -3,10 +3,11 @@
 // Proses utama Electron: jendela, IPC, dan satu proses engine. Isian dari tampilan divalidasi
 // di engine.js sebelum menjadi argumen CLI. Tidak ada kontrol untuk order sungguhan.
 
-const { app, BrowserWindow, Notification, ipcMain } = require('electron');
+const { app, BrowserWindow, Notification, ipcMain, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
+const alerts = require('./alerts');
 const engine = require('./engine');
 const {
   COIN, Discovery, MAX_ACTIVITY, localAddress, primaryAddress, sealedFields,
@@ -17,6 +18,12 @@ const { Team, normalizeRank } = require('./team');
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
 const ICON = path.join(__dirname, 'assets', 'icon.png'); // logo MarketForge (dari app_icon_adaptive)
 const PAGE_URL = pathToFileURL(PAGE).href;
+
+const { BRAND, BUNDLE_ID } = require('./brand');
+
+// Nama di menu Quit/Hide/About, notifikasi, dan taskbar Windows (bar menu macOS: lihat brand.js).
+app.setName(BRAND);
+if (process.platform === 'win32') app.setAppUserModelId(BUNDLE_ID);
 
 const proc = new engine.EngineProcess();
 let win = null;
@@ -280,8 +287,131 @@ function announceExit(info) {
   }
 }
 
+// --------------------------------------------------------------------------- kesehatan dan peringatan
+
+const HEALTH_MS = 60 * 1000; // cek jaringan, charger, dan harga posisi tiap menit
+const NETWORK_TIMEOUT_MS = 8000;
+const REPEAT_NOTICE_MS = 30 * 60 * 1000; // notifikasi gagal/hilang yang sama paling sering 30 menit
+const health = { network: 'unknown', onBattery: false, sleep: null, keepAwake: false, checkedAt: 0 };
+let sleepingSince = null; // saat laptop mulai tidur (powerMonitor 'suspend')
+let awakeBlocker = null; // powerSaveBlocker selama bot berjalan
+let lossLimit = 0; // batas rugi (%) untuk notifikasi; 0 = mati
+const lossAlerted = new Set();
+const noticeAt = new Map(); // kunci notifikasi -> waktu terakhir tampil
+const missing = new Set(); // posisi yang tidak ada lagi di tab Posisi bursa (mungkin ditutup manual)
+
+function realOpen() {
+  return ownPositions.filter((p) => p.real).length;
+}
+
+function notify(notice, repeatMs = 0) {
+  if (!notice) return;
+  const last = noticeAt.get(notice.key);
+  if (repeatMs && last && Date.now() - last < repeatMs) return;
+  noticeAt.set(notice.key, Date.now());
+  try {
+    if (Notification.isSupported()) new Notification({ title: notice.title, body: notice.body }).show();
+  } catch {
+    // notifikasi hanya tambahan; peringatan juga tampil di aplikasi
+  }
+}
+
+function healthSnapshot() {
+  const state = { ...health, exchange, running: proc.running, realOpen: realOpen(), now: Date.now() };
+  return { ...state, warnings: alerts.healthWarnings(state), missing: [...missing], lossLimit };
+}
+
+/** Jaga Mac/PC tetap menyala selama bot berjalan (jual otomatis butuh laptop yang bangun). */
+function syncKeepAwake() {
+  const want = proc.running;
+  if (want && awakeBlocker === null) awakeBlocker = powerSaveBlocker.start('prevent-app-suspension');
+  if (!want && awakeBlocker !== null) {
+    powerSaveBlocker.stop(awakeBlocker);
+    awakeBlocker = null;
+  }
+  health.keepAwake = awakeBlocker !== null;
+}
+
+async function reachable(url) {
+  try {
+    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) });
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+async function checkNetwork() {
+  const exchangeOk = await reachable(alerts.NETWORK_TARGETS[exchange] || alerts.NETWORK_TARGETS.binance);
+  const controlOk = exchangeOk || (await reachable(alerts.CONTROL_TARGET));
+  health.network = alerts.networkState(exchangeOk, controlOk);
+  health.checkedAt = Date.now();
+}
+
+/** Harga posisi terbuka tanpa menulis jurnal (aman di samping bot), lalu cek batas rugi. */
+async function refreshLivePositions() {
+  try {
+    const result = await engine.runJson(onExchange(['posisi', '--baca']));
+    if (!Array.isArray(result.positions)) return;
+    ownPositions = result.positions;
+  } catch {
+    return;
+  }
+  const open = new Set(ownPositions.map((p) => p.symbol));
+  for (const symbol of [...missing]) if (!open.has(symbol)) missing.delete(symbol);
+  for (const notice of alerts.lossAlerts(ownPositions, lossLimit, lossAlerted)) notify(notice);
+  syncPresence();
+  send('positions:changed', { positions: ownPositions });
+}
+
+async function healthTick() {
+  syncKeepAwake();
+  health.onBattery = powerMonitor.isOnBatteryPower();
+  await checkNetwork();
+  await refreshLivePositions(); // juga menemukan posisi baru (mis. setelah ganti platform)
+  send('health:changed', healthSnapshot());
+}
+
+function startHealth() {
+  powerMonitor.on('suspend', () => {
+    sleepingSince = Date.now();
+  });
+  powerMonitor.on('resume', () => {
+    if (sleepingSince !== null) {
+      const to = Date.now();
+      const watching = proc.running || realOpen() > 0;
+      health.sleep = { from: sleepingSince, to, minutes: Math.round((to - sleepingSince) / 60000), watching };
+      sleepingSince = null;
+      if (watching && health.sleep.minutes >= 1) {
+        notify({ key: 'sleep', title: `Laptop sempat tidur ${health.sleep.minutes} menit`, body: 'Selama itu bot tidak memantau posisi. Pasang charger dan jangan tutup layar.' });
+      }
+    }
+    healthTick();
+  });
+  const power = () => {
+    health.onBattery = powerMonitor.isOnBatteryPower();
+    if (health.onBattery && (proc.running || realOpen())) {
+      notify({ key: 'battery', title: 'Charger dilepas', body: 'Pasang charger supaya laptop tidak tidur saat bot memantau.' }, REPEAT_NOTICE_MS);
+    }
+    send('health:changed', healthSnapshot());
+  };
+  powerMonitor.on('on-battery', power);
+  powerMonitor.on('on-ac', power);
+  healthTick();
+  setInterval(healthTick, HEALTH_MS).unref?.();
+}
+
 proc.on('log', (entry) => {
   send('engine:log', entry);
+  if (!health.keepAwake) syncKeepAwake();
+  const notice = alerts.logNotice(entry);
+  if (notice) {
+    notify(notice, notice.key.startsWith('sold:') ? 0 : REPEAT_NOTICE_MS);
+    if (entry.event?.type === 'position_missing') {
+      missing.add(entry.event.symbol);
+      send('health:changed', healthSnapshot());
+    }
+  }
   const e = entry.event;
   if (e?.type === 'view' && e.target === 'app') showAppWindow();
   if (team && runningMode === 'leader' && e?.type === 'cycle' && e.phase === 'start') {
@@ -295,6 +425,8 @@ proc.on('exit', (info) => {
   runningMode = null;
   syncPresence();
   refreshPositions();
+  syncKeepAwake();
+  send('health:changed', healthSnapshot());
   for (const job of closeQueue.splice(0)) closeForLeader(job);
   announceExit(info); // bot selesai: aplikasi kembali ke depan dan memberi tahu
 });
@@ -305,7 +437,7 @@ function createWindow() {
     height: 880,
     minWidth: 1000,
     minHeight: 680,
-    title: 'MarketForge',
+    title: BRAND,
     icon: ICON, // Windows/Linux; di macOS ikon Dock diatur lewat app.dock
     backgroundColor: '#121316',
     webPreferences: {
@@ -376,7 +508,12 @@ handle('engine:summary', (range) => {
 });
 handle('platform:set', (id) => {
   if (!engine.EXCHANGES.includes(id)) throw new Error('Platform tidak dikenal');
-  if (!proc.running) exchange = id; // saat bot berjalan, platform mengikuti bot
+  if (!proc.running && exchange !== id) {
+    exchange = id; // saat bot berjalan, platform mengikuti bot
+    ownPositions = []; // posisi dan jaringan dicek ulang untuk bursa ini
+    missing.clear();
+    healthTick();
+  }
   return exchange;
 });
 handle('chart:image', (file) => engine.readChart(file));
@@ -417,6 +554,25 @@ handle('positions:check', async () => {
   const result = await engine.runJson(onExchange(['posisi', '--cek']), { timeoutMs: 300000 });
   if (Array.isArray(result.positions)) ownPositions = result.positions;
   return result;
+});
+handle('positions:cached', () => ownPositions);
+handle('positions:recordManual', async (symbol, exitPrice, pnlUsdt) => {
+  // Hanya mencatat jurnal; tidak menyentuh bursa. Aman saat bot berjalan (kunci jual yang sama).
+  const result = await engine.runJson(onExchange(engine.manualCloseArgs(symbol, exitPrice, pnlUsdt)));
+  if (result.error) throw new Error(result.error);
+  if (Array.isArray(result.positions)) ownPositions = result.positions;
+  missing.delete(String(symbol).toUpperCase());
+  syncPresence();
+  send('positions:changed', { positions: ownPositions });
+  send('health:changed', healthSnapshot());
+  return result;
+});
+handle('health:get', () => healthSnapshot());
+handle('alerts:setLossLimit', (pct) => {
+  const value = Number(pct);
+  lossLimit = [0, 10, 20, 30, 50].includes(value) ? value : 0;
+  lossAlerted.clear();
+  return lossLimit;
 });
 handle('team:realAnswer', (ok) => {
   const start = pendingRealStart;
@@ -512,6 +668,7 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin') app.dock?.setIcon(ICON);
   await startDiscovery(); // selesai sebelum jendela memuat daftar laptop
   createWindow();
+  startHealth();
 });
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -113,6 +113,21 @@ function followerTops(rank) {
   return tops.length === 1 ? ['--rank', String(tops[0])] : ['--ranks', tops.join(',')];
 }
 
+/**
+ * Argumen `posisi --catat-manual`: posisi yang sudah ditutup sendiri di bursa. Harga tutup wajib,
+ * hasil USDT dari Riwayat Posisi bursa opsional (boleh minus).
+ */
+function manualCloseArgs(symbol, exitPrice, pnlUsdt) {
+  const pair = String(symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{1,20}USD[TC]$/.test(pair)) throw new InputError('Pair tidak valid');
+  const args = ['posisi', '--catat-manual', pair, '--harga', String(number(exitPrice, 'Harga tutup', 1e-12, 1e9))];
+  if (pnlUsdt !== undefined && pnlUsdt !== null && String(pnlUsdt).trim() !== '') {
+    const pnl = String(pnlUsdt).trim().replace(/^\+/, '');
+    args.push(`--hasil=${number(pnl, 'Hasil', -1e9, 1e9)}`);
+  }
+  return args;
+}
+
 /** Modal USDT, atau 'max' = seluruh saldo USDT tersedia (dibaca engine dari form order Binance/Tebbit). */
 function modalOf(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
@@ -354,6 +369,7 @@ module.exports = {
   appSetting,
   findBot,
   hubToken,
+  manualCloseArgs,
   parseLine,
   readAppEnv,
   runJson,

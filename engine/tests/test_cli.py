@@ -137,3 +137,17 @@ def test_app_paths_in_dotenv_reach_the_os_layer_but_the_os_environment_wins(
 
     assert os.environ["BOT_APP_PATH"] == r"D:\Binance\Binance.exe"
     assert os.environ["BOT_CHROME_PATH"] == r"C:\dari\os\chrome.exe"  # variabel OS menang
+
+
+def test_manual_close_arguments() -> None:
+    from binance_bot.workflows.positions import ManualClose
+
+    args = build_parser().parse_args(
+        ["posisi", "--catat-manual", "ariausdt", "--harga", "0,04747", "--hasil", "+0,60"]
+    )
+    assert cli._manual_close(args) == ManualClose("ARIAUSDT", 0.04747, 0.60)
+    with pytest.raises(BotError, match="--harga"):
+        cli._manual_close(build_parser().parse_args(["posisi", "--catat-manual", "ARIAUSDT"]))
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["posisi", "--catat-manual", "ARIAUSDT", "--harga", "0"])
+    assert cli._manual_close(build_parser().parse_args(["posisi", "--baca"])) is None
