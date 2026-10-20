@@ -152,6 +152,11 @@ POSITIONS_SCROLL_NOTCHES = 12
 # Tinggi tab "Posisi(n)" saat halaman tanpa banner; None = pergeseran panel tidak diukur.
 POSITIONS_TAB_Y: float | None = None
 
+# Titik kosong di bilah judul Binance (tanpa kontrol apa pun). Cara terakhir merebut fokus lewat
+# klik asli, bila Windows menolak SetForegroundWindow (mis. jendela notifikasi memegang fokus).
+# None = tidak dipakai.
+FOCUS_POINT: tuple[float, float] | None = None
+
 # Zona tombol order di halaman trade (x0, y0, x1, y1). Klik ke sini SELALU ditolak oleh
 # navigator: beli/short belum boleh dijalankan oleh bot.
 ORDER_BUTTON_ZONES: tuple[tuple[float, float, float, float], ...] = (

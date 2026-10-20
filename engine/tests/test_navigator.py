@@ -4,9 +4,15 @@ import pytest
 
 from binance_bot.binance_desktop import BinanceNavigator, layout
 from binance_bot.config import Settings
-from binance_bot.exceptions import AppNotRunningError, SafetyError, ScreenReadError, WindowError
+from binance_bot.exceptions import (
+    AppNotRunningError,
+    AppTimeoutError,
+    SafetyError,
+    ScreenReadError,
+    WindowError,
+)
 from binance_bot.macos import Rect, TextLine
-from fakes import AREA, WINDOW, Clock, FakeApps, FakeScreen, list_lines, text_lines
+from fakes import AREA, BUNDLE, WINDOW, Clock, FakeApps, FakeScreen, list_lines, text_lines
 
 ASCENDING = list_lines((1, "USUSDT", "-32.21%"), (2, "JCTUSDT", "-30.04%"))
 DESCENDING = list_lines(
@@ -38,6 +44,85 @@ def at(target: tuple[float, float]) -> tuple[int, int]:
 
 def clicks(screen: FakeScreen) -> list[object]:
     return [where for kind, where in screen.events if kind == "click"]
+
+
+class FocusStuckApps(FakeApps):
+    """Aplikasi lain (jendela notifikasi Windows) memegang fokus sampai ada klik di jendela."""
+
+    def __init__(self, screen: FakeScreen) -> None:
+        super().__init__()
+        self._screen = screen
+
+    def frontmost_bundle_id(self) -> str | None:
+        clicked = any(kind == "click" for kind, _ in self._screen.events)
+        return BUNDLE if clicked else "ShellExperienceHost.exe"
+
+
+def test_prepare_clicks_the_empty_title_bar_when_focus_will_not_move(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Uji nyata (04.45): jendela notifikasi Windows memegang fokus, putaran gagal di awal.
+    monkeypatch.setattr(layout, "FOCUS_POINT", (0.25, 0.0216))
+    screen = FakeScreen()
+    nav = make_nav(screen, FocusStuckApps(screen))
+    nav.prepare()
+    assert clicks(screen) == [WINDOW.point_at(0.25, 0.0216)]
+
+
+def test_ensure_front_clicks_the_empty_title_bar_after_two_failed_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(layout, "FOCUS_POINT", (0.25, 0.0216))
+    screen = FakeScreen()
+    apps = FocusStuckApps(screen)
+    nav = make_nav(screen, apps)
+    nav._rect = WINDOW
+    nav._ensure_front()
+    assert clicks(screen) == [WINDOW.point_at(0.25, 0.0216)]
+    assert len(apps.launched) == 3  # dua usaha biasa gagal, klik, usaha ketiga berhasil
+
+
+def test_focus_that_never_returns_is_still_an_error_after_one_click(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NeverFront(FakeApps):
+        def frontmost_bundle_id(self) -> str | None:
+            return "ShellExperienceHost.exe"
+
+    monkeypatch.setattr(layout, "FOCUS_POINT", (0.25, 0.0216))
+    screen = FakeScreen()
+    nav = make_nav(screen, NeverFront())
+    nav._rect = WINDOW
+    with pytest.raises(AppTimeoutError):
+        nav._ensure_front()
+    assert len(clicks(screen)) == 1  # satu klik saja, bukan klik berulang
+
+
+def test_no_title_bar_click_without_a_focus_point(monkeypatch: pytest.MonkeyPatch) -> None:
+    class NeverFront(FakeApps):
+        def frontmost_bundle_id(self) -> str | None:
+            return "ShellExperienceHost.exe"
+
+    monkeypatch.setattr(layout, "FOCUS_POINT", None)  # profil macOS
+    screen = FakeScreen()
+    nav = make_nav(screen, NeverFront())
+    nav._rect = WINDOW
+    with pytest.raises(AppTimeoutError):
+        nav._ensure_front()
+    assert clicks(screen) == []
+
+
+def test_focus_point_is_an_empty_title_bar_spot_far_from_the_order_zones() -> None:
+    from binance_bot.binance_desktop import layout_windows, layout_windows_1366
+
+    for profile in (layout_windows, layout_windows_1366):
+        x, y = profile.FOCUS_POINT
+        _, height = profile.EXPECTED_WINDOW
+        assert y * height < 45  # di dalam bilah judul (45 px)
+        assert 0.2 < x < 0.34  # di antara tombol muat ulang dan kotak pencarian
+        assert not any(
+            x0 <= x <= x1 and y0 <= y <= y1 for x0, y0, x1, y1 in profile.ORDER_BUTTON_ZONES
+        )
 
 
 def test_prepare_refuses_when_binance_not_running() -> None:
@@ -135,6 +220,67 @@ def test_open_gainer_clicks_row_icon_and_reads_pair_on_trade_page() -> None:
     nav.prepare()
     assert nav.open_gainer(3) == "MBLUSDT"
     assert clicks(screen) == [at(layout.trade_icon(3))]
+
+
+ACTION_AREA = (0.60, 0.20, 1.0, 0.80)  # judul kolom "Tindakan" di daftar Futures
+
+
+def test_open_gainer_waits_for_a_trade_page_that_is_slow_to_load() -> None:
+    # Uji nyata (BRUSDT): halaman koin baru separuh tampil saat pair pertama dibaca.
+    screen = FakeScreen(texts={layout.SYMBOL_AREA: [[], [], text_lines("BRUSDT Perpetual")]})
+    nav = make_nav(screen)
+    nav.prepare()
+    assert nav.open_gainer(1) == "BRUSDT"
+    assert clicks(screen) == [at(layout.trade_icon(1))]  # tanpa klik tambahan
+
+
+def test_open_gainer_clicks_the_icon_again_when_the_click_was_lost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Uji nyata (NILUSDT): klik ikon "Perdagangkan" hilang, daftar Pasar tetap di layar.
+    monkeypatch.setattr(layout, "FUTURES_ACTION_AREA", ACTION_AREA)
+    screen = FakeScreen(
+        texts={
+            layout.SYMBOL_AREA: [[], [], [], text_lines("NILUSDT Perpetual")],
+            ACTION_AREA: [text_lines("Tindakan")],
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    assert nav.open_gainer(5) == "NILUSDT"
+    icon = clicks(screen)[0]
+    assert clicks(screen) == [icon, icon]
+
+
+def test_open_gainer_does_not_click_again_when_the_list_is_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Daftar tak terbukti tampil: klik ulang bisa mendarat di halaman koin, jadi tidak ada."""
+    monkeypatch.setattr(layout, "FUTURES_ACTION_AREA", ACTION_AREA)
+    screen = FakeScreen(texts={layout.SYMBOL_AREA: [[]], ACTION_AREA: [[]]})
+    nav = make_nav(screen)
+    nav.prepare()
+    with pytest.raises(ScreenReadError, match="Pair Futures tidak terbaca"):
+        nav.open_gainer(2)
+    assert len(clicks(screen)) == 1
+
+
+def test_open_gainer_repeats_the_click_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(layout, "FUTURES_ACTION_AREA", ACTION_AREA)
+    screen = FakeScreen(texts={layout.SYMBOL_AREA: [[]], ACTION_AREA: [text_lines("Tindakan")]})
+    nav = make_nav(screen)
+    nav.prepare()
+    with pytest.raises(ScreenReadError, match="Pair Futures tidak terbaca"):
+        nav.open_gainer(1)
+    assert len(clicks(screen)) == 2
+
+
+def test_available_usdt_reads_an_empty_wallet_that_ocr_shows_with_letter_o() -> None:
+    # Uji nyata (19 Okt 23.50): dompet Futures kosong, "0,00" terbaca "O,OO" lalu "tidak terbaca".
+    screen = FakeScreen(texts={layout.ORDER_AVAILABLE_AREA: [text_lines("Tersedia O,OO USDT")]})
+    nav = make_nav(screen)
+    nav.prepare()
+    assert nav.available_usdt() == 0.0
 
 
 def test_rank_is_bounded() -> None:
@@ -303,6 +449,23 @@ def test_missing_15m_button_is_an_error_not_a_blind_click() -> None:
     with pytest.raises(ScreenReadError, match="15 mnt"):
         nav.show_15m_chart()
     assert len(clicks(screen)) == before
+
+
+def test_15m_button_is_waited_for_while_the_trade_page_is_still_loading() -> None:
+    # Uji nyata (BRUSDT): toolbar grafik belum tampil saat dicari, halaman baru separuh dimuat.
+    ready = toolbar(("Grafik", 0.0715, 0.196), ("15 mnt", 0.1265, 0.2416))
+    screen = FakeScreen(
+        texts={
+            layout.SYMBOL_AREA: [text_lines("BRUSDT Perpetual")],
+            layout.CHART_TOOLBAR_AREA: [[], [], [], [], ready],
+            chart_area(): [text_lines("MA(7) 0,0610")],
+        }
+    )
+    nav = make_nav(screen)
+    nav.prepare()
+    nav.open_gainer(1)
+    nav.show_15m_chart()
+    assert clicks(screen)[-2:] == [at((0.0715, 0.196)), at((0.1265, 0.2416))]
 
 
 def test_futures_tab_is_clicked_again_when_the_list_has_not_loaded() -> None:
@@ -695,6 +858,30 @@ def test_press_short_logic_when_unlocked(monkeypatch: pytest.MonkeyPatch) -> Non
     nav._on_trade_page = False
     with pytest.raises(SafetyError, match="halaman koin"):
         nav.press_short(plan)
+
+
+def test_press_short_reads_the_quantity_again_when_ocr_stumbles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Uji nyata (AGTUSDT): bacaan "24" padahal kolom berisi 20, 0,17 detik setelah bacaan "20".
+    from binance_bot.strategy import execution
+    from binance_bot.strategy.execution import OrderPlan
+
+    monkeypatch.setattr(execution, "_live_orders", True)
+    plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 2)
+
+    nav, pressed = _locked_order_nav(monkeypatch, [])
+    answers = iter([["10", "USDT"], ["100", "USDT"]])
+    monkeypatch.setattr(nav, "_read_texts", lambda area: next(answers))
+    nav.press_short(plan)
+    assert pressed == [nav.rect.point_at(0.95, 0.51)]
+
+    nav, pressed = _locked_order_nav(monkeypatch, [])
+    reads: list[int] = []
+    monkeypatch.setattr(nav, "_read_texts", lambda area: reads.append(1) or ["50", "USDT"])
+    with pytest.raises(SafetyError, match="order dibatalkan"):
+        nav.press_short(plan)  # semua bacaan salah: tetap batal, tidak ada yang diklik
+    assert pressed == [] and len(reads) == 4
 
 
 def test_short_button_is_searched_only_in_the_order_form_not_the_chart_widget() -> None:

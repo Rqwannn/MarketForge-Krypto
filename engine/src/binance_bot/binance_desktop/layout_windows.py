@@ -12,6 +12,10 @@ Nilai relatif = piksel / (1920, 1020). Piksel hasil ukur dicatat di komentar.
 WINDOW_MAXIMIZED = True
 EXPECTED_WINDOW = (1920, 1020)
 
+# Bilah judul Binance setinggi 45 px: (480, 22) kosong, di antara tombol muat ulang (210) dan kotak
+# pencarian (733). Dipakai hanya sebagai cara terakhir merebut fokus (lihat layout.FOCUS_POINT).
+FOCUS_POINT = (0.25, 0.0216)
+
 # --------------------------------------------------------------------------- daftar Top Gainers
 
 # Sidebar "Pasar" (43, 195).

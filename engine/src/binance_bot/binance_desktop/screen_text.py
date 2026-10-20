@@ -168,6 +168,29 @@ def parse_amount(text: str) -> float | None:
         return None
 
 
+# Baris "Tersedia 58,70 USDT" di form order. OCR sering membaca nol sebagai huruf O: dompet kosong
+# tampil "0,00" tetapi terbaca "Tersedia O,OO USDT" (uji nyata 19 Okt 2026).
+_AVAILABLE = re.compile(r"Tersedia\s*([\dOo][\dOo.,]*)\s*USDT", re.IGNORECASE)
+
+
+def parse_available_usdt(texts: Iterable[str]) -> float | None:
+    """Saldo "Tersedia ... USDT" dari baris teks form order; None bila tidak terbaca.
+
+    Huruf O/o di dalam angka dibaca sebagai nol. Itu hanya bisa membuat saldo lebih kecil dari yang
+    sebenarnya (O menggantikan angka lain, tidak pernah menambah), jadi tetap aman untuk pengecekan
+    margin. Teks yang hanya huruf, tanpa angka atau pemisah desimal ("Tersedia OOO USDT"), bukan
+    saldo.
+    """
+    for text in texts:
+        match = _AVAILABLE.search(text)
+        if match is None or not re.search(r"[\d.,]", match.group(1)):
+            continue
+        amount = parse_amount(match.group(1).replace("O", "0").replace("o", "0"))
+        if amount is not None:
+            return amount
+    return None
+
+
 def same_number(shown: str, typed: str) -> bool:
     """Apakah teks di kolom bernilai sama dengan angka yang diketik.
 

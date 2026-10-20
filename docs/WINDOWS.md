@@ -105,6 +105,21 @@ Gunakan jumlah di atas kuantitas minimum pair itu. Angka terlalu kecil memunculk
 - OCR Windows lebih goyah pada teks kecil: potongan pendek diperbesar dan dibaca dengan beberapa
   varian, serta verifikasi kolom Jumlah diulang sampai 4 kali (kursor berkedip mengganggu).
 - Akun Futures belum aktif tetap bisa dipakai: halaman trade dan kolom Jumlah tetap tampil.
+- Saldo "Tersedia": huruf O di dalam angka dibaca nol (dompet kosong terbaca "O,OO", uji nyata 19 Okt),
+  jadi dilaporkan "saldo 0,00 kurang dari margin", bukan "tidak terbaca". Teks tanpa angka atau pemisah
+  desimal tetap dianggap tidak terbaca (bot tidak masuk).
+- Halaman koin yang lambat tampil ditunggu: pair dibaca sampai 3 kali dan toolbar "15 mnt" ditunggu
+  sampai 15 detik, tidak langsung menyerah (uji nyata 20 Okt: BRUSDT terlewat karena halaman masih memuat).
+- Klik ikon trade yang hilang (daftar Pasar tetap di layar, uji nyata: NILUSDT, AVAUSDT) diulang sekali,
+  hanya bila judul kolom "Tindakan" terbukti masih terbaca; bila daftarnya sudah tidak ada, tidak ada klik
+  ulang supaya tidak mendarat di halaman koin. Pengecekan kolom Jumlah sebelum klik order juga dibaca sampai
+  4 kali dan tetap harus persis angka rencana (uji nyata: AGTUSDT terbaca "24" padahal 20).
+- Fokus macet: Windows bisa menolak `SetForegroundWindow`. Uji nyata 20 Okt: jendela "New notification"
+  (ShellExperienceHost) memegang fokus berjam-jam dan Alt, AttachThreadInput, serta SwitchToThisWindow
+  ditolak semua. Setelah dua usaha biasa gagal, bot mengklik titik kosong di bilah judul Binance
+  (`FOCUS_POINT` di tata letak; tanpa kontrol apa pun dan jauh dari zona order), karena klik asli selalu
+  mengaktifkan jendela. Profil macOS tidak punya titik itu, jadi tidak ada klik. Selama uji tanpa
+  pengawasan, nyalakan "Jangan Ganggu" Windows agar notifikasi tidak merebut fokus.
 
 ## Status verifikasi
 

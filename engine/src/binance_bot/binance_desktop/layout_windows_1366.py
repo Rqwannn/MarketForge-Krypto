@@ -14,6 +14,10 @@ Futures lebih rapat (64 px, bukan 80 px).
 WINDOW_MAXIMIZED = True
 EXPECTED_WINDOW = (1366, 720)
 
+# Bilah judul Binance setinggi 45 px: (341, 22) kosong, di antara tombol muat ulang dan kotak
+# pencarian. Cara terakhir merebut fokus (lihat layout.FOCUS_POINT).
+FOCUS_POINT = (0.25, 0.0306)
+
 # Teks Binance di layar ini 12-14 px: semua bacaan OCR diperbesar 2x dulu.
 OCR_UPSCALE = 2
 

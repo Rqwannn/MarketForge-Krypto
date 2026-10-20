@@ -3,6 +3,7 @@ import pytest
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import (
     is_sorted_by_top_gain,
+    parse_available_usdt,
     parse_futures_symbol,
     parse_gainer_rows,
     parse_margin,
@@ -97,6 +98,29 @@ def test_amounts_are_read_the_way_binance_prints_them(text: str, expected: float
     from binance_bot.binance_desktop.screen_text import parse_amount
 
     assert parse_amount(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("texts", "expected"),
+    [
+        (["Tersedia 21,00 USDT"], 21.0),
+        (["Tersedia O,OO USDT"], 0.0),  # uji nyata 19 Okt: dompet kosong terbaca "O,OO"
+        (["Tersedia o,oo USDT"], 0.0),
+        (["Tersedia O.OO USDT"], 0.0),
+        (["Tersedia 2O,OO USDT"], 20.0),
+        (["Tersedia 21,OO USDT"], 21.0),
+        (["Tersedia 1.234,5O USDT"], 1234.5),
+        (["Jumlah", "Tersedia 58,70 USDT"], 58.7),  # baris lain di area diabaikan
+        (["Tersedia OOO USDT"], None),  # hanya huruf, tanpa angka atau pemisah: bukan saldo
+        (["Tersedia USDT"], None),
+        (["Maks 0,00 USDT"], None),
+        ([], None),
+    ],
+)
+def test_available_balance_reads_the_letter_o_as_zero(
+    texts: list[str], expected: float | None
+) -> None:
+    assert parse_available_usdt(texts) == expected
 
 
 def test_margin_leverage_is_read_from_the_companion_word_line() -> None:

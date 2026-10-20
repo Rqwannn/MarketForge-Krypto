@@ -20,7 +20,7 @@ from binance_bot.binance_desktop.screen_text import (
     GainerRow,
     MarginSettings,
     is_sorted_by_top_gain,
-    parse_amount,
+    parse_available_usdt,
     parse_futures_symbol,
     parse_gainer_rows,
     parse_margin,
@@ -55,7 +55,12 @@ _OPEN_SYMBOL_ATTEMPTS = 2  # buka ulang lewat nama bila daftar bergeser saat dik
 _VERIFY_ATTEMPTS = 4
 _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
+_FOCUS_CLICK_AFTER = 2  # usaha biasa yang gagal sebelum klik titik kosong bilah judul
 _VERIFY_RETRY_DELAY_S = 0.4
+_PAGE_READ_ATTEMPTS = 3  # baca pair di halaman koin: halaman baru bisa lambat tampil
+_PAGE_READ_DELAY_S = 1.0
+_OPEN_PAGE_ATTEMPTS = 2  # klik ikon trade diulang sekali bila hilang (daftar masih tampil)
+_TOOLBAR_WAIT_S = 15.0  # toolbar grafik belum tampil saat halaman koin masih memuat
 _CHART_TAB = re.compile(r"\bGrafik\b")
 _FUTURES_TAB = re.compile(r"\bFutures\b")
 _CHANGE_HEADER = re.compile(r"Perubahan")
@@ -81,7 +86,6 @@ _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
 # Teks di dalam tombol (dibaca dari kanal minimum): cukup salah satu kata, OCR sering memotong.
 _SHORT_TEXT = re.compile(r"(Jual|Sell)\s*/?\s*Short|Short|Jual", re.IGNORECASE)
 _LONG_TEXT = re.compile(r"(Beli|Buy)\s*/?\s*Long|Long|Beli", re.IGNORECASE)
-_AVAILABLE = re.compile(r"Tersedia\s*([\d.,]+)\s*USDT", re.IGNORECASE)
 _POSITIONS_TAB = re.compile(r"^\s*(Posisi|Positions?)\s*\([\dOo]+\)", re.IGNORECASE)  # "Posisi(O)"
 _MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Dialog leverage: Binance "Sesuaikan Leverage", Tebbit "Modify leverage".
@@ -159,14 +163,27 @@ class BinanceNavigator:
             )
         # `open -b` pada aplikasi yang sudah berjalan hanya membawanya ke depan.
         self._apps.launch(settings.app_bundle_id)
-        wait_until_frontmost(
-            self._apps,
-            settings.app_bundle_id,
-            timeout_s=settings.launch_timeout_s,
-            interval_s=settings.poll_interval_s,
-            sleep=self._sleep,
-            clock=self._clock,
-        )
+        try:
+            wait_until_frontmost(
+                self._apps,
+                settings.app_bundle_id,
+                timeout_s=min(_FRONT_WAIT_S, settings.launch_timeout_s),
+                interval_s=settings.poll_interval_s,
+                sleep=self._sleep,
+                clock=self._clock,
+            )
+        except AppTimeoutError:
+            # Windows menolak memindahkan fokus (mis. jendela notifikasi memegangnya): klik asli
+            # di titik kosong bilah judul, lalu tunggu seperti biasa.
+            self._focus_by_click(None)
+            wait_until_frontmost(
+                self._apps,
+                settings.app_bundle_id,
+                timeout_s=settings.launch_timeout_s,
+                interval_s=settings.poll_interval_s,
+                sleep=self._sleep,
+                clock=self._clock,
+            )
         rect = wait_for_window(
             self._window,
             settings.app_name,
@@ -341,18 +358,51 @@ class BinanceNavigator:
         """Buka halaman trade Futures baris `rank`. Mengembalikan pair yang benar-benar terbuka.
 
         Peringkat bisa bergeser dalam hitungan detik, jadi pair dibaca ulang di halaman trade.
+        Halaman yang lambat tampil ditunggu. Klik ikon yang hilang (uji nyata: NILUSDT, daftar
+        Pasar tetap di layar) diulang sekali, tetapi hanya bila daftar terbukti masih tampil.
         """
-        self._click(self._trade_icon(rank))
-        self._on_trade_page = True
-        self._on_list = False
-        self._chart_shift = 0.0
-        try:
-            symbol = self.read_symbol()
-        except ScreenReadError as exc:
-            shot = self._save_debug_shot("halaman-trade")
-            raise ScreenReadError(f"{exc} Foto layar yang dilihat bot: {shot}") from exc
-        logger.info("Top gainer #%d: %s", rank, symbol)
-        return symbol
+        attempt = 1
+        while True:
+            self._click(self._trade_icon(rank))
+            self._on_trade_page = True
+            self._on_list = False
+            self._chart_shift = 0.0
+            try:
+                symbol = self._read_symbol_waiting()
+            except ScreenReadError as exc:
+                if attempt >= _OPEN_PAGE_ATTEMPTS or not self._list_still_shown():
+                    shot = self._save_debug_shot("halaman-trade")
+                    raise ScreenReadError(f"{exc} Foto layar yang dilihat bot: {shot}") from exc
+                logger.warning(
+                    "Klik ikon trade #%d tidak membuka halaman koin (daftar masih tampil): diulang",
+                    rank,
+                )
+                self._on_trade_page, self._on_list = False, True
+                attempt += 1
+                continue
+            logger.info("Top gainer #%d: %s", rank, symbol)
+            return symbol
+
+    def _read_symbol_waiting(self) -> str:
+        """Pair di halaman trade. Halaman yang baru dibuka bisa lambat tampil: dibaca ulang."""
+        attempt = 1
+        while True:
+            try:
+                return self.read_symbol()
+            except ScreenReadError:
+                if attempt >= _PAGE_READ_ATTEMPTS:
+                    raise
+            attempt += 1
+            self._sleep(_PAGE_READ_DELAY_S)
+
+    def _list_still_shown(self) -> bool:
+        """Daftar Futures masih di layar (judul kolom "Tindakan" terbaca): klik ikon tadi hilang.
+
+        Dicek lewat OCR dulu agar klik ulang tidak pernah mendarat di halaman trade.
+        """
+        if layout.FUTURES_ACTION_AREA is None:
+            return False
+        return self._find_text(layout.FUTURES_ACTION_AREA, _ACTION_HEADER) is not None
 
     def open_symbol(self, symbol: str) -> str:
         """Buka koin lewat namanya dari daftar top gainers SAAT INI.
@@ -408,10 +458,7 @@ class BinanceNavigator:
         """
         timeout = _CHART_LOAD_TIMEOUT_S
         for attempt in (1, 2):
-            chart_tab = self._find_text(layout.CHART_TOOLBAR_AREA, _CHART_TAB)
-            if chart_tab is not None:
-                self._click(chart_tab)
-            button = self._find_text(layout.CHART_TOOLBAR_AREA, _FIFTEEN_MINUTES)
+            button = self._find_timeframe_button()
             if button is None:
                 shot = self._save_debug_shot("tombol-15-mnt")
                 raise ScreenReadError(
@@ -429,6 +476,22 @@ class BinanceNavigator:
                 # Klik bisa hilang saat halaman koin masih berpindah: ulangi sekali.
                 logger.warning("%s; klik tab Grafik dan 15 mnt diulang (foto: %s)", exc, shot)
                 timeout = _CHART_RETRY_TIMEOUT_S
+
+    def _find_timeframe_button(self) -> tuple[float, float] | None:
+        """Klik tab "Grafik" bila tampak, lalu cari tombol "15 mnt".
+
+        Halaman koin yang baru dibuka tampil bertahap (uji nyata: BRUSDT, toolbar belum ada saat
+        dicari): ditunggu sampai `_TOOLBAR_WAIT_S`, tidak langsung menyerah.
+        """
+        deadline = self._clock() + _TOOLBAR_WAIT_S
+        while True:
+            chart_tab = self._find_text(layout.CHART_TOOLBAR_AREA, _CHART_TAB)
+            if chart_tab is not None:
+                self._click(chart_tab)
+            button = self._find_text(layout.CHART_TOOLBAR_AREA, _FIFTEEN_MINUTES)
+            if button is not None or self._clock() >= deadline:
+                return button
+            self._sleep(1.0)
 
     def _wait_for_chart(self, timeout: float = _CHART_LOAD_TIMEOUT_S) -> None:
         """Tunggu grafik selesai dimuat (legenda garis MA terbaca), bukan animasi loading."""
@@ -468,12 +531,8 @@ class BinanceNavigator:
 
     def available_usdt(self) -> float | None:
         """Saldo "Tersedia" di form order (USDT), atau None bila tidak terbaca."""
-        for text in self._read_texts(self.rect.sub(*self._form_area(layout.ORDER_AVAILABLE_AREA))):
-            match = _AVAILABLE.search(text)
-            amount = parse_amount(match.group(1)) if match else None
-            if amount is not None:
-                return amount
-        return None
+        area = self.rect.sub(*self._form_area(layout.ORDER_AVAILABLE_AREA))
+        return parse_available_usdt(self._read_texts(area))
 
     def read_margin_settings(self) -> MarginSettings:
         texts = self._read_texts(self.rect.sub(*self._margin_area()))
@@ -790,6 +849,33 @@ class BinanceNavigator:
             except AppTimeoutError:
                 if attempt + 1 == _FRONT_ATTEMPTS:
                     raise
+                if attempt + 1 == _FOCUS_CLICK_AFTER:
+                    self._focus_by_click(self._rect)
+        self._sleep(0.5)
+
+    def _focus_by_click(self, rect: Rect | None) -> None:
+        """Cara terakhir merebut fokus: klik titik kosong di bilah judul Binance.
+
+        Windows menolak SetForegroundWindow dari proses yang bukan pemilik fokus. Uji nyata:
+        jendela notifikasi sistem memegang fokus 30 menit lebih dan semua putaran gagal; Alt,
+        AttachThreadInput dan SwitchToThisWindow ditolak semua. Klik asli selalu mengaktifkan
+        jendela yang diklik. Titiknya tanpa kontrol apa pun dan jauh dari form order, jadi klik
+        ini hanya memberi fokus. Tidak dipakai (None) bila tata letak tidak mendefinisikannya.
+        """
+        if layout.FOCUS_POINT is None:
+            return
+        try:
+            if rect is None:
+                rect = self._window.bounds(self._settings.app_name)
+        except WindowError:
+            return
+        if rect.width <= 0 or rect.height <= 0:
+            return
+        logger.warning(
+            "Fokus tak bisa direbut dengan cara biasa: klik titik kosong bilah judul %s",
+            self._settings.app_name,
+        )
+        self._window.click(*rect.point_at(*layout.FOCUS_POINT))
         self._sleep(0.5)
 
     def _covered(self) -> bool:
@@ -931,10 +1017,21 @@ class BinanceNavigator:
             raise SafetyError("Order sungguhan terkunci (Real Fund Trading belum dinyalakan)")
         if not self._on_coin_page():
             raise SafetyError("Order hanya di halaman koin")
-        shown = self._read_texts(self.rect.sub(*self._quantity_area()))
-        if not any(same_number(value, plan.order_text) for value in shown):
+        shown: list[str] = []
+        for attempt in range(_VERIFY_ATTEMPTS):
+            shown = self._read_texts(self.rect.sub(*self._quantity_area()))
+            if any(same_number(value, plan.order_text) for value in shown):
+                break
+            if attempt + 1 < _VERIFY_ATTEMPTS:
+                # Uji nyata (AGTUSDT): bacaan "24" padahal kolom berisi 20, 0,17 detik setelah
+                # bacaan "20" (kursor berkedip mengganggu OCR). Baca ulang seperti saat mengisi;
+                # angkanya tetap harus persis sama dengan rencana.
+                self._sleep(_VERIFY_RETRY_DELAY_S)
+        else:
+            shot = self._save_debug_shot("kolom-jumlah")
             raise SafetyError(
-                f"Kolom jumlah menampilkan {shown}, bukan {plan.order_text}: order dibatalkan"
+                f"Kolom jumlah menampilkan {shown}, bukan {plan.order_text}: order dibatalkan. "
+                f"Foto layar: {shot}"
             )
         target = self.short_button()
         logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
