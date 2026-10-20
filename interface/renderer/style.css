@@ -184,6 +184,22 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .money:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .money input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: 600 20px/1 var(--mono); padding: 9px 0; }
 .money span { color: var(--faint); font-size: 12px; font-weight: 600; }
+.money input.is-max { color: var(--accent); cursor: default; }
+.money input.is-max + span { visibility: hidden; }
+.money .max {
+  margin-left: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.money .max:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.money .max.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.money .max:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .chips button {

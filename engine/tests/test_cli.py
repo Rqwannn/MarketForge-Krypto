@@ -68,6 +68,18 @@ def test_leader_and_follower_arguments() -> None:
     assert (follower.hub, follower.rank, follower.modal) == ("http://10.0.0.2:8765", 5, 500)
 
 
+@pytest.mark.parametrize("command", ["single", "follower"])
+def test_modal_max_means_the_whole_available_balance(command: str) -> None:
+    params = params_from(build_parser().parse_args([command, "--modal", "Max"]))
+    assert (params.capital_max, params.capital_usdt) == (True, None)
+    params.validate()  # Max cukup sebagai modal
+    assert (
+        params_from(build_parser().parse_args([command, "--modal", "150,5"])).capital_usdt == 150.5
+    )
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([command, "--modal", "semua"])
+
+
 def test_unexpected_error_is_logged_with_traceback(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
 ) -> None:

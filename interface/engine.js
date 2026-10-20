@@ -113,10 +113,12 @@ function followerTops(rank) {
   return tops.length === 1 ? ['--rank', String(tops[0])] : ['--ranks', tops.join(',')];
 }
 
+/** Modal USDT, atau 'max' = seluruh saldo USDT tersedia (dibaca engine dari form order Binance). */
 function modalOf(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
-    throw new InputError('Isi modal dalam USDT');
+    throw new InputError('Isi modal dalam USDT atau pilih Max');
   }
+  if (String(value).trim().toLowerCase() === 'max') return 'max';
   return String(number(value, 'Modal', 1, 1e9));
 }
 

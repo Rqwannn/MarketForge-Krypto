@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -298,6 +299,19 @@ class SopTrader:
                 f"saldo tersedia {available:.2f} USDT kurang dari margin {margin_usdt:.2f} USDT"
             )
 
+    def _capital_from_balance(self, entry: JournalEntry) -> SopParams:
+        """Modal Max: modal = saldo USDT tersedia di form order SAAT INI (rumus SOP tetap).
+
+        Dibaca ulang setiap koin, jadi posisi berikutnya memakai sisa saldo setelah margin posisi
+        sebelumnya terpakai. Tidak terbaca = tidak masuk (Tebbit belum bisa membaca saldo).
+        """
+        available = self._nav.available_usdt()
+        if available is None or available <= 0:
+            raise _Skip("Modal Max: saldo tersedia tidak terbaca di form order")
+        logger.info("Modal Max: saldo tersedia %.2f USDT dipakai sebagai modal", available)
+        entry.capital_usdt = available
+        return replace(self.params, capital_usdt=available, capital_max=False)
+
     def real_positions_open(self) -> int:
         """Jumlah posisi uang sungguhan yang masih terbuka (yang wajib diawasi sampai terjual)."""
         if not live_orders_enabled():
@@ -522,6 +536,8 @@ class SopTrader:
             raise _Skip(blocker)
 
         # Ukuran posisi: margin % modal x leverage.
+        if params.capital_max:
+            params = self._capital_from_balance(entry)
         rules = self._market.rules(symbol)
         price = quote.bid  # short menjual ke harga bid
         sizing = size_position(params, price, rules, self._settings.decimal_separator)
