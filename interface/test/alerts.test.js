@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { healthWarnings, logNotice, lossAlerts, networkState } = require('../alerts');
+const { healthWarnings, logNotice, lossAlerts, networkState, settleNetwork } = require('../alerts');
 
 const NOW = Date.parse('2026-10-20T10:00:00+07:00');
 const base = { exchange: 'binance', network: 'ok', onBattery: false, sleep: null, running: true, realOpen: 0, now: NOW };
@@ -12,6 +12,17 @@ test('jaringan: diblokir hanya bila bursa gagal tetapi internet jalan', () => {
   assert.equal(networkState(true, false), 'ok');
   assert.equal(networkState(false, true), 'blocked'); // seperti pagi ini: fapi.binance.com NXDOMAIN
   assert.equal(networkState(false, false), 'offline');
+});
+
+test('jaringan lambat: satu cek habis waktu belum memunculkan peringatan, dua beruntun baru', () => {
+  let s = settleNetwork('ok', 'offline', true, 0); // Wi-Fi lambat, sistem masih tersambung
+  assert.deepEqual(s, { network: 'ok', fails: 1 });
+  s = settleNetwork(s.network, 'ok', true, s.fails);
+  assert.deepEqual(s, { network: 'ok', fails: 0 });
+  s = settleNetwork('ok', 'blocked', true, 0);
+  s = settleNetwork(s.network, 'blocked', true, s.fails);
+  assert.equal(s.network, 'blocked');
+  assert.equal(settleNetwork('ok', 'offline', false, 0).network, 'offline'); // Wi-Fi mati: langsung
 });
 
 test('tanpa masalah: tidak ada peringatan', () => {

@@ -3,7 +3,7 @@
 // Proses utama Electron: jendela, IPC, dan satu proses engine. Isian dari tampilan divalidasi
 // di engine.js sebelum menjadi argumen CLI. Tidak ada kontrol untuk order sungguhan.
 
-const { app, BrowserWindow, Notification, ipcMain, powerMonitor, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, Notification, ipcMain, net, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -290,7 +290,8 @@ function announceExit(info) {
 // --------------------------------------------------------------------------- kesehatan dan peringatan
 
 const HEALTH_MS = 60 * 1000; // cek jaringan, charger, dan harga posisi tiap menit
-const NETWORK_TIMEOUT_MS = 8000;
+const NETWORK_TIMEOUT_MS = 12000; // Wi-Fi lambat: sambungan ke Binance bisa 2-3 detik
+let networkFails = 0; // cek jaringan gagal beruntun (lihat alerts.settleNetwork)
 const REPEAT_NOTICE_MS = 30 * 60 * 1000; // notifikasi gagal/hilang yang sama paling sering 30 menit
 const health = { network: 'unknown', onBattery: false, sleep: null, keepAwake: false, checkedAt: 0 };
 let sleepingSince = null; // saat laptop mulai tidur (powerMonitor 'suspend')
@@ -334,7 +335,8 @@ function syncKeepAwake() {
 
 async function reachable(url) {
   try {
-    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) });
+    // net.fetch: jaringan Chromium, mengikuti proxy/VPN sistem seperti browser.
+    const res = await net.fetch(url, { method: 'GET', signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) });
     return res.status < 500;
   } catch {
     return false;
@@ -342,9 +344,12 @@ async function reachable(url) {
 }
 
 async function checkNetwork() {
-  const exchangeOk = await reachable(alerts.NETWORK_TARGETS[exchange] || alerts.NETWORK_TARGETS.binance);
-  const controlOk = exchangeOk || (await reachable(alerts.CONTROL_TARGET));
-  health.network = alerts.networkState(exchangeOk, controlOk);
+  const online = net.isOnline();
+  const exchangeOk = online && (await reachable(alerts.NETWORK_TARGETS[exchange] || alerts.NETWORK_TARGETS.binance));
+  const controlOk = exchangeOk || (online && (await reachable(alerts.CONTROL_TARGET)));
+  const settled = alerts.settleNetwork(health.network, alerts.networkState(exchangeOk, controlOk), online, networkFails);
+  health.network = settled.network;
+  networkFails = settled.fails;
   health.checkedAt = Date.now();
 }
 

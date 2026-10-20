@@ -13,11 +13,25 @@ const NETWORK_TARGETS = {
 };
 const CONTROL_TARGET = 'https://www.google.com/generate_204';
 const SLEEP_MEMORY_MS = 12 * 3600 * 1000; // tidur lebih lama dari ini sudah tidak relevan
+// Wi-Fi lambat bisa membuat satu cek habis waktu; peringatan baru tampil setelah gagal beruntun.
+const NETWORK_FAILS_TO_WARN = 2;
 
 /** Hasil cek bursa dan pembanding -> 'ok', 'blocked' (hanya bursa gagal), atau 'offline'. */
 function networkState(exchangeOk, controlOk) {
   if (exchangeOk) return 'ok';
   return controlOk ? 'blocked' : 'offline';
+}
+
+/**
+ * Keadaan jaringan yang ditampilkan setelah satu cek. `measured`: hasil `networkState`, `online`:
+ * sistem operasi masih punya sambungan, `fails`: gagal beruntun sebelumnya. Tanpa sambungan sama
+ * sekali langsung 'offline'; selain itu gagal harus beruntun dulu, sebelumnya keadaan lama dipakai.
+ */
+function settleNetwork(current, measured, online, fails) {
+  if (!online) return { network: 'offline', fails: fails + 1 };
+  if (measured === 'ok') return { network: 'ok', fails: 0 };
+  const streak = fails + 1;
+  return { network: streak >= NETWORK_FAILS_TO_WARN ? measured : current, fails: streak };
 }
 
 const clock = (ms) => new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -117,4 +131,4 @@ function logNotice(entry) {
   return null;
 }
 
-module.exports = { CONTROL_TARGET, NETWORK_TARGETS, healthWarnings, logNotice, lossAlerts, networkState };
+module.exports = { CONTROL_TARGET, NETWORK_TARGETS, healthWarnings, logNotice, lossAlerts, networkState, settleNetwork };
