@@ -179,6 +179,7 @@ class BinanceNavigator:
         self._on_trade_page = False
         self._chart_shift = 0.0  # pergeseran vertikal tata letak halaman trade (relatif jendela)
         self._list_shift = 0.0  # pergeseran daftar top gainer akibat banner di halaman Pasar
+        self._tabs_shift = 0.0  # pergeseran tab Futures (dan kotak cari) akibat banner
         self._header_pos: tuple[float, float] = layout.FUTURES_CHANGE_HEADER
         self._icon_x = layout.FUTURES_TRADE_ICON_X  # x ikon trade (dicari dengan OCR bila bisa)
         self._row_y: dict[int, float] = {}  # y baris top gainer yang terbaca di layar
@@ -337,30 +338,47 @@ class BinanceNavigator:
         """Posisi tab Futures: dicari dengan OCR (banner bisa menggesernya), atau posisi tetap."""
         if layout.MARKET_TABS_AREA is None:
             return layout.MARKET_FUTURES_TAB
-        found = self._find_text(layout.MARKET_TABS_AREA, _FUTURES_TAB)
-        if found is None:
-            logger.warning("Tab Futures tidak terbaca di halaman Pasar; memakai posisi tetap")
-            return layout.MARKET_FUTURES_TAB
-        return found
+        for attempt in range(_MENU_ATTEMPTS):
+            found = self._find_text(layout.MARKET_TABS_AREA, _FUTURES_TAB)
+            if found is not None:
+                return found
+            if attempt + 1 < _MENU_ATTEMPTS:
+                self._sleep(0.5)
+        # Bukan posisi tetap: banner promo bisa menempati tempat tab itu, dan klik di sana membuka
+        # halaman koin lain (uji nyata 21 Okt: banner "BOTB Listing Baru" membuka Spot BOTB/USDT).
+        shot = self._save_debug_shot("tab-futures")
+        raise ScreenReadError(
+            f"Tab Futures tidak terbaca di halaman Pasar; tidak diklik. Foto layar: {shot}"
+        )
 
     def _open_futures_list(self) -> None:
         """Buka tab Futures, gulir, lalu cari judul kolom untuk mengetahui pergeseran daftar."""
         tab = self._futures_tab_position()
         shift = tab[1] - layout.MARKET_FUTURES_TAB[1] if layout.MARKET_TABS_AREA else 0.0
+        self._tabs_shift = shift
         self._click(tab)
         notches = layout.FUTURES_LIST_SCROLL_NOTCHES
         if notches and shift > _EXTRA_SCROLL_SHIFT:
             notches += 1  # banner mendorong daftar ke bawah: gulir lebih jauh agar 5 baris terlihat
         self._scroll_futures_list(notches)
-        self._locate_list()
+        self._locate_list(shift)
         if self._clear_market_search():
             # Sesudah kotak cari dikosongkan, Binance belum memuat ulang isi tab Futures ("Tidak
             # ada Rekaman", uji kertas 21 Okt): tab diklik lagi supaya daftarnya dimuat ulang.
             self._click(tab)
             self._sleep(self._settings.settle_delay_s)
-            self._locate_list()
+            self._locate_list(shift)
         if layout.FUTURES_USDM_TAB:
             self._click(self._shifted(layout.FUTURES_USDM_TAB))
+
+    def _search_area(self) -> tuple[float, float, float, float] | None:
+        """Area kotak cari, digeser sebesar pergeseran tab Futures (banner di atasnya)."""
+        area = layout.MARKET_SEARCH_AREA
+        return None if area is None else _shifted(area, self._tabs_shift)
+
+    def _search_icon(self) -> tuple[float, float] | None:
+        icon = layout.MARKET_SEARCH
+        return None if icon is None else (icon[0], min(0.999, icon[1] + self._tabs_shift))
 
     def _clear_market_search(self) -> bool:
         """Kosongkan kotak cari daftar Pasar bila masih berisi nama pair (sisa `search_symbol`,
@@ -369,7 +387,7 @@ class BinanceNavigator:
         Teks pair-nya sendiri yang diklik (pasti memberi fokus ke kolom), baru Cmd+A dan hapus:
         tanpa fokus, Cmd+A dan hapus mengenai halaman (uji nyata 21 Okt: halaman pindah tab).
         """
-        area = layout.MARKET_SEARCH_AREA
+        area = self._search_area()
         if area is None:
             return False
         text = self._find_text(area, _SEARCHED_PAIR)
@@ -392,15 +410,16 @@ class BinanceNavigator:
         dicek dengan OCR; baris yang namanya persis sama dibuka lewat ikon trade-nya. Kotak
         dikosongkan lagi saat daftar Futures dibuka berikutnya (`_clear_market_search`).
         """
-        area = layout.MARKET_SEARCH_AREA
-        if layout.MARKET_SEARCH is None or area is None:
+        if layout.MARKET_SEARCH is None or layout.MARKET_SEARCH_AREA is None:
             raise ScreenReadError("Pencarian daftar Futures belum tersedia di profil layar ini")
         self._click(self._market_menu_position())
         self._on_trade_page = False
         self._on_list = False
         self._row_y = {}
         self._open_futures_list()  # juga mengosongkan sisa pencarian sebelumnya
-        self._click(layout.MARKET_SEARCH)
+        area, icon = self._search_area(), self._search_icon()
+        assert area is not None and icon is not None
+        self._click(icon)
         field = None
         for _attempt in range(_SEARCH_READ_ATTEMPTS):  # aplikasi yang lambat butuh waktu melebar
             self._sleep(_VERIFY_RETRY_DELAY_S * 2)
@@ -436,10 +455,16 @@ class BinanceNavigator:
             raise ScreenReadError(f"Pencarian {symbol} membuka {opened}")
         return opened
 
-    def _locate_list(self) -> None:
-        """Cari judul kolom "Perubahan" untuk tahu seberapa jauh daftar bergeser dari kalibrasi."""
+    def _locate_list(self, tabs_shift: float = 0.0) -> None:
+        """Cari judul kolom "Perubahan" untuk tahu seberapa jauh daftar bergeser dari kalibrasi.
+
+        `tabs_shift`: pergeseran tab Futures (banner). Dipakai bila judul kolom tak terbaca,
+        supaya klik judul tidak jatuh di posisi kalibrasi yang sudah ditempati isi lain."""
         self._list_shift = 0.0
         self._header_pos = layout.FUTURES_CHANGE_HEADER
+        if tabs_shift:
+            self._list_shift = tabs_shift
+            self._header_pos = self._shifted(layout.FUTURES_CHANGE_HEADER)
         self._icon_x = layout.FUTURES_TRADE_ICON_X
         if layout.FUTURES_ACTION_AREA is not None:
             action = self._find_text(layout.FUTURES_ACTION_AREA, _ACTION_HEADER)
@@ -451,7 +476,7 @@ class BinanceNavigator:
             return
         found = self._find_text(layout.FUTURES_HEADER_AREA, _CHANGE_HEADER)
         if found is None:
-            logger.warning("Judul kolom Perubahan tidak terbaca; memakai posisi tetap")
+            logger.warning("Judul kolom Perubahan tidak terbaca; memakai posisi dari tab Futures")
             return
         self._header_pos = found
         self._list_shift = found[1] - layout.FUTURES_CHANGE_HEADER[1]

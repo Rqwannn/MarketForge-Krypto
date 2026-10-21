@@ -98,8 +98,10 @@ FUTURES_USDM_TAB: tuple[float, float] | None = None
 # Banner promo (mis. "Listing Baru") bisa menggeser halaman Pasar ke bawah. Bila area ini diisi,
 # tab Futures dan judul kolom "Perubahan" dicari dengan OCR dan seluruh posisi daftar digeser
 # sebesar selisihnya. None = posisi tetap, tanpa pencarian.
-MARKET_TABS_AREA: tuple[float, float, float, float] | None = None
-FUTURES_HEADER_AREA: tuple[float, float, float, float] | None = None
+# Mac (21 Okt 2026): banner "BOTB Listing Baru" menempati y 0,387 dan mendorong tab ke y 0,475.
+# Area mulai x 0,08 supaya label "Futures" di sidebar tidak ikut terbaca.
+MARKET_TABS_AREA: tuple[float, float, float, float] | None = (0.08, 0.30, 0.60, 0.70)
+FUTURES_HEADER_AREA: tuple[float, float, float, float] | None = (0.40, 0.45, 0.70, 0.80)
 # Judul kolom "Perubahan 24jam": klik pertama = turun terdalam, klik kedua = naik tertinggi.
 FUTURES_CHANGE_HEADER = (0.5325, 0.5133)
 # Area OCR daftar: kolom nama pair dan perubahan 24 jam, baris 1..6.

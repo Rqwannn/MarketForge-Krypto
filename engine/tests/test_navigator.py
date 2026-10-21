@@ -43,6 +43,25 @@ def at(target: tuple[float, float]) -> tuple[int, int]:
     return WINDOW.point_at(*target)
 
 
+def _in(area: tuple[float, float, float, float], point: tuple[float, float]) -> tuple[float, float]:
+    """`point` (relatif jendela) sebagai posisi relatif di dalam `area` (bacaan OCR area itu)."""
+    x0, y0, x1, y1 = area
+    return (point[0] - x0) / (x1 - x0), (point[1] - y0) / (y1 - y0)
+
+
+def market_page(shift: float = 0.0, **texts: object) -> dict[object, object]:
+    """Bacaan OCR halaman Pasar: tab Futures dan judul Perubahan, digeser banner `shift`."""
+    tab = (layout.MARKET_FUTURES_TAB[0], layout.MARKET_FUTURES_TAB[1] + shift)
+    header = (layout.FUTURES_CHANGE_HEADER[0], layout.FUTURES_CHANGE_HEADER[1] + shift)
+    assert layout.MARKET_TABS_AREA is not None and layout.FUTURES_HEADER_AREA is not None
+    return {
+        layout.MARKET_TABS_AREA: [[TextLine("Futures", *_in(layout.MARKET_TABS_AREA, tab))]],
+        layout.FUTURES_HEADER_AREA: [
+            [TextLine("Perubahan 24jam", *_in(layout.FUTURES_HEADER_AREA, header))]
+        ],
+    }
+
+
 def clicks(screen: FakeScreen) -> list[object]:
     return [where for kind, where in screen.events if kind == "click"]
 
@@ -188,7 +207,7 @@ def test_navigation_before_prepare_is_an_error() -> None:
 
 
 def test_top_gainers_reclicks_header_until_sorted_by_highest_gain() -> None:
-    screen = FakeScreen(texts={layout.FUTURES_LIST_AREA: [ASCENDING, DESCENDING]})
+    screen = FakeScreen(texts={**market_page(), layout.FUTURES_LIST_AREA: [ASCENDING, DESCENDING]})
     nav = make_nav(screen)
     nav.prepare()
 
@@ -209,7 +228,7 @@ def test_top_gainers_reclicks_header_until_sorted_by_highest_gain() -> None:
 
 
 def test_top_gainers_gives_up_when_never_sorted() -> None:
-    nav = make_nav(FakeScreen(texts={layout.FUTURES_LIST_AREA: [ASCENDING]}))
+    nav = make_nav(FakeScreen(texts={**market_page(), layout.FUTURES_LIST_AREA: [ASCENDING]}))
     nav.prepare()
     with pytest.raises(ScreenReadError, match="tidak terurut"):
         nav.open_top_gainers()
@@ -470,7 +489,7 @@ def test_15m_button_is_waited_for_while_the_trade_page_is_still_loading() -> Non
 
 
 def test_futures_tab_is_clicked_again_when_the_list_has_not_loaded() -> None:
-    screen = FakeScreen(texts={layout.FUTURES_LIST_AREA: [[], DESCENDING]})
+    screen = FakeScreen(texts={**market_page(), layout.FUTURES_LIST_AREA: [[], DESCENDING]})
     nav = make_nav(screen)
     nav.prepare()
     assert nav.open_top_gainers()[0].symbol == "LUMIAUSDT"
@@ -1482,3 +1501,35 @@ def test_leverage_that_never_changes_is_still_an_error(monkeypatch: pytest.Monke
     nav = _settling_nav(monkeypatch, closing_reads=0, levels=[20])
     with pytest.raises(ScreenReadError, match="masih 20x, bukan 2x"):
         nav._await_leverage(lay.LEVERAGE_DIALOG_AREA, 2)
+
+
+def test_a_promo_banner_pushing_the_tabs_down_is_followed_not_clicked() -> None:
+    """Uji nyata 21 Okt: banner "BOTB Listing Baru" di tempat tab Futures (y 0,387) mendorong tab
+    ke y 0,475. Tab, judul kolom, dan daftar diklik di posisi barunya, bukan di banner."""
+    shift = 0.087
+    screen = FakeScreen(texts=market_page(shift))
+    nav = make_nav(screen)
+    nav.prepare()
+
+    nav._open_futures_list()
+
+    banner = at(layout.MARKET_FUTURES_TAB)
+    assert banner not in clicks(screen)
+    tab = at((layout.MARKET_FUTURES_TAB[0], layout.MARKET_FUTURES_TAB[1] + shift))
+    assert clicks(screen) == [tab]
+    header = (layout.FUTURES_CHANGE_HEADER[0], layout.FUTURES_CHANGE_HEADER[1] + shift)
+    assert nav._header_pos == pytest.approx(header, abs=0.002)  # sort diklik di judul barunya
+    assert nav._list_shift == pytest.approx(shift, abs=0.002)
+    assert layout.MARKET_SEARCH is not None
+    assert nav._search_icon() == pytest.approx(
+        (layout.MARKET_SEARCH[0], layout.MARKET_SEARCH[1] + shift), abs=0.002
+    )
+
+
+def test_an_unreadable_futures_tab_is_never_clicked_blindly() -> None:
+    screen = FakeScreen(texts={layout.FUTURES_LIST_AREA: [DESCENDING]})  # tab tidak terbaca
+    nav = make_nav(screen)
+    nav.prepare()
+    with pytest.raises(ScreenReadError, match="Tab Futures tidak terbaca"):
+        nav.open_top_gainers()
+    assert clicks(screen) == [at(layout.SIDEBAR_MARKET)]  # hanya menu Pasar
