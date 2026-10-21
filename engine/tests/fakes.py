@@ -10,7 +10,7 @@ from binance_bot.analysis import AnalysisRecord, PatternReading
 from binance_bot.binance_desktop import layout
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import DEFAULT_APP_ID
-from binance_bot.exceptions import BotError
+from binance_bot.exceptions import BotError, ScreenReadError
 from binance_bot.macos import Rect, TextLine
 from binance_bot.market import Candle, Quote, SymbolRules
 from binance_bot.strategy import MaPattern, OrderPlan, candles_needed
@@ -113,6 +113,9 @@ class FakeScreen:
 
     def type_number(self, text: str) -> None:
         self.events.append(("type", text))
+
+    def type_symbol(self, text: str) -> None:
+        self.events.append(("type_symbol", text))
 
     def capture(self, rect: Rect, path: Path) -> None:
         self._last = rect
@@ -239,11 +242,17 @@ class FakeNavigator:
 
     def open_symbol(self, symbol: str) -> str:
         self.calls.append(f"open_symbol:{symbol}")
-        rank = next(row.rank for row in self.rows if row.symbol == symbol)
+        rank = next((row.rank for row in self.rows if row.symbol == symbol), None)
+        if rank is None:
+            raise ScreenReadError(f"{symbol} sudah tidak di daftar top gainers")
         symbol_opened = self.symbols[rank]
         if isinstance(symbol_opened, BotError):
             raise symbol_opened
         return symbol_opened
+
+    def search_symbol(self, symbol: str) -> str:
+        self.calls.append(f"search_symbol:{symbol}")
+        return symbol
 
     def show_app(self, text: str, **fields: object) -> None:
         self.calls.append(f"show_app:{fields.get('symbol') or fields.get('rank')}")

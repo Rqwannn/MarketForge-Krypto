@@ -85,6 +85,11 @@ SIDEBAR_MARKET = (0.023, 0.173)
 SIDEBAR_AREA: tuple[float, float, float, float] | None = None
 # Tab "Futures" pada daftar pasar (sub-tab USDⓈ-M terpilih secara default).
 MARKET_FUTURES_TAB = (0.267, 0.388)
+# Kotak cari daftar Pasar: saat kosong hanya ikon kaca pembesar di kanan, sebaris dengan tab
+# Futures; diklik melebar ke kiri. Dipakai untuk membuka koin yang baru terjual walau sudah keluar
+# Top 5. Diukur 21 Okt 2026 (OCR: ikon di x 0,892 y 0,391). None = belum diukur di profil ini.
+MARKET_SEARCH: tuple[float, float] | None = (0.892, 0.39)
+MARKET_SEARCH_AREA: tuple[float, float, float, float] | None = (0.69, 0.36, 0.91, 0.42)
 # Gulir halaman Pasar setelah tab Futures dibuka (0 = tidak perlu), di titik gulir ini.
 FUTURES_LIST_SCROLL_NOTCHES = 0
 FUTURES_LIST_SCROLL_POINT = (0.5, 0.7)

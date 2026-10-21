@@ -333,6 +333,10 @@ class TebbitNavigator(BinanceNavigator):
             )
         return opened
 
+    def search_symbol(self, symbol: str) -> str:
+        """Tebbit membuka koin mana pun lewat alamatnya: sama dengan `open_symbol`."""
+        return self.open_symbol(symbol)
+
     def _wait_contract(self) -> str:
         assert self._window_id is not None
         deadline = self._clock() + _PAGE_TIMEOUT_S

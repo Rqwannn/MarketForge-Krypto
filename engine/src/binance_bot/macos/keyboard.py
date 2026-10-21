@@ -1,7 +1,8 @@
 """Ketik angka ke kolom yang sedang fokus lewat System Events. Butuh izin Accessibility.
 
-Sengaja terbatas: hanya angka dan tanda desimal, plus "pilih semua" dan hapus untuk
-mengosongkan kolom. Tidak ada Enter/Return, jadi modul ini tidak bisa mengirim order.
+Sengaja terbatas: angka dan tanda desimal, nama pair (huruf kapital dan angka, untuk kotak cari
+daftar Futures), plus "pilih semua" dan hapus untuk mengosongkan kolom. Tidak ada Enter/Return,
+jadi modul ini tidak bisa mengirim order.
 
 Ketikan CoreGraphics (CGEvent) ditolak kolom angka aplikasi berbasis Chromium (Binance Desktop
 dan Chrome), sedangkan `keystroke` System Events diterima seperti ketikan keyboard biasa.
@@ -15,6 +16,7 @@ import re
 from binance_bot.macos.app_controller import Runner, run_command
 
 NUMBER_PATTERN = re.compile(r"[0-9]+([.,][0-9]+)?")
+SYMBOL_PATTERN = re.compile(r"[A-Z0-9]{2,20}")  # nama pair, mis. JCTUSDT atau 1000PEPEUSDT
 _DELETE = 51  # key code tombol Delete (backspace)
 
 
@@ -40,4 +42,13 @@ def type_number(text: str, run: Runner = run_command) -> None:
     """Ketik angka seperti "184,6". Menolak apa pun selain angka dan satu tanda desimal."""
     if not NUMBER_PATTERN.fullmatch(text):
         raise ValueError(f"Hanya angka yang boleh diketik, bukan {text!r}")
+    _system_events([f'\tkeystroke "{char}"' for char in text], run)
+
+
+def type_symbol(text: str, run: Runner = run_command) -> None:
+    """Ketik nama pair seperti "JCTUSDT" (kotak cari). Hanya huruf kapital dan angka."""
+    if not SYMBOL_PATTERN.fullmatch(text):
+        raise ValueError(
+            f"Hanya nama pair (huruf kapital dan angka) yang boleh diketik, bukan {text!r}"
+        )
     _system_events([f'\tkeystroke "{char}"' for char in text], run)

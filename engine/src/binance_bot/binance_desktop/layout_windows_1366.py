@@ -34,6 +34,8 @@ FUTURES_LIST_SCROLL_POINT = (0.5124, 0.6944)
 # Pencarian tab Futures (y 216..576 mencakup posisi normal 334 dan bergeser banner) dan judul kolom
 # "Perubahan" sesudah digulir.
 MARKET_TABS_AREA = (0.10, 0.30, 0.60, 0.80)
+MARKET_SEARCH = None  # kotak cari daftar Pasar belum diukur di Windows
+MARKET_SEARCH_AREA = None
 FUTURES_HEADER_AREA = (0.30, 0.20, 0.75, 0.80)
 # Sub-tab "Futures USD-M" setelah digulir (180, 288) dan judul "Perubahan 24jam" (734, 342).
 FUTURES_USDM_TAB = (0.1318, 0.4)

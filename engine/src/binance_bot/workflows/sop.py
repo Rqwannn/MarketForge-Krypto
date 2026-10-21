@@ -367,7 +367,7 @@ class SopTrader:
             if e.status == "target" and (e.id, e.created_at) in before
         ]
 
-    def _reentry_blocker(self, symbol: str) -> str | None:
+    def reentry_blocker(self, symbol: str) -> str | None:
         """Batas masuk ulang: koin yang sama paling banyak 1 + `max_reentries` kali per hari.
 
         Tanpa stop-loss, masuk ulang tepat saat harga berbalik naik bisa tertahan lama; batas ini
@@ -391,6 +391,22 @@ class SopTrader:
                 f"{self.params.max_reentries} kali per koin per hari)"
             )
         return None
+
+    def recent_target_sales(self, within_s: float) -> dict[str, float]:
+        """Pair yang terjual di target dalam `within_s` detik terakhir -> waktu terjualnya.
+
+        Uji kertas dan uang sungguhan dipisah, sama seperti batas masuk ulang."""
+        since = self._wall_clock() - within_s
+        real = live_orders_enabled()
+        sales: dict[str, float] = {}
+        for e in self._journal.load():
+            if e.status == "target" and e.real == real and e.closed_at and e.closed_at >= since:
+                sales[e.symbol] = max(sales.get(e.symbol, 0.0), e.closed_at)
+        return sales
+
+    def has_open(self, symbol: str) -> bool:
+        """Pair ini masih punya posisi terbuka (uji kertas atau sungguhan) di jurnal."""
+        return any(e.symbol == symbol and e.status == "open" for e in self._journal.load())
 
     def _refresh_by_price(self) -> list[JournalEntry]:
         return refresh_by_price(
@@ -511,7 +527,7 @@ class SopTrader:
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
         # Dicek sebelum grafik dan AI: tidak perlu membaca koin yang memang tidak akan dimasuki.
-        reentry = self._reentry_blocker(symbol)
+        reentry = self.reentry_blocker(symbol)
         if reentry:
             raise _Skip(reentry)
 

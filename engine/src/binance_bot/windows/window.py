@@ -7,7 +7,7 @@ from pathlib import Path
 
 from binance_bot.binance_desktop import layout
 from binance_bot.exceptions import WindowError
-from binance_bot.macos.keyboard import NUMBER_PATTERN
+from binance_bot.macos.keyboard import NUMBER_PATTERN, SYMBOL_PATTERN
 from binance_bot.macos.window import Rect
 from binance_bot.windows import win32
 
@@ -85,6 +85,13 @@ class WinWindowController:
         if not NUMBER_PATTERN.fullmatch(text):
             raise ValueError(f"Hanya angka yang boleh diketik, bukan {text!r}")
         logger.info("Ketik %s", text)
+        for char in text:
+            win32.type_char(char)
+
+    def type_symbol(self, text: str) -> None:
+        if not SYMBOL_PATTERN.fullmatch(text):
+            raise ValueError(f"Hanya nama pair yang boleh diketik, bukan {text!r}")
+        logger.info("Ketik nama pair %s", text)
         for char in text:
             win32.type_char(char)
 

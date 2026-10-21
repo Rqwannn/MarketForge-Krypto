@@ -1779,15 +1779,53 @@ def test_after_a_sale_at_target_the_next_round_starts_at_once_with_that_coin_fir
     assert nav.outside_turns() == []  # setiap aksi layar di dalam giliran
 
 
-def test_a_sold_coin_that_left_the_list_is_not_chased(tmp_path: Path) -> None:
+def test_a_sold_coin_that_left_the_top_5_is_rechecked_through_search(tmp_path: Path) -> None:
+    """Koin yang baru terjual sudah keluar Top 5: dibuka lewat pencarian, sebelum Top pilihan."""
     nav = FakeNavigator({1: "AUSDT"})
     trader, _, _, _ = make_trader(tmp_path, nav)
     workflow = SingleWorkflow(nav, trader, FakePatternAnalyzer(WAIT), ranks=[1])  # type: ignore[arg-type]
-    workflow._momentum = ["ZUSDT"]
+    workflow._remember(["ZUSDT"])
 
     workflow.run_cycle()
 
-    assert [c for c in nav.calls if c.startswith("open_symbol")] == ["open_symbol:AUSDT"]
+    opens = [c for c in nav.calls if c.split(":")[0] in ("open_symbol", "search_symbol")]
+    assert opens == ["open_symbol:ZUSDT", "search_symbol:ZUSDT", "open_symbol:AUSDT"]
+    assert nav.outside_turns() == []
+
+
+def test_a_sold_coin_is_rechecked_once_per_new_15m_candle_for_two_hours(tmp_path: Path) -> None:
+    """Keputusan 21 Okt: cek ulang tiap candle 15 menit baru, bukan candle yang sama, 2 jam."""
+    from binance_bot.workflows.single import _candle
+    from fakes import Clock
+
+    clock = Clock(900_000.0 + 100)  # 100 detik setelah candle mulai
+    nav = FakeNavigator({1: "AUSDT"})
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], sleep=clock.sleep, clock=clock
+    )  # type: ignore[arg-type]
+    workflow._remember(["AUSDT"])
+    workflow._checked["AUSDT"] = _candle(clock())  # sudah dicek langsung setelah terjual
+
+    workflow._wait_and_watch(3 * 3600)
+
+    # Candle berikutnya mulai 800 detik lagi; tiap candle baru dicek sekali sampai 2 jam habis.
+    assert nav.calls.count("open_symbol:AUSDT") == 7
+    assert "AUSDT" not in workflow._watch
+
+
+def test_a_coin_that_used_up_its_reentries_is_not_rechecked(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "BUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    for hour in (9, 10, 11, 12):  # masuk pertama + 3 kali masuk ulang hari ini
+        journal.append(_entered("AUSDT", NOW.replace(hour=hour)))
+    workflow = SingleWorkflow(nav, trader, FakePatternAnalyzer(WAIT), ranks=[1])  # type: ignore[arg-type]
+    workflow._remember(["AUSDT"])
+
+    workflow.run_cycle()
+
+    assert not any("AUSDT" in c for c in nav.calls)  # layar dan AI tidak dipakai untuknya
+    assert "AUSDT" not in workflow._watch
 
 
 def _entered(symbol: str, when: datetime, *, real: bool = False) -> JournalEntry:
@@ -1848,3 +1886,21 @@ def test_real_money_is_sent_once_leverage_is_confirmed_at_2x(
     trader, gate, _, _ = make_trader(tmp_path, nav)
     entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
     assert (entry.status, entry.real) == ("open", True) and len(gate.plans) == 1
+
+
+def test_a_restarted_bot_keeps_rechecking_coins_sold_at_target_in_the_last_two_hours(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "AUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    for symbol, minutes_ago in (("BUSDT", 30), ("CUSDT", 150)):  # 30 menit dan 2,5 jam lalu
+        sold = _entered(symbol, NOW.replace(hour=12))
+        sold.closed_at = NOW.timestamp() - minutes_ago * 60
+        journal.append(sold)
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], clock=lambda: NOW.timestamp()
+    )  # type: ignore[arg-type]
+
+    workflow._resume_watch()
+
+    assert workflow._watch == {"BUSDT": NOW.timestamp() - 30 * 60 + 7200}

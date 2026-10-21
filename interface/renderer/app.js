@@ -564,7 +564,7 @@ function addCoin(e) {
   const act = actionOf(e);
   $('coins').querySelector('.empty-row')?.remove();
   $('coins').append(el('tr', {},
-    el('td', { class: 'rank' }, el('span', { class: 'rank-badge', textContent: String(e.rank) })),
+    el('td', { class: 'rank' }, el('span', { class: 'rank-badge', textContent: e.rank ? String(e.rank) : '↻', title: e.rank ? '' : 'Dicek ulang setelah terjual (lewat pencarian)' })),
     el('td', { class: 'sym', textContent: e.symbol }),
     el('td', {}, dips(e.count_ai ?? e.count_data)),
     el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
@@ -1210,7 +1210,7 @@ function analysisItem(a) {
   const example = a.status === 'contoh';
   const opened = a.real ? 'Short sungguhan dibuka' : 'Short uji kertas dibuka';
   const action = example ? a.reason : a.status === 'open' || STATUS[a.status] ? opened : plain(a.reason);
-  const where = example ? 'Gambar contoh' : `Top ${a.rank} · ${ROLE_NAME[a.role] || 'Sendiri'}`;
+  const where = example ? 'Gambar contoh' : `${a.rank ? `Top ${a.rank}` : 'Dicek ulang setelah terjual'} · ${ROLE_NAME[a.role] || 'Sendiri'}`;
   return el('li', { class: 'hist-item' },
     chartThumb(a.chart, `${a.symbol} · ${label}`) || el('span', { class: 'chart-thumb none', textContent: 'Tanpa grafik' }),
     el('div', {},

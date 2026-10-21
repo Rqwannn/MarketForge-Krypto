@@ -32,6 +32,8 @@ FUTURES_LIST_SCROLL_POINT = (0.4688, 0.6863)
 # Pencarian tab Futures (y 306..673 mencakup posisi normal 418 dan bergeser banner 508) dan judul
 # kolom "Perubahan" sesudah digulir (y 204..816).
 MARKET_TABS_AREA = (0.10, 0.30, 0.60, 0.66)
+MARKET_SEARCH = None  # kotak cari daftar Pasar belum diukur di Windows
+MARKET_SEARCH_AREA = None
 FUTURES_HEADER_AREA = (0.30, 0.20, 0.75, 0.80)
 # Sub-tab "Futures USD-M" setelah digulir (332, 405). Binance mengingat sub-tab terakhir,
 # jadi dipilih ulang agar tidak jatuh ke COIN-M.

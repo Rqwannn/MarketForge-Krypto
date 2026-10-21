@@ -14,7 +14,7 @@ from typing import Protocol
 
 from binance_bot.exceptions import CommandError, WindowError
 from binance_bot.macos.app_controller import Runner, run_command
-from binance_bot.macos.keyboard import clear_field, select_field, type_number
+from binance_bot.macos.keyboard import clear_field, select_field, type_number, type_symbol
 from binance_bot.macos.mouse import click_at, scroll_down_at, scroll_horizontal_at, scroll_up_at
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,8 @@ class WindowController(Protocol):
 
     def type_number(self, text: str) -> None: ...
 
+    def type_symbol(self, text: str) -> None: ...
+
     def capture(self, rect: Rect, path: Path) -> None: ...
 
 
@@ -85,6 +87,7 @@ class MacWindowController:
         keyboard_clear: Callable[[], None] = clear_field,
         keyboard_type: Callable[[str], None] = type_number,
         keyboard_select: Callable[[], None] = select_field,
+        keyboard_symbol: Callable[[str], None] = type_symbol,
     ) -> None:
         self._run = runner
         self._mouse_click = mouse_click
@@ -93,6 +96,7 @@ class MacWindowController:
         self._keyboard_clear = keyboard_clear
         self._keyboard_type = keyboard_type
         self._keyboard_select = keyboard_select
+        self._keyboard_symbol = keyboard_symbol
 
     def bounds(self, app_name: str) -> Rect:
         script = (
@@ -143,6 +147,10 @@ class MacWindowController:
     def type_number(self, text: str) -> None:
         logger.info("Ketik %s", text)
         self._keyboard_type(text)
+
+    def type_symbol(self, text: str) -> None:
+        logger.info("Ketik nama pair %s", text)
+        self._keyboard_symbol(text)
 
     def capture(self, rect: Rect, path: Path) -> None:
         region = f"{rect.x},{rect.y},{rect.width},{rect.height}"

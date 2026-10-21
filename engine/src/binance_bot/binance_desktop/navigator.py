@@ -60,6 +60,7 @@ _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
 _FOCUS_CLICK_AFTER = 2  # usaha biasa yang gagal sebelum klik titik kosong bilah judul
 _VERIFY_RETRY_DELAY_S = 0.4
+_SEARCH_READ_ATTEMPTS = 5  # baca hasil pencarian daftar Futures (sekitar 5 detik)
 _LEVERAGE_SETTLE_ATTEMPTS = 12  # sekitar 5 detik untuk dialog menutup dan label berubah
 _POSITION_PAGES = 8  # langkah gulir maksimal mencari baris posisi di tabel Posisi (3-5 posisi)
 _PAGE_READ_ATTEMPTS = 3  # baca pair di halaman koin: halaman baru bisa lambat tampil
@@ -117,6 +118,8 @@ _MARKET_CLOSE = re.compile(r"\bMarket\b")
 # Angka leverage (label di atas form dan kolom dialog); OCR bisa menggabungkannya dengan
 # tombol - dan + ("— 10x +").
 _LEVERAGE_VALUE = re.compile(r"(?<![\d.,])(\d{1,3})\s*[xX](?![A-Za-z])")
+_SEARCHED_PAIR = re.compile(r"\b[A-Z0-9]{2,16}USDT\b")  # isi kotak cari daftar Pasar
+_SEARCH_PLACEHOLDER = re.compile(r"Cari\s+Nama|Search", re.IGNORECASE)  # kotak cari kosong
 _LEVERAGE_TITLE = re.compile(r"(Sesuaikan|Modify|Adjust)\s+Leverage", re.IGNORECASE)
 _CONFIRM = re.compile(r"^\s*(Konfirmasi|Confirm)\s*$", re.IGNORECASE)
 _CLOSE = re.compile(r"^\s*[xX\u00d7]\s*$")  # ikon tutup (x atau tanda kali)
@@ -350,8 +353,88 @@ class BinanceNavigator:
             notches += 1  # banner mendorong daftar ke bawah: gulir lebih jauh agar 5 baris terlihat
         self._scroll_futures_list(notches)
         self._locate_list()
+        if self._clear_market_search():
+            # Sesudah kotak cari dikosongkan, Binance belum memuat ulang isi tab Futures ("Tidak
+            # ada Rekaman", uji kertas 21 Okt): tab diklik lagi supaya daftarnya dimuat ulang.
+            self._click(tab)
+            self._sleep(self._settings.settle_delay_s)
+            self._locate_list()
         if layout.FUTURES_USDM_TAB:
             self._click(self._shifted(layout.FUTURES_USDM_TAB))
+
+    def _clear_market_search(self) -> bool:
+        """Kosongkan kotak cari daftar Pasar bila masih berisi nama pair (sisa `search_symbol`,
+        bisa dari bot lain): daftar yang tersaring hanya berisi satu koin, bukan Top 5.
+
+        Teks pair-nya sendiri yang diklik (pasti memberi fokus ke kolom), baru Cmd+A dan hapus:
+        tanpa fokus, Cmd+A dan hapus mengenai halaman (uji nyata 21 Okt: halaman pindah tab).
+        """
+        area = layout.MARKET_SEARCH_AREA
+        if area is None:
+            return False
+        text = self._find_text(area, _SEARCHED_PAIR)
+        if text is None:
+            return False
+        logger.info("Kotak cari daftar Futures masih berisi nama pair: dikosongkan")
+        self._click(text)
+        self._window.clear_field()
+        self._sleep(self._settings.settle_delay_s)
+        if self._find_text(area, _SEARCHED_PAIR) is not None:
+            raise ScreenReadError("Kotak cari daftar Futures tidak bisa dikosongkan")
+        return True
+
+    def search_symbol(self, symbol: str) -> str:
+        """Buka koin lewat kotak cari daftar Futures, walau sudah keluar Top 5.
+
+        Untuk koin yang baru terjual di target (pernah lolos Top 5 saat pertama masuk). Ikon cari
+        diklik agar kotak melebar; mengetik hanya setelah tulisan "Cari Nama Koin" terlihat dan
+        tulisan itu diklik (fokus pasti di kolom). Hanya nama pair yang diketik, tanpa Enter, lalu
+        dicek dengan OCR; baris yang namanya persis sama dibuka lewat ikon trade-nya. Kotak
+        dikosongkan lagi saat daftar Futures dibuka berikutnya (`_clear_market_search`).
+        """
+        area = layout.MARKET_SEARCH_AREA
+        if layout.MARKET_SEARCH is None or area is None:
+            raise ScreenReadError("Pencarian daftar Futures belum tersedia di profil layar ini")
+        self._click(self._market_menu_position())
+        self._on_trade_page = False
+        self._on_list = False
+        self._row_y = {}
+        self._open_futures_list()  # juga mengosongkan sisa pencarian sebelumnya
+        self._click(layout.MARKET_SEARCH)
+        field = None
+        for _attempt in range(_SEARCH_READ_ATTEMPTS):  # aplikasi yang lambat butuh waktu melebar
+            self._sleep(_VERIFY_RETRY_DELAY_S * 2)
+            field = self._find_text(area, _SEARCH_PLACEHOLDER)
+            if field is not None:
+                break
+        if field is None:
+            raise ScreenReadError(
+                "Kotak cari daftar Futures tidak terbuka (tulisan Cari tak terlihat)"
+            )
+        self._click(field)  # fokus ke kolom; tidak ada ketikan sebelum ini
+        self._window.type_symbol(symbol)
+        self._sleep(self._settings.settle_delay_s)
+        # Nama persis (bukan 1000PEPEUSDT untuk PEPEUSDT); kursor atau ikon boleh ikut terbaca.
+        exact = re.compile(rf"(?<![A-Z0-9]){re.escape(symbol)}(?![A-Z0-9])")
+        if self._find_text(area, exact) is None:
+            raise ScreenReadError(f"Kotak cari daftar Futures tidak menampilkan {symbol}")
+        rows: list[GainerRow] = []
+        row = None
+        for attempt in range(_SEARCH_READ_ATTEMPTS):  # hasil saringan butuh waktu untuk tampil
+            rows = self.read_top_gainers()
+            row = next((r for r in rows if r.symbol == symbol), None)
+            if row is not None or attempt + 1 == _SEARCH_READ_ATTEMPTS:
+                break
+            self._sleep(1.0)
+        if row is None:
+            raise ScreenReadError(
+                f"{symbol} tidak ditemukan lewat pencarian Futures "
+                f"(terbaca: {[r.symbol for r in rows]})"
+            )
+        opened = self.open_gainer(row.rank)
+        if opened != symbol:
+            raise ScreenReadError(f"Pencarian {symbol} membuka {opened}")
+        return opened
 
     def _locate_list(self) -> None:
         """Cari judul kolom "Perubahan" untuk tahu seberapa jauh daftar bergeser dari kalibrasi."""
