@@ -131,3 +131,14 @@ def test_margin_leverage_is_read_from_the_companion_word_line() -> None:
     assert parse_margin(["Cross", "Leverage 20x"]).leverage == 20
     assert parse_margin(["Cross", "25x"]).leverage == 25
     assert parse_margin(["Cross", "Leverage"]).leverage is None
+
+
+def test_cyrillic_lookalikes_from_the_ocr_are_read_as_latin() -> None:
+    """Uji nyata 21 Okt: Vision membaca "20x" dengan huruf ha Kiril dan leverage tidak terbaca."""
+    from binance_bot.binance_desktop.navigator import _LEVERAGE_VALUE
+    from binance_bot.macos.ocr import latinize
+
+    assert _LEVERAGE_VALUE.search("20\u0445") is None  # sebelum: huruf Kiril tidak cocok pola
+    assert latinize("20\u0445") == "20x" and _LEVERAGE_VALUE.search(latinize("20\u0445"))
+    assert latinize("Cross \u0425 BRUSDT Perp") == "Cross X BRUSDT Perp"
+    assert latinize("Konfirmasi Posisi(1) 0,5905") == "Konfirmasi Posisi(1) 0,5905"  # Latin utuh

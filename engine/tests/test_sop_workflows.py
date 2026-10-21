@@ -1822,3 +1822,29 @@ def test_reentry_count_ignores_yesterday_and_the_other_money_mode(tmp_path: Path
     entry = trader.trade(1, "AUSDT", source(FakePatternAnalyzer(OK)))
 
     assert entry.status == "open"  # baru 3 kali uji kertas hari ini
+
+
+def test_real_money_is_never_sent_unless_leverage_is_proven_to_be_2x(
+    tmp_path: Path, live_money: None
+) -> None:
+    """Uji nyata 21 Okt: leverage tidak terbaca, order tetap dikirim dan terbuka 20x."""
+
+    class Refusing(FakeNavigator):
+        def ensure_leverage(self, leverage: int) -> MarginSettings:
+            raise ScreenReadError("Tombol leverage di atas form order tidak ditemukan")
+
+    for margin in (MarginSettings(False, 20), MarginSettings(False, None)):  # 20x, atau tak terbaca
+        nav = Refusing({1: "STRKUSDT"}, margin=margin)
+        trader, gate, _, _ = make_trader(tmp_path, nav)
+        entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+        assert entry.status == "skipped" and "leverage harus terbukti 2x" in entry.reason
+        assert nav.filled == [] and gate.plans == [] and entry.real is False
+
+
+def test_real_money_is_sent_once_leverage_is_confirmed_at_2x(
+    tmp_path: Path, live_money: None
+) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"}, margin=MarginSettings(False, 20))  # bot mengubah ke 2x
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert (entry.status, entry.real) == ("open", True) and len(gate.plans) == 1

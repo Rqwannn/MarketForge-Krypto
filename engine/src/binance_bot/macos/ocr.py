@@ -19,6 +19,23 @@ class TextLine:
     width: float = 0.0  # lebar relatif; dipakai bila OCR menggabungkan beberapa kata
 
 
+# Vision sering membaca huruf Latin sebagai huruf Kiril yang bentuknya sama (angka "20" diikuti
+# huruf ha Kiril, bukan x Latin). Semua pola di aplikasi ini berbahasa Latin, jadi lookalike Kiril
+# dikembalikan ke Latin; tanpa ini pola "20x" gagal cocok dan leverage tidak terbaca (uji nyata
+# 21 Okt: order sungguhan terbuka 20x karena leverage tidak terbaca).
+_CYRILLIC_TO_LATIN = {
+    "\u0445": "x", "\u0425": "X", "\u0430": "a", "\u0410": "A", "\u0435": "e", "\u0415": "E",
+    "\u043e": "o", "\u041e": "O", "\u0441": "c", "\u0421": "C", "\u0440": "p", "\u0420": "P",
+    "\u043a": "k", "\u041a": "K", "\u043c": "m", "\u041c": "M", "\u043d": "h", "\u041d": "H",
+    "\u0442": "t", "\u0422": "T", "\u0432": "b", "\u0412": "B", "\u0456": "i", "\u0406": "I",
+}  # fmt: skip
+_CYRILLIC_LOOKALIKES = str.maketrans(_CYRILLIC_TO_LATIN)
+
+
+def latinize(text: str) -> str:
+    return text.translate(_CYRILLIC_LOOKALIKES)
+
+
 class TextReader(Protocol):
     def read_lines(self, image: Path) -> list[TextLine]: ...
 
@@ -44,7 +61,7 @@ class MacTextReader:
             box = obs.boundingBox()  # relatif 0..1, titik asal di kiri-bawah
             lines.append(
                 TextLine(
-                    text=obs.topCandidates_(1)[0].string(),
+                    text=latinize(obs.topCandidates_(1)[0].string()),
                     x=box.origin.x + box.size.width / 2,
                     y=1.0 - (box.origin.y + box.size.height / 2),
                     width=box.size.width,

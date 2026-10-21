@@ -609,8 +609,13 @@ class SopTrader:
         else:
             margin = self._nav.read_margin_settings()
         entry.margin = margin.describe()
-        for issue in margin.problems(params.leverage):
+        issues = margin.problems(params.leverage)
+        for issue in issues:
             logger.warning("Margin di aplikasi: %s. Wajib diubah sebelum order sungguhan.", issue)
+        if issues and live_orders_enabled():
+            # Uang sungguhan: leverage yang tidak terbukti 2x (salah atau tidak terbaca) = tidak
+            # masuk. Uji nyata 21 Okt: leverage tidak terbaca, order tetap dikirim dan terbuka 20x.
+            raise _Skip(f"order sungguhan tidak dikirim: {issues[0]} (leverage harus terbukti 2x)")
 
         # Langkah 5: isi form lalu pintu order (dimatikan).
         if self._fill_form:
