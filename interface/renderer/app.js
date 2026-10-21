@@ -1449,7 +1449,7 @@ function renderHealth() {
   if (!items.length && (h.running || livePositions.length)) {
     const site = platform?.name || 'Binance';
     const parts = [h.network === 'ok' ? `Jaringan ${site} aman` : null, h.onBattery ? null : 'charger terpasang',
-      h.keepAwake ? 'laptop dijaga tetap menyala selama bot berjalan' : null].filter(Boolean);
+      h.keepAwake ? 'laptop dan layar dijaga tetap menyala selama bot berjalan' : null].filter(Boolean);
     if (parts.length) items.push(el('div', { class: 'health-item ok' }, el('i', { 'aria-hidden': 'true' }), el('span', { textContent: `${parts.join(' · ')}.` })));
   }
   box.replaceChildren(...items);

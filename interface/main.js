@@ -295,7 +295,7 @@ let networkFails = 0; // cek jaringan gagal beruntun (lihat alerts.settleNetwork
 const REPEAT_NOTICE_MS = 30 * 60 * 1000; // notifikasi gagal/hilang yang sama paling sering 30 menit
 const health = { network: 'unknown', onBattery: false, sleep: null, keepAwake: false, checkedAt: 0 };
 let sleepingSince = null; // saat laptop mulai tidur (powerMonitor 'suspend')
-let awakeBlocker = null; // powerSaveBlocker selama bot berjalan
+let awakeBlocker = null; // powerSaveBlocker selama bot berjalan (layar dan laptop tetap menyala)
 let lossLimit = 0; // batas rugi (%) untuk notifikasi; 0 = mati
 const lossAlerted = new Set();
 const noticeAt = new Map(); // kunci notifikasi -> waktu terakhir tampil
@@ -322,10 +322,16 @@ function healthSnapshot() {
   return { ...state, warnings: alerts.healthWarnings(state), missing: [...missing], lossLimit };
 }
 
-/** Jaga Mac/PC tetap menyala selama bot berjalan (jual otomatis butuh laptop yang bangun). */
+/**
+ * Jaga Mac/PC dan LAYAR tetap menyala selama bot berjalan. Bot mengklik dan membaca layar Binance,
+ * jadi penghemat layar atau kunci layar yang muncul di tengah jeda putaran menggagalkan putaran
+ * dan jual otomatis. 'prevent-display-sleep' (setara `caffeinate -d`) menahan layar mati dan
+ * penghemat layar, dan sekaligus menahan laptop tidur; 'prevent-app-suspension' hanya menahan
+ * tidur (setara `caffeinate -i`) dan tidak cukup. Dilepas begitu bot berhenti.
+ */
 function syncKeepAwake() {
   const want = proc.running;
-  if (want && awakeBlocker === null) awakeBlocker = powerSaveBlocker.start('prevent-app-suspension');
+  if (want && awakeBlocker === null) awakeBlocker = powerSaveBlocker.start('prevent-display-sleep');
   if (!want && awakeBlocker !== null) {
     powerSaveBlocker.stop(awakeBlocker);
     awakeBlocker = null;
