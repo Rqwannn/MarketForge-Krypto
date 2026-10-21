@@ -60,6 +60,7 @@ _FRONT_ATTEMPTS = 5
 _FRONT_WAIT_S = 3.0
 _FOCUS_CLICK_AFTER = 2  # usaha biasa yang gagal sebelum klik titik kosong bilah judul
 _VERIFY_RETRY_DELAY_S = 0.4
+_LEVERAGE_SETTLE_ATTEMPTS = 12  # sekitar 5 detik untuk dialog menutup dan label berubah
 _POSITION_PAGES = 8  # langkah gulir maksimal mencari baris posisi di tabel Posisi (3-5 posisi)
 _PAGE_READ_ATTEMPTS = 3  # baca pair di halaman koin: halaman baru bisa lambat tampil
 _PAGE_READ_DELAY_S = 1.0
@@ -674,15 +675,29 @@ class BinanceNavigator:
             if confirm is None:
                 raise ScreenReadError("Tombol Konfirmasi di dialog leverage tidak ditemukan")
             self._click(confirm)
-            margin = self.read_margin_settings()
-            if margin.leverage != leverage:
-                raise ScreenReadError(
-                    f"Bursa tidak mengubah leverage (masih {margin.leverage}x, bukan {leverage}x)"
-                )
+            margin = self._await_leverage(dialog, leverage)
         finally:
             self._close_leverage_dialog(dialog)
         logger.info("Leverage diubah ke %dx", leverage)
         return margin
+
+    def _await_leverage(
+        self, dialog: tuple[float, float, float, float], leverage: int
+    ) -> MarginSettings:
+        """Sesudah Konfirmasi: tunggu dialog tertutup dan label di atas form menunjukkan
+        `leverage`. Dialog menutup dengan animasi; dibaca terlalu cepat (uji nyata 21 Okt) judulnya
+        masih terlihat sehingga dikira macet, padahal leverage sudah berubah."""
+        margin = MarginSettings(isolated=None, leverage=None)
+        for _attempt in range(_LEVERAGE_SETTLE_ATTEMPTS):
+            self._sleep(_VERIFY_RETRY_DELAY_S)
+            if self._find_text(dialog, _LEVERAGE_TITLE) is not None:
+                continue  # dialog masih menutup
+            margin = self.read_margin_settings()
+            if margin.leverage == leverage:
+                return margin
+        raise ScreenReadError(
+            f"Bursa tidak mengubah leverage (masih {margin.leverage}x, bukan {leverage}x)"
+        )
 
     def _type_leverage(self, dialog: tuple[float, float, float, float], leverage: int) -> None:
         # Kolom angka ada di antara tombol - dan +, di atas label slider (1x, 2x, ...) yang

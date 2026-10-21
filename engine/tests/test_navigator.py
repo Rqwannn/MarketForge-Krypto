@@ -1443,3 +1443,42 @@ def test_a_position_gone_from_the_exchange_is_reported_as_missing(
     nav, _ = _closing_nav(monkeypatch, [AFTER])
     with pytest.raises(PositionNotFoundError):
         nav.close_position("BRUSDT")
+
+
+def _settling_nav(
+    monkeypatch: pytest.MonkeyPatch, closing_reads: int, levels: list[int]
+) -> BinanceNavigator:
+    """Dialog leverage masih terlihat `closing_reads` kali sesudah Konfirmasi; label lalu terbaca
+    berurutan sesuai `levels` (angka terakhir dipakai terus)."""
+    from binance_bot.binance_desktop.screen_text import MarginSettings
+
+    nav = make_nav()
+    titles = iter([(0.5, 0.2)] * closing_reads)
+    monkeypatch.setattr(nav, "_find_text", lambda area, pattern: next(titles, None))
+    reads = iter(levels)
+    last = {"value": levels[-1]}
+
+    def margin() -> MarginSettings:
+        last["value"] = next(reads, last["value"])
+        return MarginSettings(isolated=False, leverage=last["value"])
+
+    monkeypatch.setattr(nav, "read_margin_settings", margin)
+    return nav
+
+
+def test_leverage_change_waits_for_the_dialog_to_close_before_checking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Uji nyata 21 Okt: dialog masih menutup saat dibaca; leverage sebenarnya sudah 2x."""
+    from binance_bot.binance_desktop import layout as lay
+
+    nav = _settling_nav(monkeypatch, closing_reads=2, levels=[20, 2])
+    assert nav._await_leverage(lay.LEVERAGE_DIALOG_AREA, 2).leverage == 2
+
+
+def test_leverage_that_never_changes_is_still_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from binance_bot.binance_desktop import layout as lay
+
+    nav = _settling_nav(monkeypatch, closing_reads=0, levels=[20])
+    with pytest.raises(ScreenReadError, match="masih 20x, bukan 2x"):
+        nav._await_leverage(lay.LEVERAGE_DIALOG_AREA, 2)
