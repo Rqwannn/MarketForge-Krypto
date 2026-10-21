@@ -1904,3 +1904,27 @@ def test_a_restarted_bot_keeps_rechecking_coins_sold_at_target_in_the_last_two_h
     workflow._resume_watch()
 
     assert workflow._watch == {"BUSDT": NOW.timestamp() - 30 * 60 + 7200}
+
+
+def test_a_failed_recheck_is_retried_next_candle_not_every_minute(tmp_path: Path) -> None:
+    """Uji nyata 21 Okt: daftar Futures gagal dibaca (banner), cek ulang dicoba lagi tiap menit."""
+    from binance_bot.workflows.single import _candle
+    from fakes import Clock
+
+    class Broken(FakeNavigator):
+        def open_top_gainers(self) -> list[GainerRow]:
+            self.calls.append("open_top_gainers")
+            raise ScreenReadError("Daftar Futures tidak terurut")
+
+    clock = Clock(900_000.0 + 100)
+    nav = Broken({1: "AUSDT"})
+    trader, _, _, _ = make_trader(tmp_path, nav)
+    workflow = SingleWorkflow(
+        nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], sleep=clock.sleep, clock=clock
+    )  # type: ignore[arg-type]
+    workflow._remember(["AUSDT"])
+    workflow._checked["AUSDT"] = _candle(clock())
+
+    workflow._wait_and_watch(2400)  # 40 menit: dua candle baru (tanpa perbaikan: tiap menit)
+
+    assert nav.calls.count("open_top_gainers") == 2

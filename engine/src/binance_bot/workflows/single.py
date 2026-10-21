@@ -187,6 +187,11 @@ class SingleWorkflow:
         if not due:
             return
         logger.info("Candle 15 menit baru: cek ulang %s", ", ".join(due))
+        candle = _candle(self._clock())
+        for (
+            symbol
+        ) in due:  # gagal pun tetap terhitung: dicoba lagi candle berikutnya, bukan tiap menit
+            self._checked[symbol] = candle
         try:
             with self._nav.screen_turn():
                 self._nav.prepare()
