@@ -21,9 +21,11 @@ from binance_bot.strategy import (
     JournalEntry,
     PositionCloser,
     SopParams,
-    close_short_now,
+    close_now,
+    exit_price,
     live_orders_enabled,
 )
+from binance_bot.strategy.evaluate import gain_pct, is_long
 from binance_bot.workflows.sop import refresh_by_price, refresh_journal
 
 logger = logging.getLogger(__name__)
@@ -115,9 +117,7 @@ class PositionsWorkflow:
                 error = f"Tidak ada posisi terbuka untuk {manual.symbol}"
                 self._output(json.dumps({"error": error, "closed": [], "positions": []}))
                 return
-            closed = close_short_now(
-                entries[index], manual.exit_price, now, [], self._params.fee_pct
-            )
+            closed = close_now(entries[index], manual.exit_price, now, [], self._params.fee_pct)
             if manual.pnl_usdt is not None and closed.notional:
                 # Hasil dari Riwayat Posisi bursa lebih tepat (harga masuk asli, fee, funding).
                 closed = replace(
@@ -226,14 +226,14 @@ class PositionsWorkflow:
                 if live and entry.real and self._closer is not None:
                     # Posisi sungguhan: tutup dulu di bursa; gagal = posisi tetap tercatat terbuka.
                     self._closer.close_position(entry.symbol)
-                ask = self._market.quote(entry.symbol).ask
+                price = exit_price(entry, self._market.quote(entry.symbol))
                 try:
                     funding = self._market.funding_history(
                         entry.symbol, int(entry.created_at * 1000), int(now * 1000)
                     )
                 except NoHistoryError:
                     funding = []  # bursa tanpa riwayat funding (Tebbit)
-                entry = close_short_now(entry, ask, now, funding, self._params.fee_pct)
+                entry = close_now(entry, price, now, funding, self._params.fee_pct)
                 closed.append(entry)
                 logger.warning(
                     (
@@ -243,7 +243,7 @@ class PositionsWorkflow:
                     )
                     + "%s ditutup di %g: %+.2f%% posisi (%+.2f%% modal)",
                     entry.symbol,
-                    ask,
+                    price,
                     entry.pnl_pct or 0,
                     entry.pnl_capital_pct or 0,
                 )
@@ -261,6 +261,9 @@ class PositionsWorkflow:
             "created_at": entry.created_at,
             "entry_price": entry.entry_price,
             "target_price": entry.target_price,
+            "side": entry.side,
+            "cutloss_price": entry.cutloss_price,
+            "time_exit_at": entry.time_exit_at,  # jual apa pun kondisinya (batas waktu)
             "real": entry.real,
             "notional": entry.notional,
             "price": None,
@@ -269,42 +272,44 @@ class PositionsWorkflow:
             "pnl_pct": None,
             "pnl_capital_pct": None,
             "pnl_usdt": None,
-            "to_target_pct": None,  # harga masih harus turun sekian persen sampai jual otomatis
-            # Rugi terdalam sejak masuk: dari harga tertinggi yang tercatat (melawan short).
+            "to_target_pct": None,  # harga masih harus bergerak sekian persen sampai target
+            # Rugi terdalam sejak masuk: dari harga terburuk yang tercatat (tertinggi untuk short,
+            # terendah untuk long).
             "worst_pnl_pct": (
-                self._pnl_pct(entry, entry.max_price)
-                if entry.max_price and entry.entry_price
+                self._pnl_pct(entry, worst)
+                if (worst := entry.min_price if is_long(entry) else entry.max_price)
+                and entry.entry_price
                 else None
             ),
         }
         read_at: float | None = self._wall_clock()
         try:
-            ask = self._market.quote(entry.symbol).ask
+            price = exit_price(entry, self._market.quote(entry.symbol))
         except MarketDataError:
             # Tebbit: harga hanya terbaca dari layar. Pakai yang terakhir tersimpan (dibaca bot saat
             # berjalan atau tombol Cek harga) dan tandai usianya.
             if entry.last_price is None:
                 return data
-            ask, read_at = entry.last_price, entry.last_price_at
+            price, read_at = entry.last_price, entry.last_price_at
             data["price_stale"] = True
-        pnl_pct = self._pnl_pct(entry, ask)
-        data["price"] = ask
+        pnl_pct = self._pnl_pct(entry, price)
+        data["price"] = price
         data["price_at"] = read_at
         data["pnl_pct"] = pnl_pct
         if entry.notional:
             data["pnl_usdt"] = entry.notional * pnl_pct / 100
         if entry.notional and entry.capital_usdt:
             data["pnl_capital_pct"] = entry.notional * pnl_pct / entry.capital_usdt
-        if entry.target_price and ask > 0:
-            data["to_target_pct"] = max(0.0, 100 * (ask - entry.target_price) / ask)
+        if entry.target_price and price > 0:
+            toward = 1 if is_long(entry) else -1  # long menunggu harga naik, short turun
+            data["to_target_pct"] = max(0.0, toward * 100 * (entry.target_price - price) / price)
         worst = data["worst_pnl_pct"]  # harga sekarang bisa lebih buruk dari yang sudah tercatat
         data["worst_pnl_pct"] = pnl_pct if worst is None else min(worst, pnl_pct)
         return data
 
     def _pnl_pct(self, entry: JournalEntry, price: float) -> float:
-        """Hasil short dalam persen nilai posisi bila ditutup di `price` (setelah fee)."""
-        assert entry.entry_price
-        return 100 * (entry.entry_price - price) / entry.entry_price - self._params.fee_pct
+        """Hasil posisi dalam persen nilai posisi bila ditutup di `price` (setelah fee)."""
+        return gain_pct(entry, price) - self._params.fee_pct
 
     @staticmethod
     def _closed_dict(entry: JournalEntry) -> dict[str, Any]:

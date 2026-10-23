@@ -1,10 +1,10 @@
-"""Inti SOP V2 "Short Top Gainers (Futures 2x)" untuk satu koin yang halaman trade-nya terbuka.
+"""Inti SOP "Top Gainers (Short dan Long)" untuk satu koin yang halaman trade-nya terbuka.
 
 Dipakai bersama oleh mode single (AI sendiri) dan follower (AI dari hub leader). Urutan:
 cek slot (koin berikutnya hanya bila posisi terbuka tidak rugi; jumlah posisi tidak dibatasi),
 saringan gratis (spread, kenaikan minimal bila diisi; funding rate tidak dipakai), pola garis
-kuning MA7 (AI atau data), ukuran posisi (margin 50% x 2x), leverage 2x di bursa, isi kolom
-Jumlah, lalu pintu order yang DIMATIKAN. Semua dicatat.
+kuning MA7 (AI atau data) untuk short dan tanda LONG bila dipilih, ukuran posisi (margin 50% x
+2x), leverage 2x di bursa, isi kolom Jumlah, lalu pintu order yang DIMATIKAN. Semua dicatat.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -34,6 +34,7 @@ from binance_bot.market import MarketData
 from binance_bot.strategy import (
     Journal,
     JournalEntry,
+    LongPattern,
     MaPattern,
     OrderGate,
     OrderPlan,
@@ -44,22 +45,96 @@ from binance_bot.strategy import (
     data_ma_pattern,
     evaluate_by_price,
     evaluate_open_trades,
+    exit_price,
     live_orders_enabled,
+    long_numbers,
     ma_gap_pct,
     size_position,
 )
+from binance_bot.strategy.evaluate import entry_price_of, gain_pct
+from binance_bot.strategy.params import HOLD_GREEN_H, HOLD_MAX_H
 from binance_bot.workflows.base import TradingNavigator
 
 logger = logging.getLogger(__name__)
 
-# Mengambil hasil AI pola garis kuning untuk (pair, screenshot grafik 15 menit).
-ReadingSource = Callable[[str, Path], PatternReading]
+# Mengambil hasil AI untuk (pair, screenshot grafik 15 menit, baca juga tanda LONG?).
+ReadingSource = Callable[[str, Path, bool], PatternReading]
 
 _VERDICT_TEXT = {
     "jangan": "JANGAN (garis kuning selalu di atas)",
     "tunggu": "TUNGGU (baru sekali di bawah)",
     "ok": "OK (berkali-kali di bawah)",
 }
+_SIGN_TEXT = {1: "turun tajam lalu berbalik", 2: "posisi datar", 3: "garis cepat jauh di atas"}
+_EXIT_TEXT = {
+    "target": "jual (target tercapai)",
+    "stop": "jual (cutloss)",
+    "timeout": "jual (batas waktu)",
+    "likuidasi": "jual (likuidasi)",
+}
+
+
+def short_reason(pattern: MaPattern, verdict: str, min_crosses: int) -> str:
+    """Alasan tidak masuk short (aturan short tidak berubah sejak V3)."""
+    if verdict == "tunggu" and pattern.lines_close and pattern.below_recent:
+        return (
+            "pola garis kuning TUNGGU (garis MA7 dan MA25 berdekatan; masuk hanya bila berjauhan)"
+        )
+    if verdict == "tunggu" and pattern.below_count >= min_crosses:
+        return (
+            f"pola garis kuning TUNGGU (sudah {pattern.below_count} kali di bawah, "
+            "tapi 6 jam terakhir naik terus)"
+        )
+    return f"pola garis kuning {_VERDICT_TEXT[verdict]}"
+
+
+def signs_text(signs: Sequence[int]) -> str:
+    return ", ".join(f"tanda {n} ({_SIGN_TEXT[n]})" for n in signs)
+
+
+@dataclass(frozen=True, slots=True)
+class Decision:
+    side: str | None  # "short" | "long" | None = tidak masuk
+    verdict: str  # jangan | tunggu | ok (short) | long | konflik
+    reason: str  # alasan tidak masuk (kosong bila masuk)
+
+
+def decide(
+    short: MaPattern,
+    long: LongPattern | None,
+    sides: Sequence[str],
+    params: SopParams,
+    profile: PatternProfile,
+) -> Decision:
+    """Arah masuk dari bacaan grafik dan arah yang boleh di Top ini (`params.sides_for`).
+
+    Short memakai aturan profil apa adanya. LONG cukup satu tanda (usulan SOP 23 Okt). Grafik yang
+    memenuhi syarat short sekaligus menunjukkan tanda LONG tidak dimasuki (usulan SOP: diputuskan
+    manual). Tanpa arah LONG (`long` None), hasilnya sama persis dengan aturan short sebelumnya.
+    """
+    if not sides:
+        return Decision(None, "tunggu", "Top ini tidak dipilih untuk short maupun long")
+    short_verdict = profile.verdict(short, params.min_crosses)
+    signs = long.signs if long is not None and "long" in sides else []
+    if short_verdict == "ok" and signs:
+        return Decision(
+            None,
+            "konflik",
+            f"grafik memenuhi syarat SHORT dan menunjukkan {signs_text(signs)}; tidak masuk",
+        )
+    if short_verdict == "ok" and "short" in sides:
+        return Decision("short", "ok", "")
+    if signs:
+        return Decision("long", "long", "")
+    reasons = []
+    if "short" in sides:
+        reasons.append(short_reason(short, short_verdict, params.min_crosses))
+    elif short_verdict == "ok":
+        reasons.append("pola cocok untuk SHORT, tetapi arah SHORT tidak dipilih")
+    if "long" in sides:
+        reasons.append("tanda LONG tidak terbaca" if long is None else "tidak ada tanda LONG")
+    verdict = short_verdict if "short" in sides or short_verdict == "ok" else "tunggu"
+    return Decision(None, verdict, "; ".join(reasons))
 
 
 def limits_of(params: SopParams) -> dict[str, float]:
@@ -79,6 +154,10 @@ def decision_fields(entry: JournalEntry, params: SopParams | None = None) -> dic
         "ma_gap_pct": entry.ma_gap_pct,  # positif = garis cepat di bawah pembanding
         "ai": entry.pattern_ai,
         "data": entry.pattern_data,
+        "side": entry.side,
+        "long_ai": entry.long_ai,
+        "long_data": entry.long_data,
+        "long_signs": entry.long_signs,
         "leverage": entry.leverage,
         "margin_usdt": entry.margin_usdt,
         "notional": entry.notional,
@@ -105,6 +184,7 @@ def coin_event(entry: JournalEntry, params: SopParams | None = None) -> dict[str
         reason=entry.reason,
         entry_price=entry.entry_price,
         target_price=entry.target_price,
+        cutloss_price=entry.cutloss_price,
         real=entry.real,
         chart=chart_of(entry),
     )
@@ -130,6 +210,9 @@ def log_top_gainers(rows: Sequence[GainerRow]) -> None:
 # putaran berikutnya. Binance memakai data publik (tanpa layar); Tebbit membaca harga dari layar
 # (OCR, tanpa AI) sehingga lebih jarang.
 WATCH_INTERVAL_S = {"binance": 60.0, "tebbit": 300.0}
+# Bursa tanpa riwayat candle: posisi uji kertas hanya bisa dinilai dari harga saat dicek, jadi
+# target, cutloss, dan batas waktunya tercatat tepat hanya bila bot terus mengawasinya.
+PRICE_ONLY_PLATFORMS = ("tebbit",)
 
 
 def refresh_journal(
@@ -147,7 +230,7 @@ def refresh_by_price(
     now_s: float,
     closer: PositionCloser | None = None,
 ) -> list[JournalEntry]:
-    """Jual otomatis dari harga ask terkini (Tebbit dari layar OCR; Binance uang sungguhan)."""
+    """Jual otomatis dari harga terkini (Tebbit dari layar OCR; Binance uang sungguhan)."""
     if live_orders_enabled() and closer is not None:
         return _sell_due_positions(journal, market, fee_pct, now_s, closer)
     entries = journal.load()
@@ -155,11 +238,11 @@ def refresh_by_price(
     for entry in entries:
         if entry.status == "open" and entry.entry_price and entry.target_price and not entry.real:
             try:
-                ask = market.quote(entry.symbol).ask
+                price = exit_price(entry, market.quote(entry.symbol))
             except BotError as exc:
                 logger.warning("Harga %s belum terbaca untuk jual otomatis: %s", entry.symbol, exc)
             else:
-                entry = evaluate_by_price(entry, ask, now_s, fee_pct)
+                entry = evaluate_by_price(entry, price, now_s, fee_pct)
         updated.append(entry)
     return record_changes(journal, entries, updated)
 
@@ -178,6 +261,7 @@ def _sell_due_positions(
     menahan bot yang datang belakangan, lalu jurnal dibaca ulang (bot lain mungkin sudah menjual)
     dan harga setiap posisi dibaca ulang tepat sebelum diputuskan. Posisi berikutnya baru
     dijual bila harga SAAT ITU masih di target; kalau sudah memantul, posisinya tetap terbuka.
+    Cutloss dan batas waktu (bila dinyalakan) memakai jalur yang sama.
     """
     with exclusive(journal.path.with_suffix(".sell.lock")):
         entries = journal.load()
@@ -187,19 +271,24 @@ def _sell_due_positions(
                 updated.append(entry)
                 continue
             try:
-                ask = market.quote(entry.symbol).ask  # dibaca ulang sesudah menunggu giliran
+                # Dibaca ulang sesudah menunggu giliran: ask untuk short, bid untuk long.
+                price = exit_price(entry, market.quote(entry.symbol))
             except BotError as exc:
                 logger.warning("Harga %s belum terbaca untuk jual otomatis: %s", entry.symbol, exc)
                 updated.append(entry)
                 continue
-            result = evaluate_by_price(entry, ask, now_s, fee_pct)
+            result = evaluate_by_price(entry, price, now_s, fee_pct)
             if entry.real:
                 logger.info(
-                    "Cek ulang %s sebelum menjual: ask %g, target %g -> %s",
+                    "Cek ulang %s sebelum menjual: %s %g, target %g%s -> %s",
                     entry.symbol,
-                    ask,
+                    "bid" if entry.side == "long" else "ask",
+                    price,
                     entry.target_price,
-                    "jual" if result.is_closed else "tahan (target belum tercapai)",
+                    f", cutloss {entry.cutloss_price:g}" if entry.cutloss_price else "",
+                    _EXIT_TEXT.get(result.status, "jual")
+                    if result.is_closed
+                    else "tahan (target belum tercapai)",
                 )
                 if result.is_closed:
                     try:
@@ -330,6 +419,18 @@ class SopTrader:
         entry.capital_usdt = capital
         return replace(self.params, capital_usdt=capital, capital_share=None)
 
+    def positions_to_watch(self) -> int:
+        """Posisi yang wajib diawasi bot sampai selesai: semua posisi uang sungguhan, dan posisi
+        uji kertas di bursa tanpa candle. Uji kertas Binance dinilai ulang dari candle 1 menit
+        kapan pun bot berjalan lagi, jadi tidak perlu ditunggui."""
+        live = live_orders_enabled()
+        price_only = self.profile.platform in PRICE_ONLY_PLATFORMS
+        return sum(
+            1
+            for e in self._journal.load()
+            if e.status == "open" and ((e.real and live) or (price_only and not e.real))
+        )
+
     def real_positions_open(self) -> int:
         """Jumlah posisi uang sungguhan yang masih terbuka (yang wajib diawasi sampai terjual)."""
         if not live_orders_enabled():
@@ -337,7 +438,8 @@ class SopTrader:
         return sum(1 for e in self._journal.load() if e.status == "open" and e.real)
 
     def refresh_journal(self) -> list[JournalEntry]:
-        """Jual otomatis: posisi yang sudah mencapai target ditutup dan dicatat.
+        """Jual otomatis: posisi yang sudah mencapai target (atau cutloss/batas waktu bila
+        dinyalakan) ditutup dan dicatat.
 
         Real Fund Trading memakai harga SAAT INI, bukan riwayat candle: posisi sungguhan hanya
         ditutup bila harga sekarang sudah di target (bukan bila tadi sempat menyentuhnya).
@@ -357,8 +459,9 @@ class SopTrader:
     def sell_due(self) -> list[str]:
         """Jual otomatis (lihat `refresh_journal`), lalu pair yang baru terjual di target.
 
-        Terjual di target = harga sedang turun (momentum short): putaran berikutnya dimulai segera
-        dan koin itu dicek ulang lebih dulu, tetap dengan semua aturan masuk.
+        Terjual di target = harga sedang bergerak searah posisi (momentum): putaran berikutnya
+        dimulai segera dan koin itu dicek ulang lebih dulu, tetap dengan semua aturan masuk. Jual
+        karena cutloss atau batas waktu tidak dicek ulang.
         """
         before = {(e.id, e.created_at) for e in self._journal.load() if e.status == "open"}
         return [
@@ -370,9 +473,9 @@ class SopTrader:
     def reentry_blocker(self, symbol: str) -> str | None:
         """Batas masuk ulang: koin yang sama paling banyak 1 + `max_reentries` kali per hari.
 
-        Tanpa stop-loss, masuk ulang tepat saat harga berbalik naik bisa tertahan lama; batas ini
-        membatasi berapa kali satu koin dikejar dalam sehari. Uji kertas dan uang sungguhan
-        dihitung terpisah.
+        Masuk ulang tepat saat harga berbalik bisa tertahan lama; batas ini membatasi berapa kali
+        satu koin dikejar dalam sehari, short dan long dihitung bersama. Uji kertas dan uang
+        sungguhan dihitung terpisah.
         """
         today = datetime.fromtimestamp(self._wall_clock()).date()
         real = live_orders_enabled()
@@ -391,6 +494,20 @@ class SopTrader:
                 f"{self.params.max_reentries} kali per koin per hari)"
             )
         return None
+
+    def momentum_sides(self, symbol: str) -> tuple[str, ...]:
+        """Arah masuk ulang untuk koin yang baru terjual di target: arah posisi yang terjual itu
+        (momentumnya searah), selama arah itu masih dipakai di pengaturan."""
+        real = live_orders_enabled()
+        sold = [
+            e
+            for e in self._journal.load()
+            if e.symbol == symbol and e.status == "target" and e.real == real
+        ]
+        if not sold:
+            return ()
+        side = max(sold, key=lambda e: e.closed_at or 0.0).side
+        return (side,) if self.params.side_enabled(side) else ()
 
     def recent_target_sales(self, within_s: float) -> dict[str, float]:
         """Pair yang terjual di target dalam `within_s` detik terakhir -> waktu terjualnya.
@@ -420,21 +537,30 @@ class SopTrader:
         opened = [e for e in self._journal.load() if e.status == "open"]
         for entry in opened:
             assert entry.entry_price is not None
-            # Short rugi bila harga naik di atas harga masuk. Dibandingkan dengan sisi harga yang
-            # sama saat masuk (bid), supaya spread sesaat setelah masuk tidak dihitung sebagai rugi.
+            # Dibandingkan dengan sisi harga yang sama saat masuk (bid untuk short, ask untuk
+            # long), supaya spread sesaat setelah masuk tidak dihitung sebagai rugi.
             try:
-                price = self._market.quote(entry.symbol).bid
+                price = entry_price_of(entry.side, self._market.quote(entry.symbol))
             except MarketDataError as exc:
                 return f"harga {entry.symbol} tidak terbaca ({exc}); koin berikutnya ditahan"
-            if price > entry.entry_price:
+            if gain_pct(entry, price) < 0:
+                sign = "<" if entry.side == "long" else ">"
                 return (
-                    f"posisi {entry.symbol} sedang rugi ({price:g} > masuk {entry.entry_price:g}); "
-                    "koin berikutnya belum boleh dibuka"
+                    f"posisi {entry.symbol} sedang rugi ({price:g} {sign} masuk "
+                    f"{entry.entry_price:g}); koin berikutnya belum boleh dibuka"
                 )
         return None
 
-    def trade(self, rank: int, symbol: str, reading_source: ReadingSource | None) -> JournalEntry:
-        """Jalankan langkah 2-5 SOP untuk pair yang halaman trade-nya sedang terbuka."""
+    def trade(
+        self,
+        rank: int,
+        symbol: str,
+        reading_source: ReadingSource | None,
+        sides: Sequence[str] | None = None,
+    ) -> JournalEntry:
+        """Jalankan langkah 2-5 SOP untuk pair yang halaman trade-nya sedang terbuka.
+
+        `sides`: arah yang boleh dibuka; bawaan menurut Top (`params.sides_for(rank)`)."""
         entry = JournalEntry(
             id=f"{self._now():%Y%m%d_%H%M%S}_{symbol}",
             created_at=self._wall_clock(),
@@ -445,7 +571,9 @@ class SopTrader:
             role=self._role,
         )
         try:
-            self._run(entry, reading_source)
+            self._run(
+                entry, reading_source, self.params.sides_for(rank) if sides is None else sides
+            )
         except (_Skip, BotError) as exc:
             entry.status = "skipped"
             entry.reason = str(exc)
@@ -467,10 +595,21 @@ class SopTrader:
             role=self._role,
         )
         if reading is not None:
-            entry.pattern_ai = reading.pattern.as_dict()
-            entry.ai_summary = reading.summary
-            entry.verdict = self.profile.verdict(reading.pattern, self.params.min_crosses)
+            self._record_reading(entry, reading)
+            entry.verdict = self.decide(reading, rank).verdict
         return self._finish(entry)
+
+    def decide(self, reading: PatternReading, rank: int) -> Decision:
+        long = reading.long.pattern if reading.long is not None else None
+        sides = self.params.sides_for(rank)
+        return decide(reading.pattern, long, sides, self.params, self.profile)
+
+    @staticmethod
+    def _record_reading(entry: JournalEntry, reading: PatternReading) -> None:
+        entry.pattern_ai = reading.pattern.as_dict()
+        entry.ai_summary = reading.summary
+        if reading.long is not None:
+            entry.long_ai = {**reading.long.pattern.as_dict(), "summary": reading.long.summary}
 
     def _ensure_leverage(self, leverage: int) -> MarginSettings:
         """Bot mengubah leverage koin ke SOP (2x) sebelum mengisi form. Bila bursa menolak
@@ -522,8 +661,12 @@ class SopTrader:
             )
         return entry
 
-    def _run(self, entry: JournalEntry, reading_source: ReadingSource | None) -> None:
+    def _run(
+        self, entry: JournalEntry, reading_source: ReadingSource | None, sides: Sequence[str]
+    ) -> None:
         params, symbol = self.params, entry.symbol
+        if not sides:
+            raise _Skip("Top ini tidak dipilih untuk short maupun long")
         if not symbol.endswith("USDT"):
             raise _Skip("bukan pair USDT")
         # Dicek sebelum grafik dan AI: tidak perlu membaca koin yang memang tidak akan dimasuki.
@@ -551,6 +694,7 @@ class SopTrader:
         chart = self._nav.capture_chart(shots / f"{name}_15m.png")
         entry.screenshots.append(str(chart))
 
+        long_wanted = "long" in sides
         try:
             profile = self.profile
             klines = self._market.klines(symbol, "15m", limit=candles_needed(mid=profile.mid))
@@ -562,18 +706,26 @@ class SopTrader:
         except MarketDataError as exc:  # bursa tanpa sumber candle: hanya AI yang menilai
             logger.info("Pembanding data tidak ada: %s", exc)
             data = None
+        if long_wanted and data is not None:
+            try:  # V4: angka tanda LONG dicatat (ambangnya belum ditetapkan)
+                entry.long_data = long_numbers(klines)
+            except ValueError as exc:
+                logger.info("Angka MA untuk LONG belum bisa dihitung: %s", exc)
         entry.pattern_data = data.as_dict() if data else None
         decisive = data
+        long: LongPattern | None = None
         if params.signal_source == "ai":
             if reading_source is None:
                 raise _Skip("SINYAL=ai tetapi tidak ada sumber analisis AI")
-            reading = reading_source(symbol, chart)
-            entry.pattern_ai = reading.pattern.as_dict()
-            entry.ai_summary = reading.summary
+            reading = reading_source(symbol, chart, long_wanted)
+            self._record_reading(entry, reading)
             decisive = reading.pattern
+            long = reading.long.pattern if reading.long is not None else None
         if decisive is None:
             raise _Skip("bursa ini tidak punya data candle; pakai SINYAL=ai")
-        entry.verdict = self.profile.verdict(decisive, params.min_crosses)
+        decision = decide(decisive, long, sides, params, self.profile)
+        short_verdict = self.profile.verdict(decisive, params.min_crosses)
+        entry.verdict = decision.verdict
         logger.info(
             "#%d %s garis kuning %s: %d kali di bawah MA%d -> %s (data: %d kali)%s",
             entry.rank,
@@ -581,22 +733,23 @@ class SopTrader:
             params.signal_source.upper(),
             decisive.below_count,
             self.profile.mid,
-            _VERDICT_TEXT[entry.verdict],
+            _VERDICT_TEXT[short_verdict],
             data.below_count if data else -1,
             f" | {entry.ai_summary}" if entry.ai_summary else "",
         )
-        if entry.verdict != "ok":
-            if entry.verdict == "tunggu" and decisive.lines_close and decisive.below_recent:
-                raise _Skip(
-                    "pola garis kuning TUNGGU (garis MA7 dan MA25 berdekatan; masuk hanya bila "
-                    "berjauhan)"
-                )
-            if entry.verdict == "tunggu" and decisive.below_count >= params.min_crosses:
-                raise _Skip(
-                    f"pola garis kuning TUNGGU (sudah {decisive.below_count} kali di bawah, "
-                    "tapi 6 jam terakhir naik terus)"
-                )
-            raise _Skip(f"pola garis kuning {_VERDICT_TEXT[entry.verdict]}")
+        if long_wanted:
+            logger.info(
+                "#%d %s tanda LONG AI: %s%s",
+                entry.rank,
+                symbol,
+                (signs_text(long.signs) or "tidak ada") if long is not None else "tidak terbaca",
+                f" | {entry.long_ai['summary']}" if entry.long_ai else "",
+            )
+        if decision.side is None:
+            raise _Skip(decision.reason)
+        side = decision.side
+        if side == "long" and long is not None:
+            entry.long_signs = long.signs
 
         # Langkah 3 SOP (setelah pola): spread.
         if cost_issue:
@@ -613,7 +766,7 @@ class SopTrader:
         if params.capital_share is not None:
             params = self._capital_from_balance(entry, params.capital_share)
         rules = self._market.rules(symbol)
-        price = quote.bid  # short menjual ke harga bid
+        price = entry_price_of(side, quote)  # short menjual ke bid, long membeli di ask
         sizing = size_position(params, price, rules, self._settings.decimal_separator)
         if isinstance(sizing, str):
             raise _Skip(sizing)
@@ -636,6 +789,8 @@ class SopTrader:
         # Langkah 5: isi form lalu pintu order (dimatikan).
         if self._fill_form:
             self._nav.fill_quantity(sizing.order_text)
+        toward = 1 if side == "long" else -1  # arah harga yang menguntungkan posisi
+        target_pct = params.target_for(side)
         plan = OrderPlan(
             symbol=symbol,
             order_text=sizing.order_text,
@@ -643,33 +798,58 @@ class SopTrader:
             notional=sizing.notional,
             margin_usdt=sizing.margin_usdt,
             entry_price=price,
-            target_price=price * (1 - params.target_pct / 100),
+            target_price=price * (1 + toward * target_pct / 100),
             leverage=params.leverage,
+            side=side.upper(),
+            cutloss_price=(
+                price * (1 - toward * params.stop_pct / 100) if params.stop_pct else None
+            ),
             margin_mode=margin.mode,
         )
         self._gate.submit(plan)
 
+        now_s = self._wall_clock()
         entry.status = "open"
-        entry.real = live_orders_enabled()  # tombol Short ditekan sungguhan
+        entry.side = side
+        entry.real = live_orders_enabled()  # tombol order ditekan sungguhan
         entry.entry_price = plan.entry_price
         entry.max_price = plan.entry_price
         entry.min_price = plan.entry_price
-        entry.last_price = quote.ask  # harga terakhir terbaca: bahan daftar Posisi tanpa layar
-        entry.last_price_at = self._wall_clock()
+        # Harga terakhir terbaca (harga tutup posisi): bahan daftar Posisi tanpa layar.
+        entry.last_price = quote.bid if side == "long" else quote.ask
+        entry.last_price_at = now_s
         entry.quantity = sizing.quantity
         entry.notional = sizing.notional
         entry.margin_usdt = sizing.margin_usdt
         entry.target_price = plan.target_price
+        entry.cutloss_price = plan.cutloss_price
+        if params.time_limit:
+            entry.green_exit_at = now_s + HOLD_GREEN_H * 3600
+            entry.time_exit_at = now_s + HOLD_MAX_H * 3600
+        exits = []
+        if plan.cutloss_price is not None:
+            exits.append(f"cutloss di {plan.cutloss_price:g} ({params.stop_pct:g}%)")
+        else:
+            exits.append("tanpa stop-loss")
+        if params.time_limit:
+            exits.append(
+                f"jual sesudah {HOLD_GREEN_H:g} jam bila untung, paling lama {HOLD_MAX_H:g} jam"
+            )
+        else:
+            exits.append("tanpa batas waktu")
         logger.info(
-            "#%d %s MASUK %s: short %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
-            "di %g (turun %g%%), tanpa stop-loss dan tanpa batas waktu",
+            "#%d %s MASUK %s: %s %s USDT @ %g (%dx, margin %.2f USDT) | jual otomatis "
+            "di %g (%s %g%%), %s",
             entry.rank,
             symbol,
             "UANG SUNGGUHAN" if entry.real else "UJI KERTAS",
+            side,
             sizing.order_text,
             price,
             params.leverage,
             sizing.margin_usdt,
             plan.target_price,
-            params.target_pct,
+            "naik" if side == "long" else "turun",
+            target_pct,
+            " dan ".join(exits),
         )

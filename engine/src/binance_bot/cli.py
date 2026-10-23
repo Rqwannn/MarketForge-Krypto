@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from binance_bot import __version__
-from binance_bot.analysis import ConsensusAnalyzer, VikeyPatternAnalyzer
+from binance_bot.analysis import (
+    ConsensusAnalyzer,
+    LongAnalyzer,
+    LongConsensusAnalyzer,
+    PatternAnalyzer,
+    VikeyLongAnalyzer,
+    VikeyPatternAnalyzer,
+)
 from binance_bot.binance_desktop import BinanceNavigator
 from binance_bot.binance_desktop.layout import MAX_RANK
 from binance_bot.binance_desktop.pattern_rules import BINANCE
@@ -25,6 +32,7 @@ from binance_bot.strategy import (
     DryRunOrderGate,
     Journal,
     OrderGate,
+    PatternProfile,
     ScreenOrderGate,
     SopParams,
     enable_live_orders,
@@ -149,7 +157,24 @@ def _sop_options() -> argparse.ArgumentParser:
         "--target",
         type=float,
         default=d.target_pct,
-        help="Jual otomatis saat harga turun %% (V3: 3-5)",
+        help="Short: jual otomatis saat harga turun %% (3-5)",
+    )
+    _add_tops(g)
+    g.add_argument(
+        "--target-long",
+        type=float,
+        default=d.long_target_pct,
+        help="Long: jual otomatis saat harga naik %% (4-5)",
+    )
+    g.add_argument(
+        "--cutloss",
+        type=float,
+        help="Jual otomatis saat harga melawan posisi %% (SOP: 10); tanpa opsi = tanpa cutloss",
+    )
+    g.add_argument(
+        "--batas-waktu",
+        action="store_true",
+        help="Sesudah 2,5 jam jual bila untung bersih; di jam ke-3 jual apa pun kondisinya",
     )
     g.add_argument(
         "--min-turun",
@@ -177,6 +202,35 @@ def _sop_options() -> argparse.ArgumentParser:
     return p
 
 
+def _add_tops(group: argparse._ActionsContainer) -> None:
+    """Arah per Top (SOP 23 Okt). Tanpa keduanya: short di semua Top yang dipantau."""
+    group.add_argument(
+        "--top-short",
+        type=parse_ranks,
+        help="Top yang boleh short, mis. 2,3,4 (bersama --top-long: selebihnya tidak short)",
+    )
+    group.add_argument(
+        "--top-long", type=parse_ranks, help="Top yang boleh long, mis. 1,5 (tanda masuk LONG)"
+    )
+
+
+def tops_from(args: argparse.Namespace) -> tuple[tuple[int, ...] | None, tuple[int, ...]]:
+    """(short_tops, long_tops). Bila salah satu diisi, keduanya tegas: yang kosong = tidak ada."""
+    if args.top_short is None and args.top_long is None:
+        return None, ()
+    return tuple(args.top_short or ()), tuple(args.top_long or ())
+
+
+def build_analyzers(
+    settings: Settings, profile: PatternProfile, params: SopParams
+) -> tuple[PatternAnalyzer, LongAnalyzer | None]:
+    """AI pembaca grafik: short (prompt tetap) dan tanda LONG bila ada Top yang boleh long."""
+    short = ConsensusAnalyzer(VikeyPatternAnalyzer(settings, profile.prompt))
+    if not params.side_enabled("long"):
+        return short, None
+    return short, LongConsensusAnalyzer(VikeyLongAnalyzer(settings, profile.long_prompt))
+
+
 def params_from(args: argparse.Namespace) -> SopParams:
     return SopParams(
         capital_usdt=None if isinstance(args.modal, BalanceShare) else args.modal,
@@ -185,6 +239,11 @@ def params_from(args: argparse.Namespace) -> SopParams:
         margin_pct=args.margin,
         leverage=args.leverage,
         target_pct=args.target,
+        short_tops=tops_from(args)[0],
+        long_tops=tops_from(args)[1],
+        long_target_pct=args.target_long,
+        stop_pct=args.cutloss,
+        time_limit=args.batas_waktu,
         min_crosses=args.min_turun,
         min_gain_pct=args.min_naik,
         fee_pct=args.biaya,
@@ -247,6 +306,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     leader.add_argument("--interval", type=float, default=0.0, help="Ulangi tiap N menit")
     leader.add_argument("--port", type=int, help="Port hub (menimpa BOT_HUB_PORT)")
+    _add_tops(leader)
 
     follower = sub.add_parser(
         "follower", parents=[sop], help="Mode banyak: SOP penuh dengan hasil AI dari hub leader."
@@ -260,6 +320,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--semua",
         action="store_true",
         help="Ikuti semua Top yang dimainkan leader di putaran ini (menimpa --rank)",
+    )
+    follower.add_argument(
+        "--berkas-berhenti",
+        type=Path,
+        help="Aplikasi membuat berkas ini untuk menghentikan pengawasan posisi dengan aman",
     )
 
     jurnal = sub.add_parser(
@@ -484,22 +549,31 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
         return FillTestWorkflow(navigator, rank=args.rank, quantity_text=args.jumlah)
     if args.command == "leader":
         store = AnalysisStore()
+        short_tops, long_tops = tops_from(args)
+        lead = SopParams(
+            min_gain_pct=args.min_naik,
+            min_crosses=args.min_turun,
+            short_tops=short_tops,
+            long_tops=long_tops,
+        )
+        analyzer, long_analyzer = build_analyzers(settings, profile, lead)
         return LeaderWorkflow(
             settings,
-            SopParams(min_gain_pct=args.min_naik, min_crosses=args.min_turun),
+            lead,
             navigator,
             market,
-            ConsensusAnalyzer(VikeyPatternAnalyzer(settings, profile.prompt)),
+            analyzer,
             store,
             HubServer(store, settings.hub_token, port=args.port or settings.hub_port),
-            args.ranks,
+            lead.tops or args.ranks,
+            long_analyzer=long_analyzer,
             interval_s=args.interval * 60,
             profile=profile,
         )
 
     params = params_from(args)
     # Order sungguhan hanya dengan --uang-sungguhan (Real Fund Trading): selain itu uji kertas,
-    # yang tetap mencari tombol Jual/Short di layar tanpa menekannya.
+    # yang tetap mencari tombol order di layar tanpa menekannya.
     if args.uang_sungguhan:
         if tebbit:
             raise BotError("Real Fund Trading untuk Tebbit belum tersedia (Binance dulu)")
@@ -507,7 +581,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     gate: OrderGate = (
         ScreenOrderGate(navigator)
         if live_orders_enabled()
-        else DryRunOrderGate(navigator.short_button)
+        else DryRunOrderGate(navigator.order_button)
     )
     trader = SopTrader(
         settings,
@@ -522,11 +596,17 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
     )
     uses_ai = params.signal_source == "ai"
     if args.command == "single":
-        analyzer = (
-            ConsensusAnalyzer(VikeyPatternAnalyzer(settings, profile.prompt)) if uses_ai else None
-        )
+        reader: PatternAnalyzer | None = None
+        long_reader: LongAnalyzer | None = None
+        if uses_ai:
+            reader, long_reader = build_analyzers(settings, profile, params)
         return SingleWorkflow(
-            navigator, trader, analyzer, ranks=args.ranks, interval_s=args.interval * 60
+            navigator,
+            trader,
+            reader,
+            ranks=params.tops or args.ranks,
+            long_analyzer=long_reader,
+            interval_s=args.interval * 60,
         )
     if args.command == "follower":
         client = HubClient(args.hub or settings.hub_url, settings.hub_token) if uses_ai else None
@@ -536,6 +616,7 @@ def build_workflow(args: argparse.Namespace, settings: Settings) -> Workflow:
             trader,
             client,
             ranks=None if args.semua else (args.ranks or [args.rank]),
+            stop_file=args.berkas_berhenti,
         )
     raise ValueError(f"Command tidak dikenal: {args.command}")
 

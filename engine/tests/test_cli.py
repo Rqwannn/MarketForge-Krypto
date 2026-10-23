@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 import pytest
@@ -158,3 +159,67 @@ def test_manual_close_arguments() -> None:
     with pytest.raises(SystemExit):
         build_parser().parse_args(["posisi", "--catat-manual", "ARIAUSDT", "--harga", "0"])
     assert cli._manual_close(build_parser().parse_args(["posisi", "--baca"])) is None
+
+
+def test_tops_per_direction_cutloss_and_time_limit_options() -> None:
+    default = params_from(build_parser().parse_args(["single", "--modal", "100"]))
+    assert (default.short_tops, default.long_tops) == (None, ())  # short di semua Top
+    assert (default.stop_pct, default.time_limit) == (None, False)
+    args = build_parser().parse_args(
+        [
+            *("single", "--modal", "100", "--top-short", "2,3,4", "--top-long", "1,5"),
+            *("--cutloss", "10", "--batas-waktu"),
+        ]
+    )
+    params = params_from(args)
+    assert (params.short_tops, params.long_tops, params.tops) == (
+        (2, 3, 4),
+        (1, 5),
+        (1, 2, 3, 4, 5),
+    )
+    assert [params.sides_for(r) for r in (1, 2, 5)] == [("long",), ("short",), ("long",)]
+    assert (params.stop_pct, params.time_limit, params.long_target_pct) == (10.0, True, 4.0)
+    long_only = params_from(
+        build_parser().parse_args(["single", "--modal", "1", "--top-long", "1"])
+    )
+    assert long_only.sides_for(1) == ("long",) and long_only.sides_for(2) == ()
+
+
+def test_the_leader_and_follower_accept_tops_per_direction() -> None:
+    # Pemimpin membaca tanda LONG hanya di Top long; pengikut memakai pembagian yang sama.
+    leader = build_parser().parse_args(["leader", "--top-short", "2,4,5", "--top-long", "1,2,3"])
+    assert (leader.top_short, leader.top_long) == ([2, 4, 5], [1, 2, 3])
+    follower = build_parser().parse_args(["follower", "--modal", "100", "--top-long", "1"])
+    assert params_from(follower).sides_for(1) == ("long",)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="membangun sistem macOS")
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["leader", "--top-short", "2,4,5", "--top-long", "1,2,3"],
+        ["single", "--modal", "100", "--top-short", "2,3,4", "--top-long", "1,5"],
+        ["follower", "--modal", "100", "--semua", "--top-long", "1", "--cutloss", "10"],
+        ["--bursa", "tebbit", "single", "--modal", "100", "--top-long", "1,2"],
+    ],
+)
+def test_every_mode_builds_with_tops_per_direction(argv: list[str], tmp_path: Path) -> None:
+    # Uji nyata 23 Okt: pemimpin dengan pembagian Top gagal dijalankan (mewajibkan modal).
+    from binance_bot.cli import build_workflow
+    from binance_bot.config import Settings
+
+    settings = Settings(
+        journal_path=tmp_path / "sop.jsonl",
+        screenshot_dir=tmp_path,
+        hub_token="token-uji",
+        hub_url="http://127.0.0.1:1",
+        vikey_api_base="https://gw.example/v1",
+        vikey_api_key="sk-uji",
+    )
+    workflow = build_workflow(build_parser().parse_args(argv), settings)
+    if argv[0] == "leader":
+        assert workflow._long_analyzer is not None  # type: ignore[attr-defined]
+        assert workflow._ranks == [1, 2, 3, 4, 5]  # type: ignore[attr-defined]
+    if "single" in argv:
+        expected = [1, 2, 3, 4, 5] if "--top-short" in argv else [1, 2]
+        assert list(workflow._ranks) == expected  # type: ignore[attr-defined]

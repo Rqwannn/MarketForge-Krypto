@@ -206,6 +206,7 @@ def _analysis(entry: JournalEntry, params: SopParams) -> dict[str, Any]:
         "real": entry.real,
         "entry_price": entry.entry_price,
         "target_price": entry.target_price,
+        "cutloss_price": entry.cutloss_price,
         "id": entry.id,
         "created_at": entry.created_at,
         "symbol": entry.symbol,

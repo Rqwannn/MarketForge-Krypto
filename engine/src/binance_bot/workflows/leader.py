@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from binance_bot.analysis import AnalysisRecord, PatternAnalyzer
+from binance_bot.analysis import AnalysisRecord, LongAnalyzer, PatternAnalyzer, read_chart
 from binance_bot.binance_desktop.pattern_rules import BINANCE
 from binance_bot.config import Settings
 from binance_bot.exceptions import BotError
@@ -16,7 +16,7 @@ from binance_bot.logging_setup import event
 from binance_bot.market import MarketData, is_futures_symbol
 from binance_bot.strategy import PatternProfile, SopParams
 from binance_bot.workflows.base import TradingNavigator
-from binance_bot.workflows.sop import limits_of, log_top_gainers
+from binance_bot.workflows.sop import decide, limits_of, log_top_gainers
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ class LeaderWorkflow:
         hub: HubServer | None,
         ranks: Sequence[int],
         *,
+        long_analyzer: LongAnalyzer | None = None,
         interval_s: float = 0.0,
         profile: PatternProfile = BINANCE,
         sleep: Callable[[float], None] = time.sleep,
@@ -54,6 +55,7 @@ class LeaderWorkflow:
         self._nav = navigator
         self._market = market
         self._analyzer = analyzer
+        self._long_analyzer = long_analyzer  # tanda LONG, hanya untuk Top yang boleh long
         self._store = store
         self._charts: dict[str, str] = {}  # pair -> screenshot grafik terakhir yang dibaca AI
         self._hub = hub
@@ -152,7 +154,14 @@ class LeaderWorkflow:
             self._store.put(record)
             records.append(record)
             pattern = record.reading.pattern
-            verdict = self._profile.verdict(pattern, self._params.min_crosses)
+            long = record.reading.long
+            verdict = decide(
+                pattern,
+                long.pattern if long else None,
+                self._params.sides_for(rank),
+                self._params,
+                self._profile,
+            ).verdict
             logger.info(
                 "#%d %s garis kuning AI: %d kali di bawah MA%d -> %s | %s",
                 rank,
@@ -169,6 +178,7 @@ class LeaderWorkflow:
                     verdict=verdict,
                     count_ai=pattern.below_count,
                     ai=pattern.as_dict(),
+                    long_ai=({**long.pattern.as_dict(), "summary": long.summary} if long else None),
                     limits=limits_of(self._params),
                     summary=record.reading.summary,
                     chart=self._charts.get(symbol),
@@ -189,10 +199,15 @@ class LeaderWorkflow:
         )
         return records
 
+    def _wants_long(self, rank: int) -> bool:
+        return self._long_analyzer is not None and "long" in self._params.sides_for(rank)
+
     def _fresh(self, symbol: str, rank: int) -> AnalysisRecord | None:
         cached = self._store.fresh(symbol, self._settings.analysis_ttl_s, self._wall_clock())
         if cached is None:
             return None
+        if cached.reading.long is None and self._wants_long(rank):
+            return None  # bacaan lama tanpa tanda LONG, sedangkan Top ini boleh long: baca ulang
         logger.info(
             "%s dianalisis %.1f menit lalu: dipakai ulang tanpa panggilan AI",
             symbol,
@@ -220,7 +235,10 @@ class LeaderWorkflow:
             f"AI membaca grafik {symbol}", symbol=symbol, rank=rank, chart=str(chart), stage="ai"
         )
         started = time.monotonic()
-        record = AnalysisRecord(symbol, rank, self._wall_clock(), self._analyzer.analyze(chart))
+        reading = read_chart(
+            self._analyzer, self._long_analyzer, chart, with_long=self._wants_long(rank)
+        )
+        record = AnalysisRecord(symbol, rank, self._wall_clock(), reading)
         self._charts[symbol] = str(chart)
         chart.with_suffix(".json").write_text(
             json.dumps(record.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"

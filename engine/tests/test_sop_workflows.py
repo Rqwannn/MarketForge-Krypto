@@ -1,12 +1,13 @@
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from binance_bot.analysis import AnalysisRecord
+from binance_bot.analysis import AnalysisRecord, LongReading
 from binance_bot.binance_desktop.screen_text import GainerRow, MarginSettings
 from binance_bot.config import Settings
 from binance_bot.exceptions import (
@@ -19,7 +20,7 @@ from binance_bot.exceptions import (
 )
 from binance_bot.hub import AnalysisStore, HubClient, HubServer, LeaderPlan, SharedAnalysis
 from binance_bot.market import Quote
-from binance_bot.strategy import Journal, JournalEntry, SopParams
+from binance_bot.strategy import Journal, JournalEntry, LongPattern, SopParams
 from binance_bot.workflows import (
     ExampleWorkflow,
     FollowerWorkflow,
@@ -73,7 +74,7 @@ def make_trader(
 
 
 def source(analyzer: FakePatternAnalyzer) -> Any:
-    return lambda _symbol, chart: analyzer.analyze(chart)
+    return lambda _symbol, chart, _long: analyzer.analyze(chart)
 
 
 def open_trade(symbol: str, entry_price: float = 1.0) -> JournalEntry:
@@ -933,7 +934,7 @@ def test_live_orders_are_locked_everywhere() -> None:
     class Presser:
         pressed = False
 
-        def press_short(self, plan: OrderPlan) -> None:
+        def press_order(self, plan: OrderPlan) -> None:
             Presser.pressed = True
 
     with pytest.raises(SafetyError, match="terkunci"):
@@ -949,8 +950,10 @@ def test_dry_run_gate_finds_the_short_button_without_pressing_it(
 
     plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 1.02, 2)
     with caplog.at_level("INFO"):
-        DryRunOrderGate(lambda: (0.9, 0.51)).submit(plan)
-        DryRunOrderGate(lambda: (_ for _ in ()).throw(ScreenReadError("tidak ada"))).submit(plan)
+        DryRunOrderGate(lambda side: (0.9, 0.51)).submit(plan)
+        DryRunOrderGate(lambda side: (_ for _ in ()).throw(ScreenReadError("tidak ada"))).submit(
+            plan
+        )
     text = caplog.text
     assert "ditemukan di (0.900, 0.510); TIDAK ditekan" in text
     assert "tidak ditemukan (uji kertas tetap jalan)" in text
@@ -1782,7 +1785,8 @@ def test_after_a_sale_at_target_the_next_round_starts_at_once_with_that_coin_fir
 def test_a_sold_coin_that_left_the_top_5_is_rechecked_through_search(tmp_path: Path) -> None:
     """Koin yang baru terjual sudah keluar Top 5: dibuka lewat pencarian, sebelum Top pilihan."""
     nav = FakeNavigator({1: "AUSDT"})
-    trader, _, _, _ = make_trader(tmp_path, nav)
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    journal.append(_entered("ZUSDT", NOW.replace(hour=9)))  # terjual di target (short)
     workflow = SingleWorkflow(nav, trader, FakePatternAnalyzer(WAIT), ranks=[1])  # type: ignore[arg-type]
     workflow._remember(["ZUSDT"])
 
@@ -1800,7 +1804,8 @@ def test_a_sold_coin_is_rechecked_once_per_new_15m_candle_for_two_hours(tmp_path
 
     clock = Clock(900_000.0 + 100)  # 100 detik setelah candle mulai
     nav = FakeNavigator({1: "AUSDT"})
-    trader, _, _, _ = make_trader(tmp_path, nav)
+    trader, _, journal, _ = make_trader(tmp_path, nav)
+    journal.append(_entered("AUSDT", NOW.replace(hour=9)))  # terjual di target (short)
     workflow = SingleWorkflow(
         nav, trader, FakePatternAnalyzer(WAIT), ranks=[1], sleep=clock.sleep, clock=clock
     )  # type: ignore[arg-type]
@@ -1928,3 +1933,474 @@ def test_a_failed_recheck_is_retried_next_candle_not_every_minute(tmp_path: Path
     workflow._wait_and_watch(2400)  # 40 menit: dua candle baru (tanpa perbaikan: tiap menit)
 
     assert nav.calls.count("open_top_gainers") == 2
+
+
+# --------------------------------------------------------------------------- SOP 23 Okt: LONG
+
+
+def two_sided(short: Any, long: LongPattern | None) -> Any:
+    """Sumber bacaan AI: pola short dan (bila ada) tanda LONG untuk grafik yang sama."""
+    found = None if long is None else LongReading(long, "Turun tajam lalu berbalik naik.")
+    # Seperti read_chart: tanda LONG hanya dibaca bila Top ini boleh long.
+    return lambda _symbol, _chart, with_long: replace(
+        reading(short), long=found if with_long else None
+    )
+
+
+REVERSAL = LongPattern(reversal=True, flat=False, far_above=False)
+NO_SIGN = LongPattern(reversal=False, flat=False, far_above=False)
+
+
+def test_long_sign_opens_a_long_at_the_ask_with_a_4_percent_target(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "AKEUSDT"})
+    trader, gate, journal, _ = make_trader(tmp_path, nav, short_tops=(), long_tops=(1,))
+    entry = trader.trade(1, "AKEUSDT", two_sided(WAIT, REVERSAL))
+    assert (entry.status, entry.side, entry.verdict, entry.long_signs) == (
+        "open",
+        "long",
+        "long",
+        [1],
+    )
+    plan = gate.plans[0]
+    assert plan.side == "LONG"
+    assert plan.entry_price == pytest.approx(1.0005)  # long membeli di ask
+    assert plan.target_price == pytest.approx(1.0005 * 1.04)
+    assert entry.long_ai == {
+        "reversal": True,
+        "flat": False,
+        "far_above": False,
+        "summary": "Turun tajam lalu berbalik naik.",
+    }
+    assert journal.load()[0].side == "long"
+
+
+def test_a_chart_fit_for_short_and_long_is_not_entered(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "AKEUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav, short_tops=(1,), long_tops=(1,))
+    entry = trader.trade(1, "AKEUSDT", two_sided(OK, REVERSAL))
+    assert (entry.status, entry.verdict) == ("skipped", "konflik")
+    assert "SHORT" in entry.reason and "tanda 1" in entry.reason
+    assert gate.plans == []
+
+
+def test_both_directions_without_a_long_sign_keep_the_short_rules(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav, short_tops=(1,), long_tops=(1,))
+    entry = trader.trade(1, "STRKUSDT", two_sided(OK, NO_SIGN))
+    assert (entry.status, entry.side, gate.plans[0].side) == ("open", "short", "SHORT")
+    assert gate.plans[0].target_price == pytest.approx(0.97)
+
+
+def test_short_only_ignores_long_signs(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", two_sided(WAIT, REVERSAL))
+    assert (entry.status, entry.verdict) == ("skipped", "tunggu")
+    assert "TUNGGU" in entry.reason and gate.plans == []
+
+
+def test_long_only_does_not_short_a_short_pattern(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav, short_tops=(), long_tops=(1,))
+    entry = trader.trade(1, "STRKUSDT", two_sided(OK, NO_SIGN))
+    assert entry.status == "skipped" and "arah SHORT tidak dipilih" in entry.reason
+    assert gate.plans == []
+
+
+def test_cutloss_and_time_limit_are_set_when_the_position_opens(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav, stop_pct=10.0, time_limit=True)
+    short = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert short.cutloss_price == pytest.approx(1.1)  # short: harga naik 10%
+    assert gate.plans[0].cutloss_price == pytest.approx(1.1)
+    assert short.green_exit_at == NOW.timestamp() + 2.5 * 3600
+    assert short.time_exit_at == NOW.timestamp() + 3 * 3600
+
+    nav = FakeNavigator({1: "AKEUSDT"})
+    trader, _, _, _ = make_trader(
+        tmp_path / "long", nav, short_tops=(), long_tops=(1,), stop_pct=10.0
+    )
+    long = trader.trade(1, "AKEUSDT", two_sided(WAIT, REVERSAL))
+    assert long.cutloss_price == pytest.approx(1.0005 * 0.9)  # long: harga turun 10%
+    assert long.time_exit_at is None  # batas waktu tidak dipilih
+
+
+def test_without_the_new_switches_nothing_changes_for_shorts(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "STRKUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav)
+    entry = trader.trade(1, "STRKUSDT", source(FakePatternAnalyzer(OK)))
+    assert entry.side == "short" and entry.long_ai is None and entry.long_data is None
+    assert entry.cutloss_price is None and entry.time_exit_at is None
+    assert gate.plans[0].cutloss_price is None
+
+
+@pytest.mark.parametrize(
+    ("side", "quote", "status"),
+    [
+        ("short", Quote(bid=1.10, ask=1.101, change_pct=20.0), "stop"),
+        ("long", Quote(bid=0.899, ask=0.90, change_pct=20.0), "stop"),
+        ("long", Quote(bid=1.05, ask=1.051, change_pct=20.0), "target"),
+    ],
+)
+def test_real_fund_cutloss_closes_the_position_on_the_exchange(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, side: str, quote: Quote, status: str
+) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.real, held.side = True, side
+    held.target_price = 1.04 if side == "long" else 0.97
+    held.cutloss_price = 0.9 if side == "long" else 1.1
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = quote
+    assert trader.refresh_journal()[0].status == status
+    assert nav.calls == ["close_position:SKDDUSDT"]
+
+
+def test_real_fund_time_limit_sells_after_three_hours(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)
+    market = ScreenOnlyMarket()
+    nav = FakeNavigator({})
+    trader, _, journal, _ = make_trader(tmp_path, nav, market)
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.real = True
+    held.green_exit_at = NOW.timestamp() - 1800
+    held.time_exit_at = NOW.timestamp()
+    journal.append(held)
+    market.quotes["SKDDUSDT"] = Quote(bid=1.02, ask=1.021, change_pct=20.0)  # rugi
+    assert trader.refresh_journal()[0].status == "timeout"
+    assert nav.calls == ["close_position:SKDDUSDT"]
+    assert trader.sell_due() == []  # jual karena waktu tidak dicek ulang (momentum)
+
+
+def test_a_losing_long_holds_the_next_coin(tmp_path: Path) -> None:
+    nav = FakeNavigator({})
+    trader, _, journal, market = make_trader(tmp_path, nav)
+    held = open_trade("AKEUSDT", entry_price=1.0)
+    held.side = "long"
+    journal.append(held)
+    market.quotes["AKEUSDT"] = Quote(bid=1.02, ask=1.03, change_pct=20.0)
+    assert trader.slot_blocker() is None  # long untung saat harga naik
+    market.quotes["AKEUSDT"] = Quote(bid=0.97, ask=0.98, change_pct=20.0)
+    blocker = trader.slot_blocker()
+    assert blocker is not None and "AKEUSDT sedang rugi" in blocker
+
+
+def test_the_leader_shares_long_signs_with_followers() -> None:
+    record = AnalysisRecord(
+        "AKEUSDT", 1, 100.0, replace(reading(WAIT), long=LongReading(REVERSAL, "Berbalik."))
+    )
+    back = AnalysisRecord.from_dict(json.loads(json.dumps(record.to_dict())))
+    assert back.reading.long == LongReading(REVERSAL, "Berbalik.")
+    plain = AnalysisRecord("STRKUSDT", 1, 100.0, reading(OK))
+    assert AnalysisRecord.from_dict(plain.to_dict()).reading.long is None
+
+
+def test_old_journal_lines_without_a_side_are_shorts(tmp_path: Path) -> None:
+    path = tmp_path / "lama.jsonl"
+    path.write_text(json.dumps({"id": "a", "created_at": 1.0, "symbol": "X", "rank": 1}) + "\n")
+    [entry] = Journal(path).load()
+    assert entry.side == "short" and entry.cutloss_price is None
+
+
+# ---------------------------------------------------------------- pengikut mengawasi posisinya
+
+
+class CycleClient(FakeClient):
+    """Hub tiruan dengan jam: pemimpin memulai putaran baru pada `new_cycle_at` (bila diisi)."""
+
+    def __init__(self, clock: Clock, new_cycle_at: float | None = None) -> None:
+        super().__init__(None, plan_done=True)
+        self.clock = clock
+        self.new_cycle_at = new_cycle_at
+
+    def plan(self) -> LeaderPlan:
+        started = -100.0
+        if self.new_cycle_at is not None and self.clock() >= self.new_cycle_at:
+            started = self.new_cycle_at
+        return LeaderPlan((2,), True, self.clock() - started)
+
+
+class TimedMarket(FakeMarket):
+    """Harga berubah menjadi `later` mulai detik `at` (jam tes)."""
+
+    def __init__(self, clock: Clock, early: Quote, later: Quote, at: float) -> None:
+        super().__init__()
+        self.clock, self.early, self.later, self.at = clock, early, later, at
+
+    def quote(self, symbol: str) -> Quote:
+        return self.later if self.clock() >= self.at else self.early
+
+
+HOLDING = Quote(bid=1.02, ask=1.021, change_pct=20.0)  # rugi, belum sampai cutloss 1,1
+
+
+def watching_follower(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    later: Quote = HOLDING,
+    *,
+    new_cycle_at: float | None = None,
+    stop_file: Path | None = None,
+) -> tuple[FollowerWorkflow, FakeNavigator, Journal, Clock]:
+    from binance_bot.strategy import execution
+
+    monkeypatch.setattr(execution, "_live_orders", True)  # seperti --uang-sungguhan
+    clock = Clock()
+    nav = FakeNavigator({})
+    market = TimedMarket(clock, HOLDING, later, at=120.0)
+    trader, _, journal, _ = make_trader(tmp_path, nav, market, role="follower")
+    held = open_trade("SKDDUSDT", entry_price=1.0)
+    held.real, held.target_price, held.cutloss_price = True, 0.97, 1.1
+    journal.append(held)
+    follower = FollowerWorkflow(
+        Settings(screenshot_dir=tmp_path / "shots"),
+        nav,
+        trader,
+        CycleClient(clock, new_cycle_at),  # type: ignore[arg-type]
+        ranks=(2,),
+        sleep=clock.sleep,
+        clock=clock,
+        stop_file=stop_file,
+    )
+    return follower, nav, journal, clock
+
+
+def test_follower_keeps_watching_real_positions_until_the_cutloss_sells(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Harga baru melewati cutloss 2 menit sesudah putaran pengikut selesai.
+    follower, nav, journal, clock = watching_follower(
+        tmp_path, monkeypatch, Quote(bid=1.11, ask=1.111, change_pct=20.0)
+    )
+    follower.run()
+    assert nav.calls.count("close_position:SKDDUSDT") == 1
+    assert journal.load()[0].status == "stop"
+    assert 120 <= clock() < 200
+
+
+def test_follower_watch_stops_when_the_app_asks_and_keeps_the_position(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stop = tmp_path / "berhenti"
+    follower, nav, journal, _ = watching_follower(tmp_path, monkeypatch, stop_file=stop)
+    stop.write_text("")
+    follower.run()
+    assert "close_position:SKDDUSDT" not in nav.calls
+    assert journal.load()[0].status == "open"
+
+
+def test_follower_watch_hands_over_to_the_leaders_next_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    follower, _, journal, clock = watching_follower(tmp_path, monkeypatch, new_cycle_at=600.0)
+    follower.run()
+    assert journal.load()[0].status == "open"
+    assert 600 <= clock() < 700  # berhenti begitu putaran baru pemimpin terlihat
+
+
+def test_positions_to_watch_are_real_ones_and_paper_ones_without_candles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from binance_bot.strategy import execution
+    from binance_bot.tebbit_web.pattern_rules import TEBBIT
+
+    nav = FakeNavigator({})
+    trader, _, journal, market = make_trader(tmp_path, nav)
+    journal.append(open_trade("AUSDT"))  # uji kertas
+    assert trader.positions_to_watch() == 0  # Binance: dinilai ulang dari candle nanti
+    tebbit = SopTrader(
+        Settings(screenshot_dir=tmp_path / "shots"),
+        SopParams(capital_usdt=100.0),
+        nav,  # type: ignore[arg-type]
+        market,  # type: ignore[arg-type]
+        journal,
+        FakeGate(),  # type: ignore[arg-type]
+        profile=TEBBIT,
+    )
+    assert tebbit.positions_to_watch() == 1  # Tebbit: harga hanya terlihat saat dicek
+    real = open_trade("BUSDT")
+    real.id, real.real = "o-real", True
+    journal.append(real)
+    monkeypatch.setattr(execution, "_live_orders", True)
+    assert trader.positions_to_watch() == 1
+
+
+def test_tebbit_once_mode_watches_paper_positions_until_they_close(tmp_path: Path) -> None:
+    from binance_bot.tebbit_web.pattern_rules import TEBBIT
+
+    clock = Clock()
+    nav = FakeNavigator({})
+    market = ScreenOnlyMarket()
+    market.quotes["AUSDT"] = Quote(bid=0.96, ask=0.961, change_pct=20.0)
+    journal = Journal(tmp_path / "sop.jsonl")
+    held = open_trade("AUSDT")
+    journal.append(held)
+    trader = SopTrader(
+        Settings(screenshot_dir=tmp_path / "shots"),
+        SopParams(capital_usdt=100.0),
+        nav,  # type: ignore[arg-type]
+        market,  # type: ignore[arg-type]
+        journal,
+        FakeGate(),  # type: ignore[arg-type]
+        profile=TEBBIT,
+    )
+    single = SingleWorkflow(nav, trader, None, ranks=[], interval_s=0, sleep=clock.sleep)  # type: ignore[arg-type]
+    single._watch_real_positions()
+    assert journal.load()[0].status == "target"
+
+
+# ---------------------------------------------------------------- arah per Top (short dan long)
+
+
+class SidedAnalyzer(FakePatternAnalyzer):
+    """AI tiruan: pola short per pair dan tanda LONG yang sama untuk semua grafik."""
+
+    def __init__(
+        self, short: Any, long: LongPattern, patterns: dict[str, Any] | None = None
+    ) -> None:
+        super().__init__(short, patterns)
+        self.long = long
+        self.long_calls: list[Path] = []
+
+    def analyze_long(self, image: Path) -> LongReading:
+        self.long_calls.append(image)
+        return LongReading(self.long, "berbalik")
+
+
+class LongPart:
+    def __init__(self, owner: SidedAnalyzer) -> None:
+        self.owner = owner
+
+    def analyze(self, image: Path) -> LongReading:
+        return self.owner.analyze_long(image)
+
+
+@pytest.mark.parametrize(
+    ("short_tops", "long_tops", "expected"),
+    [
+        # Short Top 2-3-4, Long Top 1-5 (contoh 1)
+        ((2, 3, 4), (1, 5), {1: "long", 2: "short", 3: "short", 4: "short", 5: "long"}),
+        # Short Top 2-4-5, Long Top 1-2-3 (contoh 2). Top 2 boleh keduanya: grafiknya layak short
+        # sekaligus menunjukkan tanda long, jadi tidak dimasuki (aturan SOP).
+        ((2, 4, 5), (1, 2, 3), {1: "long", 2: "konflik", 3: "long", 4: "short", 5: "short"}),
+    ],
+)
+def test_each_top_opens_only_its_own_direction(
+    tmp_path: Path, short_tops: Any, long_tops: Any, expected: dict[int, str]
+) -> None:
+    # Semua grafik menunjukkan tanda long. Top short: grafiknya juga layak short; Top yang hanya
+    # long: grafiknya belum layak short (TUNGGU). Yang menentukan arah adalah pilihan tiap Top.
+    symbols = {r: f"T{r}USDT" for r in range(1, 6)}
+    nav = FakeNavigator(symbols)
+    trader, gate, journal, _ = make_trader(
+        tmp_path, nav, short_tops=short_tops, long_tops=long_tops
+    )
+    shorts = {symbols[r]: OK if r in short_tops else WAIT for r in symbols}
+    analyzer = SidedAnalyzer(WAIT, REVERSAL, shorts)
+    trader.slot_blocker = lambda: None  # type: ignore[method-assign]  # slot dinilai di tes lain
+    workflow = SingleWorkflow(
+        nav,
+        trader,
+        analyzer,
+        ranks=trader.params.tops or [],
+        long_analyzer=LongPart(analyzer),
+    )  # type: ignore[arg-type]
+
+    workflow.run_cycle()
+
+    got = {}
+    for e in journal.load():
+        got[e.rank] = e.side if e.status == "open" else e.verdict
+    assert got == expected
+    # AI membaca tanda LONG hanya di Top yang boleh long.
+    read_long = sorted(int(p.name.split("_rank")[1][0]) for p in analyzer.long_calls)
+    assert read_long == sorted(long_tops)
+    assert all(plan.side == expected[int(plan.symbol[1])].upper() for plan in gate.plans)
+
+
+def test_a_short_only_top_behaves_exactly_like_before(tmp_path: Path) -> None:
+    nav = FakeNavigator({2: "BUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav, short_tops=(2,), long_tops=(1,))
+    entry = trader.trade(2, "BUSDT", two_sided(WAIT, REVERSAL))
+    assert (entry.status, entry.verdict, entry.long_ai) == ("skipped", "tunggu", None)
+    assert "tanda LONG" not in entry.reason and gate.plans == []
+
+
+def test_a_top_outside_both_lists_is_never_entered(tmp_path: Path) -> None:
+    nav = FakeNavigator({3: "CUSDT"})
+    trader, gate, _, _ = make_trader(tmp_path, nav, short_tops=(2,), long_tops=(1,))
+    entry = trader.trade(3, "CUSDT", two_sided(OK, REVERSAL))
+    assert entry.status == "skipped" and "tidak dipilih" in entry.reason
+    assert gate.plans == [] and nav.calls == []  # bahkan grafiknya tidak dibuka
+
+
+def test_momentum_reenters_in_the_direction_that_was_just_sold(tmp_path: Path) -> None:
+    nav = FakeNavigator({3: "AUSDT"})
+    # Long hanya di Top 1, tetapi AUSDT yang baru terjual long kini ada di Top 3 (short saja).
+    trader, gate, journal, _ = make_trader(tmp_path, nav, short_tops=(3,), long_tops=(1,))
+    sold = _entered("AUSDT", NOW.replace(hour=9))
+    sold.side, sold.closed_at = "long", NOW.timestamp() - 60
+    journal.append(sold)
+    analyzer = SidedAnalyzer(WAIT, REVERSAL)
+    workflow = SingleWorkflow(nav, trader, analyzer, ranks=[], long_analyzer=LongPart(analyzer))  # type: ignore[arg-type]
+    workflow._remember(["AUSDT"])
+
+    workflow.run_cycle()
+
+    opened = [e for e in journal.load() if e.status == "open"]
+    assert [(e.symbol, e.side) for e in opened] == [("AUSDT", "long")]
+    assert [p.side for p in gate.plans] == ["LONG"]
+
+
+def test_momentum_is_dropped_when_that_direction_is_no_longer_chosen(tmp_path: Path) -> None:
+    nav = FakeNavigator({1: "AUSDT"})
+    trader, _, journal, _ = make_trader(tmp_path, nav, short_tops=(1,), long_tops=())
+    sold = _entered("AUSDT", NOW.replace(hour=9))
+    sold.side = "long"
+    journal.append(sold)
+    workflow = SingleWorkflow(nav, trader, FakePatternAnalyzer(OK), ranks=[])  # type: ignore[arg-type]
+    workflow._remember(["AUSDT"])
+    workflow.run_cycle()
+    assert "AUSDT" not in workflow._watch and nav.calls.count("open_symbol:AUSDT") == 0
+
+
+def test_the_leader_reads_long_signs_only_for_long_tops_and_rereads_a_cached_short_reading(
+    tmp_path: Path,
+) -> None:
+    nav = FakeNavigator({1: "AUSDT", 2: "BUSDT"})
+    leader, _, store = make_leader(tmp_path, nav, Clock(1000.0))
+    sided = SidedAnalyzer(WAIT, REVERSAL)
+    leader._analyzer = sided
+    leader._long_analyzer = LongPart(sided)
+    leader._params = SopParams(short_tops=(2,), long_tops=(1,))
+    leader._ranks = [1, 2]
+    leader.run_cycle()
+    assert len(sided.long_calls) == 1  # hanya Top 1
+    assert store.fresh("AUSDT", 3600, 1000.0).reading.long is not None
+    assert store.fresh("BUSDT", 3600, 1000.0).reading.long is None
+    # BUSDT pindah ke Top 1 (boleh long): bacaan lama tanpa tanda LONG tidak dipakai ulang.
+    assert leader._fresh("BUSDT", 1) is None
+    assert leader._fresh("BUSDT", 2) is not None
+
+
+def test_followers_use_the_leaders_tops_per_direction(tmp_path: Path) -> None:
+    record = AnalysisRecord(
+        "AUSDT", 1, NOW.timestamp(), replace(reading(WAIT), long=LongReading(REVERSAL, "b"))
+    )
+    client = FakeClient({1: record})
+    follower, _, journal = make_follower(
+        tmp_path, client, {1: "AUSDT"}, ranks=(1,), short_tops=(2,), long_tops=(1,)
+    )
+    follower.run()
+    [entry] = journal.load()
+    # Pengikut memakai pembagian pemimpin: Top 1 hanya long, tanda long ada: masuk long.
+    assert (entry.status, entry.side) == ("open", "long")

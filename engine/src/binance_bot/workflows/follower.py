@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from binance_bot.binance_desktop.layout import MAX_RANK
 from binance_bot.config import Settings
-from binance_bot.exceptions import ConfigError, HubError
+from binance_bot.exceptions import BotError, ConfigError, HubError
 from binance_bot.hub import HubClient, SharedAnalysis
 from binance_bot.logging_setup import event
 from binance_bot.strategy import JournalEntry
@@ -35,6 +36,12 @@ class FollowerWorkflow:
     slot posisi penuh.
     Modal, ukuran posisi, dan jurnal milik laptop ini sendiri. Hasil terakhir ada di `self.result`.
     Dengan SINYAL=data, follower membaca pola sendiri dari data candle Top miliknya.
+
+    Setelah putarannya selesai, posisi yang wajib diawasi (uang sungguhan; uji kertas di bursa
+    tanpa candle) tetap dicek tiap `watch_interval_s`: target, cutloss, dan batas waktu berjalan
+    seperti di mode Sendiri. Pengawasan berhenti bila posisinya selesai, pemimpin memulai putaran
+    baru (putaran itu mengawasinya lagi), atau aplikasi membuat `stop_file` (mis. pemimpin menekan
+    Sell): bot selalu berhenti di antara dua pengecekan, tidak pernah di tengah klik.
     """
 
     name = "follower"
@@ -49,6 +56,7 @@ class FollowerWorkflow:
         ranks: Sequence[int] | None = (1,),
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        stop_file: Path | None = None,
     ) -> None:
         self._settings = settings
         self._nav = navigator
@@ -56,6 +64,7 @@ class FollowerWorkflow:
         self._client = client
         self._ranks = None if ranks is None else sorted(set(ranks))
         self._sleep = sleep
+        self._stop_file = stop_file
         self._clock = clock
         self.result: JournalEntry | None = None
         self._opened = 0  # posisi uji yang dibuka di putaran ini
@@ -64,6 +73,7 @@ class FollowerWorkflow:
         # Kejadian putaran seperti di Sendiri/Pemimpin: aplikasi memakainya untuk subjudul "Putaran
         # ini", langkah alur yang tercentang, dan ringkasan akhir.
         self._opened = 0
+        round_started = self._clock()
         logger.info("Putaran pengikut dimulai", extra=event("cycle", phase="start"))
         try:
             self._run_round()
@@ -72,6 +82,59 @@ class FollowerWorkflow:
                 "Putaran selesai",
                 extra=event("cycle", phase="done", opened=self._opened, next_in_s=0),
             )
+        self._watch_positions(round_started)
+
+    # ------------------------------------------------------------------ pengawasan posisi
+
+    def _watch_positions(self, round_started: float) -> None:
+        """Jual otomatis (target, cutloss, batas waktu) di antara putaran pemimpin."""
+        step = self._trader.watch_interval_s
+        announced = False
+        while (count := self._trader.positions_to_watch()) > 0:
+            if not announced:
+                logger.info(
+                    "Mengawasi %d posisi sampai terjual atau putaran pemimpin berikutnya",
+                    count,
+                    extra=event("watch", phase="start", open=count),
+                )
+                announced = True
+            if not self._wait(step, round_started):
+                return
+            try:
+                self._trader.sell_due()
+            except BotError as exc:  # satu pengecekan gagal: dicoba lagi berikutnya
+                logger.error("Pengecekan jual otomatis gagal, dicoba lagi: %s", exc)
+        if announced:
+            logger.info("Tidak ada posisi yang perlu diawasi lagi")
+
+    def _wait(self, seconds: float, round_started: float) -> bool:
+        """Tunggu sampai pengecekan berikutnya. False = pengawasan harus berhenti sekarang.
+
+        Dicek tiap beberapa detik supaya Sell pemimpin dan putaran baru tidak menunggu lama."""
+        left = seconds
+        while left > 0:
+            if self._stop_requested():
+                logger.info("Aplikasi meminta bot berhenti: pengawasan posisi selesai")
+                return False
+            if self._leader_started_since(round_started):
+                logger.info("Pemimpin memulai putaran baru: posisi diawasi oleh putaran itu")
+                return False
+            wait = min(_HUB_POLL_S, left)
+            self._sleep(wait)
+            left -= wait
+        return True
+
+    def _stop_requested(self) -> bool:
+        return self._stop_file is not None and self._stop_file.exists()
+
+    def _leader_started_since(self, round_started: float) -> bool:
+        if self._client is None:
+            return False
+        try:
+            plan = self._client.plan()
+        except HubError:
+            return False  # pemimpin belum terjangkau: posisi tetap diawasi
+        return self._clock() - plan.age_s > round_started + 1.0
 
     def _run_round(self) -> None:
         uses_ai = self._trader.params.signal_source == "ai"
@@ -152,7 +215,8 @@ class FollowerWorkflow:
             return None
         record = shared.record
         reading = record.reading
-        verdict = self._trader.profile.verdict(reading.pattern, self._trader.params.min_crosses)
+        decision = self._trader.decide(reading, rank)
+        verdict = decision.verdict
         logger.info(
             "Hasil leader untuk Top %d: %s, garis kuning %d kali di bawah MA%d -> %s "
             "(umur %.1f menit)",
@@ -168,10 +232,10 @@ class FollowerWorkflow:
             self._trader.note(rank, f"{record.symbol} sudah diikuti di putaran ini", record.symbol)
             return None
         handled.add(record.symbol)
-        if verdict != "ok":
+        if decision.side is None:
             # AI di leader tidak memberi sinyal masuk: follower tidak perlu membuka Binance.
             return self._trader.skip(
-                rank, record.symbol, f"pola garis kuning {verdict.upper()} (dari leader)", reading
+                rank, record.symbol, f"{decision.reason} (dari leader)", reading
             )
         # Slot (SOP: posisi terbuka tidak sedang rugi) dicek sebelum membuka bursa. Keputusan
         # leader tetap dicatat dan tampil di aplikasi walau koin ini tidak dimasuki.
@@ -202,7 +266,7 @@ class FollowerWorkflow:
             # Dicatat dengan Top versi pemimpin (`rank`), bukan posisi koin di daftar laptop ini
             # saat ini (`now`, hanya untuk membuka koinnya): peringkat bisa bergeser dan dua baris
             # tabel jadi berlabel sama.
-            return self._trader.trade(rank, opened, lambda _symbol, _chart: reading)
+            return self._trader.trade(rank, opened, lambda _symbol, _chart, _long: reading)
 
     def _wait_for_leader(self, rank: int) -> SharedAnalysis | None:
         """Tunggu leader menilai Top ini; None bila leader selesai putaran tanpa menilainya."""

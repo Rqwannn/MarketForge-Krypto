@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from binance_bot.analysis import PatternAnalyzer, PatternReading
+from binance_bot.analysis import LongAnalyzer, PatternAnalyzer, PatternReading, read_chart
 from binance_bot.binance_desktop.screen_text import GainerRow
 from binance_bot.exceptions import BotError, ScreenReadError
 from binance_bot.logging_setup import event
@@ -51,6 +51,7 @@ class SingleWorkflow:
         analyzer: PatternAnalyzer | None,
         *,
         ranks: Sequence[int],
+        long_analyzer: LongAnalyzer | None = None,
         interval_s: float = 0.0,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.time,
@@ -58,6 +59,7 @@ class SingleWorkflow:
         self._nav = navigator
         self._trader = trader
         self._analyzer = analyzer
+        self._long_analyzer = long_analyzer  # tanda LONG, hanya untuk Top yang boleh long
         self._ranks = list(ranks)
         self._interval_s = interval_s
         self._sleep = sleep
@@ -109,17 +111,18 @@ class SingleWorkflow:
             return []
 
     def _watch_real_positions(self) -> None:
-        """Mode Sekali dengan uang sungguhan: tetap menyala sampai semua posisi sungguhan terjual.
+        """Mode Sekali: tetap menyala sampai posisi yang wajib diawasi selesai.
 
         Posisi sungguhan tidak boleh ditinggal tanpa pengawas, jadi bot baru berhenti setelah
-        tidak ada posisi sungguhan yang terbuka. Uji kertas tetap selesai setelah satu putaran.
+        tidak ada posisi sungguhan yang terbuka. Begitu pula posisi uji kertas di bursa tanpa
+        candle (Tebbit): target, cutloss, dan batas waktunya hanya terlihat dari harga saat dicek.
+        Uji kertas Binance selesai setelah satu putaran (dinilai ulang dari candle nanti).
         """
         step = self._trader.watch_interval_s
-        while (open_count := self._trader.real_positions_open()) > 0:
-            logger.info("Mengawasi %d posisi uang sungguhan sampai terjual", open_count)
+        while (open_count := self._trader.positions_to_watch()) > 0:
+            logger.info("Mengawasi %d posisi sampai selesai", open_count)
             self._sleep(step)
             self._refresh_safely()
-        # (posisi uji kertas dinilai lagi di awal putaran berikutnya)
 
     def _wait_and_watch(self, seconds: float) -> None:
         """Tunggu putaran berikutnya sambil menjalankan jual otomatis posisi yang terbuka.
@@ -219,6 +222,10 @@ class SingleWorkflow:
         blocker = self._trader.reentry_blocker(symbol)
         if blocker is None and self._trader.has_open(symbol):
             blocker = "posisinya masih terbuka"
+        # Masuk ulang searah posisi yang baru terjual (momentum), bukan menurut Top saat ini.
+        sides = self._trader.momentum_sides(symbol)
+        if blocker is None and not sides:
+            blocker = "arah posisi yang terjual tidak dipilih lagi"
         if blocker:
             logger.info("%s tidak dicek ulang lagi: %s", symbol, blocker)
             self._watch.pop(symbol, None)
@@ -249,7 +256,7 @@ class SingleWorkflow:
         if opened in seen:
             return False
         seen.add(opened)
-        if self._trader.trade(rank, opened, source).status == "open":
+        if self._trader.trade(rank, opened, source, sides).status == "open":
             self._watch.pop(symbol, None)  # dipantau lagi setelah terjual berikutnya
             return True
         return False
@@ -261,15 +268,15 @@ class SingleWorkflow:
         if analyzer is None:
             return None
 
-        def read_chart(symbol: str, chart: Path) -> PatternReading:
+        def read(symbol: str, chart: Path, with_long: bool) -> PatternReading:
             # Selama AI membaca, aplikasi MarketForge tampil supaya prosesnya terlihat; bursa
             # dibawa ke depan lagi sebelum langkah berikutnya (isi jumlah, klik).
             self._nav.show_app(
                 f"AI membaca grafik {symbol}", symbol=symbol, chart=str(chart), stage="ai"
             )
-            return analyzer.analyze(chart)
+            return read_chart(analyzer, self._long_analyzer, chart, with_long=with_long)
 
-        return read_chart
+        return read
 
     def run_cycle(self) -> int:
         """Satu putaran pemantauan. Mengembalikan jumlah posisi uji baru."""
