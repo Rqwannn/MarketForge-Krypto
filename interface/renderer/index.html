@@ -108,8 +108,12 @@
               <button type="button" role="radio" data-value="15">15 mnt</button>
               <button type="button" role="radio" data-value="30">30 mnt</button>
               <button type="button" role="radio" data-value="60">1 jam</button>
+              <button type="button" role="radio" data-value="custom" title="Atur jeda sendiri dalam menit">Atur</button>
             </div>
-            <small>Tiap putaran membaca ulang daftar top gainers.</small>
+            <div class="money interval-custom" id="interval-custom-wrap" hidden>
+              <input id="interval-custom" inputmode="numeric" placeholder="45" autocomplete="off" aria-label="Jeda pemantauan dalam menit"><span>menit</span>
+            </div>
+            <small id="interval-note">Tiap putaran membaca ulang daftar top gainers.</small>
           </div>
           <div class="field ranks-field">
             <span class="label" id="ranks-title">Top gainers</span>
@@ -451,6 +455,7 @@
 </div>
 <script src="reasons.js"></script>
 <script src="tops.js"></script>
+<script src="interval.js"></script>
 <script src="worldclock.js"></script>
 <script src="history.js"></script>
 <script src="app.js"></script>

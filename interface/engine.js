@@ -209,7 +209,8 @@ function buildArgs(mode, params = {}) {
       ...stop,
     ];
   }
-  const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN));
+  // Jeda antarputaran dalam menit bulat (0 = sekali).
+  const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN, true));
   // Dengan arah per Top, Top yang dipantau = gabungan Top short dan Top long.
   const ranks = tops ? [...new Set([...tops.short, ...tops.long])].sort((a, b) => a - b) : ranksOf(p.ranks);
   const args = [...bursa, '--events', mode, '--ranks', ranks.join(','), '--interval', interval];

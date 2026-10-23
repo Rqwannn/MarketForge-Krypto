@@ -295,3 +295,14 @@ test('arah per Top, cutloss, dan batas waktu diteruskan ke engine; tanpa pilihan
     ['--berkas-berhenti', '/tmp/berhenti'],
   );
 });
+
+test('jeda pemantauan dalam menit bulat, termasuk jeda sendiri', () => {
+  const at = (interval) => {
+    const args = buildArgs('single', { ranks: [1], modal: '100', interval });
+    return args[args.indexOf('--interval') + 1];
+  };
+  assert.equal(at(45), '45');
+  assert.equal(at(1440), '1440');
+  assert.throws(() => at(2.5), InputError);
+  assert.throws(() => at(1441), InputError);
+});

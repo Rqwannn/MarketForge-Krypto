@@ -35,6 +35,7 @@ const STATUS = {
 const SIDE_NAME = { short: 'Short', long: 'Long' };
 const sideOf = (x) => SIDE_NAME[x?.side] || 'Short';
 const TopChoice = window.Tops; // arah per Top (renderer/tops.js)
+const Interval = window.Interval; // jeda pemantauan (renderer/interval.js)
 let platform = null; // platform yang sedang dipakai
 // Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
 const PLATFORMS = [
@@ -221,7 +222,9 @@ for (const item of document.querySelectorAll('.menu-item')) item.addEventListene
 // menyala sejak 23 Okt (bisa dimatikan).
 const form = {
   mode: 'single', modal: '', shortTops: [...RANKS], longTops: [], rank: 1, interval: 0, cutloss: true, timeLimit: true,
+  customInterval: false, // "Atur": jeda sendiri dalam menit (form.interval)
 };
+let intervalError = ''; // isian menit yang belum sah: Mulai ditahan sampai diperbaiki
 
 /** Top yang dipantau Sendiri/Pemimpin: gabungan Top short dan Top long. */
 const watchedTops = () => TopChoice.watched(form);
@@ -234,6 +237,8 @@ function loadForm() {
   }
   // Pilihan lama (Top yang dipantau + satu arah untuk semua) diubah ke arah per Top.
   Object.assign(form, TopChoice.restore(form));
+  form.interval = Interval.restore(form.interval);
+  form.customInterval = form.customInterval === true || !Interval.PRESETS.includes(form.interval);
   delete form.ranks;
   delete form.direction;
 }
@@ -267,7 +272,7 @@ function watchedCount() {
 function render() {
   const multi = form.mode !== 'follower';
   mark($('mode'), (v) => v === form.mode);
-  mark($('interval'), (v) => Number(v) === Number(form.interval));
+  renderInterval();
   mark($('ranks'), (v) => followedRanks().includes(Number(v)));
   mark($('tops-short'), (v) => form.shortTops.includes(Number(v)));
   mark($('tops-long'), (v) => form.longTops.includes(Number(v)));
@@ -315,7 +320,23 @@ function setupForm() {
   });
   $('interval').addEventListener('click', (ev) => {
     const value = ev.target.closest('button')?.dataset.value;
-    if (value !== undefined) form.interval = Number(value);
+    if (value === undefined) return;
+    form.customInterval = value === 'custom';
+    if (form.customInterval) {
+      const typed = Interval.parse($('interval-custom').value);
+      if (typed.minutes) form.interval = typed.minutes;
+      render();
+      $('interval-custom').focus();
+      return;
+    }
+    form.interval = Number(value);
+    intervalError = '';
+    render();
+  });
+  $('interval-custom').addEventListener('input', () => {
+    const typed = Interval.parse($('interval-custom').value);
+    intervalError = typed.error || '';
+    if (typed.minutes) form.interval = typed.minutes;
     render();
   });
   $('ranks').addEventListener('click', (ev) => {
@@ -387,6 +408,21 @@ function renderModal() {
 }
 
 const EXIT_SWITCHES = { cutloss: 'cutloss', 'time-limit': 'timeLimit' }; // id saklar -> isian form
+
+/** Ulangi pemantauan: pilihan cepat, atau "Atur" dengan kolom menit. */
+function renderInterval() {
+  const custom = form.customInterval;
+  mark($('interval'), (v) => (v === 'custom' ? custom : !custom && Number(v) === Number(form.interval)));
+  $('interval-custom-wrap').hidden = !custom;
+  const input = $('interval-custom');
+  if (custom && document.activeElement !== input && !intervalError) {
+    input.value = Interval.PRESETS.includes(form.interval) ? '' : String(form.interval);
+  }
+  const waiting = custom && !intervalError && Interval.PRESETS.includes(form.interval) && !input.value;
+  const error = intervalError || (waiting ? 'Isi jeda dalam menit' : '');
+  $('interval-note').textContent = error || Interval.note(form.interval);
+  $('interval-note').classList.toggle('bad', Boolean(error));
+}
 
 /** Pilihan Top baru; null = ditolak (minimal satu Top tetap dipantau). */
 function setTops(next) {
@@ -557,6 +593,15 @@ async function toggleRun() {
     setState('stopping', 'Menghentikan', 'Bot menyelesaikan langkah yang sedang berjalan.');
     await window.bot.stop().catch(() => {});
     return;
+  }
+  if (form.mode !== 'follower' && form.customInterval) {
+    const typed = Interval.parse($('interval-custom').value);
+    if (typed.error) {
+      $('run-error').textContent = typed.error;
+      $('interval-custom').focus();
+      return;
+    }
+    form.interval = typed.minutes;
   }
   const params = {
     exchange: platform.id, modal: form.modal, ranks: watchedTops(), rank: form.rank, interval: form.interval, real: realOn,
