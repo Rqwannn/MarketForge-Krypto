@@ -257,12 +257,12 @@ class FakeNavigator:
     def show_app(self, text: str, **fields: object) -> None:
         self.calls.append(f"show_app:{fields.get('symbol') or fields.get('rank')}")
 
-    def short_button(self) -> tuple[float, float]:
-        self.calls.append("short_button")
+    def order_button(self, side: str) -> tuple[float, float]:
+        self.calls.append("short_button" if side == "SHORT" else "long_button")
         return (0.9, 0.5)
 
-    def press_short(self, plan: object) -> None:
-        raise AssertionError("press_short tidak boleh dipanggil selama order dikunci")
+    def press_order(self, plan: object) -> None:
+        raise AssertionError("press_order tidak boleh dipanggil selama order dikunci")
 
     def close_position(self, symbol: str) -> None:
         self.calls.append(f"close_position:{symbol}")

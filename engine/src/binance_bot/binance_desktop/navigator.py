@@ -48,7 +48,7 @@ from binance_bot.macos import (
     wait_until_frontmost,
 )
 from binance_bot.macos.screens import visible_areas
-from binance_bot.strategy.execution import OrderPlan, live_orders_enabled
+from binance_bot.strategy.execution import OrderPlan, button_name, live_orders_enabled
 from binance_bot.tebbit_web.visible import OnScreenWindow, front_owner_at
 
 logger = logging.getLogger(__name__)
@@ -89,6 +89,7 @@ _CHART_LEGEND = re.compile(r"MA\s*[(\[{<C]?\s*(?:7|25|99)(?!\d)|\b7\)\s*[\d.,]+\
 _USDT_UNIT = re.compile(r"\bUSDT\b")
 _MARGIN_MODE = re.compile(r"Margin\s*Awal", re.IGNORECASE)
 _SHORT_BUTTON = re.compile(r"(Jual|Sell)\s*/\s*Short", re.IGNORECASE)
+_LONG_BUTTON = re.compile(r"(Beli|Buy)\s*/\s*Long", re.IGNORECASE)
 # Teks di dalam tombol (dibaca dari kanal minimum): cukup salah satu kata, OCR sering memotong.
 _SHORT_TEXT = re.compile(r"(Jual|Sell)\s*/?\s*Short|Short|Jual", re.IGNORECASE)
 _LONG_TEXT = re.compile(r"(Beli|Buy)\s*/?\s*Long|Long|Beli", re.IGNORECASE)
@@ -103,8 +104,12 @@ _SCROLL_UP_NOTCHES = 7  # satu scroll_up = 7 langkah roda
 _DIGIT_LOOKALIKE = str.maketrans("OoIl|", "00111")
 _FORM_COLUMN = (0.78, 0.0, 1.0, 1.0)  # kolom form order (tempat tombol dicari lewat warna)
 # Toast Binance sesudah order pasar terisi (uji nyata 20 Okt: "Order Dimasukkan", "Order Jual
-# Market Terisi"). Hanya toast yang BARU muncul sesudah klik yang dihitung sebagai bukti.
-_ORDER_FILLED = re.compile(r"Order\s+Jual\b.*Terisi|Sell\b.*Order.*Filled", re.IGNORECASE)
+# Market Terisi"). Hanya toast yang BARU muncul sesudah klik yang dihitung sebagai bukti. Toast
+# Beli/Long belum pernah terlihat langsung; diperkirakan sama ("Order Beli Market Terisi").
+_ORDER_FILLED = {
+    "SHORT": re.compile(r"Order\s+Jual\b.*Terisi|Sell\b.*Order.*Filled", re.IGNORECASE),
+    "LONG": re.compile(r"Order\s+Beli\b.*Terisi|Buy\b.*Order.*Filled", re.IGNORECASE),
+}
 # Pesan penolakan order Binance (toast), dicatat sebagai alasan bila order tidak masuk.
 # Bukan kata "gagal" saja: jendela konfirmasi order memuat kalimat peringatan "...order Anda akan
 # gagal" (uji nyata 20 Okt 10.00) yang bukan penolakan.
@@ -1155,14 +1160,24 @@ class BinanceNavigator:
         raise ScreenReadError("Tombol Jual/Short di form order tidak ditemukan")
 
     def long_button(self) -> tuple[float, float]:
-        """Posisi tombol Beli/Long (untuk memastikan pasangan; bot tidak pernah menekannya)."""
+        """Posisi tombol Beli/Long di form order (LONG, SOP 23 Okt). Tidak mengklik apa pun.
+
+        Sama seperti `short_button`: pasangan warna dulu (yang kiri), cadangan teks "Beli/Long".
+        """
         if not self._on_coin_page():
             raise SafetyError("Tombol Long hanya dicari di halaman koin")
         if self._COLOR_BUTTONS:
             located = self._locate_order_buttons()
             if located is not None:
                 return located[0]
+        for zone in self._order_form_zones():
+            found = self._find_text(zone, _LONG_BUTTON)
+            if found is not None:
+                return found
         raise ScreenReadError("Tombol Beli/Long di form order tidak ditemukan")
+
+    def order_button(self, side: str) -> tuple[float, float]:
+        return self.long_button() if side == "LONG" else self.short_button()
 
     def _locate_order_buttons(self) -> tuple[tuple[float, float], tuple[float, float]] | None:
         """(tengah Long, tengah Short) relatif jendela, atau None bila pasangannya tak terbukti."""
@@ -1221,8 +1236,9 @@ class BinanceNavigator:
             return False
         return short_right or long_left
 
-    def press_short(self, plan: OrderPlan) -> None:
-        """Order sungguhan: tekan Jual/Short. Terkunci kecuali Real Fund Trading dinyalakan.
+    def press_order(self, plan: OrderPlan) -> None:
+        """Order sungguhan: tekan Jual/Short atau Beli/Long (`plan.side`). Terkunci kecuali Real
+        Fund Trading dinyalakan.
 
         Urutan: kunci, halaman koin, kolom jumlah berisi angka rencana, cari tombol, klik.
         Satu-satunya jalur yang boleh mengklik zona tombol order.
@@ -1238,14 +1254,19 @@ class BinanceNavigator:
                 f"Kolom jumlah menampilkan {shown}, bukan {plan.order_text}: order dibatalkan. "
                 f"Foto layar: {shot}"
             )
-        target = self.short_button()
-        before = self._order_evidence()
-        logger.warning("ORDER SUNGGUHAN: tekan Jual/Short %s %s USDT", plan.symbol, plan.order_text)
+        target = self.order_button(plan.side)
+        before = self._order_evidence(plan.side)
+        logger.warning(
+            "ORDER SUNGGUHAN: tekan %s %s %s USDT",
+            button_name(plan.side),
+            plan.symbol,
+            plan.order_text,
+        )
         self._ensure_front()
         self._window.click(*self.rect.point_at(*target))
         # Tombol TIDAK pernah diklik ulang: bila order pertama ternyata masuk terlambat, klik kedua
         # membuka posisi ganda.
-        self._await_order(plan, before, _ORDER_CONFIRM_S, photo="setelah-klik-short")
+        self._await_order(plan, before, _ORDER_CONFIRM_S, photo=f"setelah-klik-{plan.side.lower()}")
 
     def _quantity_matches(self, plan: OrderPlan) -> tuple[bool, list[str]]:
         shown: list[str] = []
@@ -1264,7 +1285,7 @@ class BinanceNavigator:
         """Teks penolakan atau galat order yang tampil di jendela (toast Binance), bila ada."""
         return self._order_evidence().rejected
 
-    def _order_evidence(self) -> _OrderEvidence:
+    def _order_evidence(self, side: str = "SHORT") -> _OrderEvidence:
         """Bukti order dari SELURUH jendela (satu kali OCR).
 
         Dibaca di seluruh jendela, bukan di area tetap: uji nyata (20 Okt, BRUSDT) halaman Binance
@@ -1281,7 +1302,7 @@ class BinanceNavigator:
         return _OrderEvidence(
             positions=count,
             available=parse_available_usdt(texts),
-            filled=[t for t in texts if _ORDER_FILLED.search(t)],
+            filled=[t for t in texts if _ORDER_FILLED[side].search(t)],
             rejected=[t for t in texts if _ORDER_MESSAGE.search(t)],
         )
 
@@ -1291,7 +1312,7 @@ class BinanceNavigator:
     def _await_order(
         self, plan: OrderPlan, before: _OrderEvidence, timeout_s: float, *, photo: str
     ) -> None:
-        """Tunggu bukti Binance membuka posisi sesudah tombol Jual/Short ditekan.
+        """Tunggu bukti Binance membuka posisi sesudah tombol order ditekan.
 
         Bukti: toast "Order Jual Market Terisi" yang baru muncul, jumlah di tab "Posisi(n)"
         bertambah, atau saldo Tersedia turun setidaknya separuh margin. Selama menunggu bot tidak
@@ -1311,7 +1332,7 @@ class BinanceNavigator:
             if first:
                 logger.info("Foto layar sesudah klik order: %s", self._save_debug_shot(photo))
                 first = False
-            now = self._order_evidence()
+            now = self._order_evidence(plan.side)
             new_toast = [t for t in now.filled if t not in before.filled]
             more = (
                 now.positions is not None
@@ -1325,7 +1346,8 @@ class BinanceNavigator:
             )
             if new_toast or more or spent:
                 logger.info(
-                    "Order Short %s terkonfirmasi: Posisi %s -> %s, Tersedia %s -> %s, toast %s",
+                    "Order %s %s terkonfirmasi: Posisi %s -> %s, Tersedia %s -> %s, toast %s",
+                    plan.side.title(),
                     plan.symbol,
                     before.positions,
                     now.positions,
@@ -1350,8 +1372,9 @@ class BinanceNavigator:
             self._fail_order(plan, before, now, "Posisi dan saldo Tersedia tidak berubah")
         shot = self._save_debug_shot("order-belum-pasti")
         logger.error(
-            "Order Short %s BELUM PASTI (Posisi %s -> %s, Tersedia %s -> %s): dicatat TERBUKA dan "
+            "Order %s %s BELUM PASTI (Posisi %s -> %s, Tersedia %s -> %s): dicatat TERBUKA dan "
             "diawasi demi keamanan. Periksa Binance secara manual. Foto layar: %s",
+            plan.side.title(),
             plan.symbol,
             before.positions,
             now.positions,
@@ -1366,11 +1389,16 @@ class BinanceNavigator:
         """Order jelas TIDAK masuk: jurnal tidak mencatat posisi sungguhan yang tidak ada."""
         shot = self._save_debug_shot("order-tidak-terkonfirmasi")
         logger.error(
-            "Order Short %s TIDAK masuk di Binance (%s). Foto layar: %s", plan.symbol, detail, shot
+            "Order %s %s TIDAK masuk di Binance (%s). Foto layar: %s",
+            plan.side.title(),
+            plan.symbol,
+            detail,
+            shot,
         )
         raise ScreenReadError(
-            f"Order Short {plan.symbol} tidak masuk: {detail} (Posisi {before.positions} -> "
-            f"{now.positions}, Tersedia {before.available} -> {now.available}); "
+            f"Order {plan.side.title()} {plan.symbol} tidak masuk: {detail} "
+            f"(Posisi {before.positions} -> {now.positions}, "
+            f"Tersedia {before.available} -> {now.available}); "
             f"tidak dicatat sebagai posisi sungguhan. Foto layar: {shot}"
         )
 

@@ -844,10 +844,10 @@ def _locked_order_nav(
     monkeypatch.setattr(nav._window, "click", lambda x, y: pressed.append((x, y)))
     monkeypatch.setattr(nav, "_read_texts", lambda area: shown)
     monkeypatch.setattr(nav, "_ensure_front", lambda: None)
-    monkeypatch.setattr(nav, "short_button", lambda: (0.95, 0.51))
+    monkeypatch.setattr(nav, "order_button", lambda side: (0.95, 0.51))
     # Bukti order: sebelum klik Posisi(0) dan Tersedia 21; sesudah klik Posisi(1) dan Tersedia 11.
     evidence = iter([ev(0, 21.0)])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: next(evidence, ev(1, 11.0)))
+    monkeypatch.setattr(nav, "_order_evidence", lambda side="SHORT": next(evidence, ev(1, 11.0)))
     return nav, pressed
 
 
@@ -871,7 +871,7 @@ def _unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _with_evidence(monkeypatch, nav, before, after):  # type: ignore[no-untyped-def]
     seq = iter([before])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: next(seq, after))
+    monkeypatch.setattr(nav, "_order_evidence", lambda side="SHORT": next(seq, after))
 
 
 @pytest.mark.parametrize(
@@ -889,7 +889,7 @@ def test_press_short_accepts_proof_that_binance_opened_the_position(
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
     _with_evidence(monkeypatch, nav, ev(0, 21.0), after)
-    nav.press_short(_plan_20())  # tidak ada galat: posisi terbukti terbuka
+    nav.press_order(_plan_20())  # tidak ada galat: posisi terbukti terbuka
     assert len(pressed) == 1
 
 
@@ -900,7 +900,7 @@ def test_an_old_fill_toast_is_not_proof(monkeypatch: pytest.MonkeyPatch) -> None
     old = ["Order Jual Market Terisi"]
     _with_evidence(monkeypatch, nav, ev(0, 21.0, filled=old), ev(0, 21.0, filled=old))
     with pytest.raises(ScreenReadError, match="tidak masuk"):
-        nav.press_short(_plan_20())
+        nav.press_order(_plan_20())
 
 
 def test_press_short_clear_no_change_is_an_error_not_a_phantom_position(
@@ -912,9 +912,9 @@ def test_press_short_clear_no_change_is_an_error_not_a_phantom_position(
     """
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
-    monkeypatch.setattr(nav, "_order_evidence", lambda: ev(0, 21.0))
+    monkeypatch.setattr(nav, "_order_evidence", lambda side="SHORT": ev(0, 21.0))
     with pytest.raises(ScreenReadError, match="tidak masuk"):
-        nav.press_short(_plan_20())
+        nav.press_order(_plan_20())
     assert len(pressed) == 1  # tanpa klik ulang
 
 
@@ -933,7 +933,7 @@ def test_uncertain_evidence_keeps_the_position_as_open(
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
     _with_evidence(monkeypatch, nav, before, after)
-    nav.press_short(_plan_20())  # tidak ada galat: jurnal mencatat posisi terbuka
+    nav.press_order(_plan_20())  # tidak ada galat: jurnal mencatat posisi terbuka
     assert len(pressed) == 1
 
 
@@ -941,10 +941,12 @@ def test_press_short_reports_binance_rejection_message(monkeypatch: pytest.Monke
     _unlocked(monkeypatch)
     nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
     monkeypatch.setattr(
-        nav, "_order_evidence", lambda: ev(0, 21.0, rejected=["Order gagal: margin tidak cukup"])
+        nav,
+        "_order_evidence",
+        lambda side="SHORT": ev(0, 21.0, rejected=["Order gagal: margin tidak cukup"]),
     )
     with pytest.raises(ScreenReadError, match="margin tidak cukup"):
-        nav.press_short(_plan_20())
+        nav.press_order(_plan_20())
     assert len(pressed) == 1
 
 
@@ -977,7 +979,7 @@ def test_press_short_small_balance_noise_is_not_proof(monkeypatch: pytest.Monkey
     nav, _ = _locked_order_nav(monkeypatch, ["20", "USDT"])
     _with_evidence(monkeypatch, nav, ev(0, 21.0), ev(0, 20.5))  # turun 0,5: bukan margin 9,78
     with pytest.raises(ScreenReadError, match="tidak masuk"):
-        nav.press_short(_plan_20())
+        nav.press_order(_plan_20())
 
 
 def test_positions_count_reads_the_tab_label_even_with_letter_o() -> None:
@@ -1001,7 +1003,7 @@ def test_press_short_is_locked_even_when_called_directly(monkeypatch: pytest.Mon
     nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
     plan = OrderPlan("CFXUSDT", "100", "100", 100.0, 50.0, 1.0, 0.98, 2)
     with pytest.raises(SafetyError, match="terkunci"):
-        nav.press_short(plan)
+        nav.press_order(plan)
     assert pressed == []
 
 
@@ -1015,16 +1017,16 @@ def test_press_short_logic_when_unlocked(monkeypatch: pytest.MonkeyPatch) -> Non
 
     nav, pressed = _locked_order_nav(monkeypatch, ["50", "USDT"])  # kolom jumlah tidak cocok
     with pytest.raises(SafetyError, match="order dibatalkan"):
-        nav.press_short(plan)
+        nav.press_order(plan)
     assert pressed == []
 
     nav, pressed = _locked_order_nav(monkeypatch, ["100", "USDT"])
-    nav.press_short(plan)
+    nav.press_order(plan)
     assert pressed == [nav.rect.point_at(0.95, 0.51)]  # hanya tombol Short yang ditemukan
 
     nav._on_trade_page = False
     with pytest.raises(SafetyError, match="halaman koin"):
-        nav.press_short(plan)
+        nav.press_order(plan)
 
 
 def test_press_short_reads_the_quantity_again_when_ocr_stumbles(
@@ -1040,14 +1042,14 @@ def test_press_short_reads_the_quantity_again_when_ocr_stumbles(
     nav, pressed = _locked_order_nav(monkeypatch, [])
     answers = iter([["10", "USDT"], ["100", "USDT"]])
     monkeypatch.setattr(nav, "_read_texts", lambda area: next(answers))
-    nav.press_short(plan)
+    nav.press_order(plan)
     assert pressed == [nav.rect.point_at(0.95, 0.51)]
 
     nav, pressed = _locked_order_nav(monkeypatch, [])
     reads: list[int] = []
     monkeypatch.setattr(nav, "_read_texts", lambda area: reads.append(1) or ["50", "USDT"])
     with pytest.raises(SafetyError, match="order dibatalkan"):
-        nav.press_short(plan)  # semua bacaan salah: tetap batal, tidak ada yang diklik
+        nav.press_order(plan)  # semua bacaan salah: tetap batal, tidak ada yang diklik
     assert pressed == [] and len(reads) == 4
 
 
@@ -1533,3 +1535,27 @@ def test_an_unreadable_futures_tab_is_never_clicked_blindly() -> None:
     with pytest.raises(ScreenReadError, match="Tab Futures tidak terbaca"):
         nav.open_top_gainers()
     assert clicks(screen) == [at(layout.SIDEBAR_MARKET)]  # hanya menu Pasar
+
+
+def test_press_order_long_presses_the_long_button_and_reads_the_buy_toast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    _unlocked(monkeypatch)
+    nav, pressed = _locked_order_nav(monkeypatch, ["20", "USDT"])
+    sides: list[str] = []
+    monkeypatch.setattr(nav, "order_button", lambda side: sides.append(side) or (0.9, 0.51))
+    _with_evidence(
+        monkeypatch, nav, ev(0, 21.0), ev(None, None, filled=["Order Beli Market Terisi"])
+    )
+    nav.press_order(replace(_plan_20(), side="LONG"))  # type: ignore[type-var]
+    assert sides == ["LONG"] and len(pressed) == 1
+
+
+def test_the_fill_toast_must_match_the_order_side() -> None:
+    from binance_bot.binance_desktop.navigator import _ORDER_FILLED
+
+    assert _ORDER_FILLED["LONG"].search("Order Beli Market Terisi")
+    assert not _ORDER_FILLED["LONG"].search("Order Jual Market Terisi")
+    assert not _ORDER_FILLED["SHORT"].search("Order Beli Market Terisi")
