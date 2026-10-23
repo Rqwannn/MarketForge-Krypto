@@ -84,3 +84,20 @@ test('log engine jadi notifikasi: terjual, gagal jual, posisi hilang', () => {
   assert.equal(logNotice({ message: '[DRY RUN] Tombol tutup posisi TIDAK ditekan. Jual otomatis X (target)' }), null);
   assert.equal(logNotice({ message: 'Cek ulang ARIAUSDT sebelum menjual' }), null);
 });
+
+test('peringatan rugi menyebut cutloss atau batas waktu bila menyala', () => {
+  const at = (extra) => lossAlerts([{ symbol: 'AUSDT', real: true, pnl_pct: -12, ...extra }], 10, new Set())[0].body;
+  assert.match(at({}), /menahan sampai harga turun ke target/);
+  assert.match(at({ side: 'long' }), /naik ke target/);
+  assert.match(at({ cutloss_price: 1.1 }), /cutloss 10%/);
+  assert.match(at({ time_exit_at: 1 }), /paling lama 3 jam/);
+});
+
+test('notifikasi terjual menyebut alasan cutloss dan batas waktu', () => {
+  const sold = (status) => logNotice({
+    message: `Posisi ditutup di bursa. Jual otomatis AUSDT (${status}) di 1.1: -10.20% posisi (-10.20 USDT = -10.20% modal)`,
+  });
+  assert.equal(sold('stop').title, 'AUSDT terjual otomatis karena cutloss');
+  assert.equal(sold('timeout').title, 'AUSDT terjual otomatis karena batas waktu');
+  assert.equal(sold('target').title, 'AUSDT terjual otomatis');
+});

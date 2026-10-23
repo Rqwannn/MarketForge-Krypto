@@ -4,6 +4,8 @@
 // di engine.js sebelum menjadi argumen CLI. Tidak ada kontrol untuk order sungguhan.
 
 const { app, BrowserWindow, Notification, ipcMain, net, powerMonitor, powerSaveBlocker } = require('electron');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -107,13 +109,35 @@ const closeQueue = []; // perintah Sell pemimpin yang menunggu bot di laptop ini
 // laptop pengikut ini sudah menyetujui modal peringatan untuk pemimpinnya (sampai keluar kelompok
 // atau aplikasi ditutup). pendingRealStart: putaran pemimpin yang menunggu jawaban modal itu.
 let runReal = false;
+let runStrategy = null; // arah, cutloss, dan batas waktu bot yang sedang berjalan (diumumkan pemimpin)
 let followerRealOk = null; // id pemimpin yang sudah disetujui
 let pendingRealStart = null;
+// Pengikut tetap mengawasi posisinya (target, cutloss, batas waktu) sesudah putarannya selesai.
+// Untuk menghentikannya dengan aman (putaran baru pemimpin, Sell dari pemimpin), aplikasi membuat
+// berkas ini; bot berhenti di antara dua pengecekan, tidak pernah di tengah klik.
+const FOLLOWER_STOP_FILE = path.join(os.tmpdir(), `marketforge-follower-stop-${process.pid}`);
+let pendingFollowerStart = null; // putaran pemimpin yang menunggu bot pengikut sebelumnya selesai
+// Arah, cutloss, dan batas waktu terakhir dari pemimpin. Pengikut tidak memilih sendiri (isiannya
+// tersembunyi di layar pengikut), juga saat Mulai ditekan langsung di laptop pengikut.
+let leaderStrategy = {};
+
+function askFollowerStop() {
+  try {
+    fs.writeFileSync(FOLLOWER_STOP_FILE, '');
+  } catch {
+    // tidak bisa menulis: bot tetap berhenti sendiri saat pemimpin memulai putaran baru
+  }
+}
+
+function clearFollowerStop() {
+  fs.rmSync(FOLLOWER_STOP_FILE, { force: true });
+}
 
 /** Pengikut: jalankan perintah Sell dari pemimpin (uji kertas, tombol tidak ditekan). */
 async function closeForLeader({ leaderName, symbol }) {
   if (proc.running) {
     closeQueue.push({ leaderName, symbol });
+    if (runningMode === 'follower') askFollowerStop(); // pengikut sedang mengawasi posisi
     return;
   }
   let text;
@@ -174,7 +198,17 @@ function teamState() {
 /** Pemimpin memulai putaran: pengikut yang sudah menerima ikut menjalankan bot. */
 function startFollower(start) {
   const { leaderName, rank, modal, hub, exchange: leaderExchange, real = false } = start;
-  if (proc.running) return;
+  // Arah, cutloss, dan batas waktu mengikuti pemimpin (tanpa keterangan: short saja, seperti dulu).
+  const { shortTops, longTops, cutloss, timeLimit } = start;
+  leaderStrategy = { shortTops, longTops, cutloss, timeLimit };
+  if (proc.running) {
+    // Bot pengikut putaran sebelumnya masih mengawasi posisi: hentikan dengan aman, lalu mulai.
+    if (runningMode === 'follower') {
+      pendingFollowerStart = start;
+      askFollowerStop();
+    }
+    return;
+  }
   // Pengikut memakai platform pemimpin (Binance atau Tebbit); tanpa keterangan, platform laptop ini.
   const platform = engine.EXCHANGES.includes(leaderExchange) ? leaderExchange : exchange;
   const leaderId = team?.membership?.leaderId;
@@ -187,7 +221,11 @@ function startFollower(start) {
   }
   const useReal = real && platform === 'binance' && followerRealOk === leaderId;
   try {
-    proc.start(engine.buildArgs('follower', { rank, modal, hub, exchange: platform, real: useReal }));
+    clearFollowerStop();
+    proc.start(engine.buildArgs('follower', {
+      rank, modal, hub, exchange: platform, real: useReal, shortTops, longTops, cutloss, timeLimit,
+      stopFile: FOLLOWER_STOP_FILE,
+    }));
   } catch (err) {
     send('team:error', `Gagal mengikuti ${leaderName}: ${err.message}`);
     return;
@@ -227,6 +265,8 @@ async function startDiscovery() {
     });
     team.on('removed', (info) => {
       followerRealOk = null; // persetujuan uang sungguhan berlaku per pemimpin
+      pendingFollowerStart = null;
+      leaderStrategy = {};
       syncPresence();
       send('team:changed', { ...teamState(), notice: `${info.leaderName} mengeluarkan laptop ini dari kelompok.` });
     });
@@ -426,7 +466,8 @@ proc.on('log', (entry) => {
   const e = entry.event;
   if (e?.type === 'view' && e.target === 'app') showAppWindow();
   if (team && runningMode === 'leader' && e?.type === 'cycle' && e.phase === 'start') {
-    team.startCycle(exchange, runReal); // pengikut ikut memulai putaran ini, di platform yang sama
+    // Pengikut ikut memulai putaran ini, di platform yang sama dan dengan arah serta aturan keluar yang sama.
+    team.startCycle(exchange, runReal, runStrategy);
     syncPresence();
   }
 });
@@ -438,8 +479,15 @@ proc.on('exit', (info) => {
   refreshPositions();
   syncKeepAwake();
   send('health:changed', healthSnapshot());
-  for (const job of closeQueue.splice(0)) closeForLeader(job);
+  clearFollowerStop();
   announceExit(info); // bot selesai: aplikasi kembali ke depan dan memberi tahu
+  // Sell pemimpin dijalankan dulu, satu per satu, baru putaran pemimpin yang menunggu dimulai.
+  (async () => {
+    for (const job of closeQueue.splice(0)) await closeForLeader(job);
+    const start = pendingFollowerStart;
+    pendingFollowerStart = null;
+    if (start && team?.membership) startFollower(start);
+  })();
 });
 
 function createWindow() {
@@ -484,12 +532,24 @@ handle('engine:start', (mode, params) => {
   if ((mode === 'leader' || mode === 'follower') && !engine.hubToken()) {
     throw new Error('Mode Pemimpin dan Pengikut butuh token hub yang sama di semua laptop. Minta admin mengisinya.');
   }
-  const args = mode === 'follower' && team?.membership
-    ? engine.buildArgs(mode, { ...params, rank: team.membership.rank })
-    : engine.buildArgs(mode, params);
+  let args;
+  if (mode === 'follower') {
+    const { shortTops, longTops, cutloss, timeLimit, ...own } = params || {};
+    const rank = team?.membership ? { rank: team.membership.rank } : {};
+    args = engine.buildArgs(mode, { ...own, ...rank, ...leaderStrategy, stopFile: FOLLOWER_STOP_FILE });
+    clearFollowerStop();
+  } else {
+    args = engine.buildArgs(mode, params);
+  }
   proc.start(args);
   exchange = params?.exchange || 'binance';
   runReal = params?.real === true;
+  runStrategy = {
+    shortTops: params?.shortTops,
+    longTops: params?.longTops,
+    cutloss: params?.cutloss === true,
+    timeLimit: params?.timeLimit === true,
+  };
   runningMode = mode;
   uiRole = mode;
   syncPresence();
@@ -498,6 +558,7 @@ handle('engine:start', (mode, params) => {
   return true;
 });
 handle('engine:stop', () => {
+  pendingFollowerStart = null; // dihentikan pengguna: tidak langsung dimulai lagi
   proc.stop();
   return true;
 });

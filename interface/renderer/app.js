@@ -18,18 +18,23 @@ const MODE_NOTE = {
 };
 const VERDICT = {
   ok: ['Layak short', 'ok'],
+  long: ['Layak long', 'ok'],
+  konflik: ['Short dan long', 'tunggu'],
   tunggu: ['Tunggu', 'tunggu'],
   jangan: ['Jangan short', 'jangan'],
 };
+const ENTER_VERDICTS = ['ok', 'long'];
 const STATUS = {
   open: ['Berjalan', 'open'],
   target: ['Target tercapai', 'target'],
   likuidasi: ['Likuidasi', 'stop'],
-  // Catatan lama (SOP V2). V3 tanpa stop-loss dan tanpa batas waktu.
-  stop: ['Kena batas rugi', 'stop'],
-  timeout: ['Waktu habis', 'timeout'],
+  stop: ['Kena cutloss', 'stop'], // juga catatan lama "batas rugi"
+  timeout: ['Batas waktu', 'timeout'],
   manual: ['Ditutup (Sell)', 'manual'],
 };
+const SIDE_NAME = { short: 'Short', long: 'Long' };
+const sideOf = (x) => SIDE_NAME[x?.side] || 'Short';
+const TopChoice = window.Tops; // arah per Top (renderer/tops.js)
 let platform = null; // platform yang sedang dipakai
 // Platform (bursa). Hanya yang `ready: true` yang bisa dipilih dan dijalankan engine.
 const PLATFORMS = [
@@ -93,17 +98,21 @@ function plain(text) {
     [/saldo tersedia ([\d.,]+) USDT kurang dari margin ([\d.,]+) USDT/, (m) => `Saldo tersedia ${m[1]} USDT kurang dari margin ${m[2]} USDT: tidak masuk`],
     [/saldo tersedia tidak terbaca/, 'Saldo tersedia tidak terbaca di form order, tidak masuk demi keamanan'],
     [/Cek ulang (\S+) sebelum menjual/, (m) => `Cek ulang harga ${m[1]} sebelum menjual`],
-    [/ORDER SUNGGUHAN: tekan Jual\/Short (\S+)/, (m) => `Uang sungguhan: bot menekan Jual/Short ${m[1]}`],
+    [/ORDER SUNGGUHAN: tekan (Jual\/Short|Beli\/Long) (\S+)/, (m) => `Uang sungguhan: bot menekan ${m[1]} ${m[2]}`],
     [/ORDER SUNGGUHAN: tutup posisi (\S+)/, (m) => `Uang sungguhan: bot menekan Market untuk menjual ${m[1]}`],
     [/Posisi ditutup di bursa\. Jual otomatis (\S+)/, (m) => `${m[1]} terjual otomatis di Binance`],
     [/Jual otomatis (\S+) GAGAL di bursa/, (m) => `Jual otomatis ${m[1]} gagal, posisi tetap terbuka dan dicoba lagi`],
     [/Leverage tidak bisa diubah/, 'Leverage koin ini tidak bisa diubah ke 2x otomatis'],
     [/belum terbaca untuk jual otomatis/, 'Harga posisi belum terbaca, jual otomatis dicoba lagi'],
     [/Data pasar Binance|fapi\.binance|certificate|urlopen/i, 'Data harga Binance tidak bisa diambil di jaringan ini'],
+    [/memenuhi syarat SHORT dan menunjukkan/, 'Grafik cocok untuk short dan long sekaligus, tidak masuk'],
+    [/arah SHORT tidak dipilih/, 'Pola cocok untuk short, tetapi arah short tidak dipilih'],
     [/berdekatan/, 'Garis kuning dan magenta berdekatan; masuk hanya bila berjauhan'],
     [/JANGAN/, 'Garis kuning selalu di atas, harga masih naik terus'],
     [/6 jam terakhir naik terus/, 'Garis kuning sempat turun, tapi 6 jam terakhir harga naik terus'],
     [/TUNGGU/, 'Garis kuning baru sekali turun, harga masih bisa naik lagi'],
+    [/tanda LONG tidak terbaca/, 'Tanda long belum terbaca oleh AI, tidak masuk'],
+    [/tidak ada tanda LONG/, 'Belum ada tanda masuk long'],
     [/sedang rugi/, 'Posisi pertama sedang rugi, koin berikutnya ditunda'],
     [/Leader tidak (memainkan|menilai) Top/, 'Pemimpin tidak menilai Top ini di putaran ini, tidak ada tindakan'],
     [/belum memulai putaran/, 'Pemimpin belum memulai putaran baru, tidak ada tindakan'],
@@ -160,8 +169,9 @@ function activity(entry) {
     return { text: `${e.symbol} dilewati: ${plain(e.reason).toLowerCase()}` };
   }
   if (e?.type === 'hub') return { text: 'Mulai membagikan hasil ke laptop pengikut', css: 'good' };
+  if (e?.type === 'watch') return { text: `Mengawasi ${e.open} posisi sampai terjual atau putaran pemimpin berikutnya` };
   if (e?.type === 'sell') {
-    const why = e.status === 'target' ? 'target tercapai' : e.status;
+    const why = { target: 'target tercapai', stop: 'cutloss', timeout: 'batas waktu' }[e.status] || e.status;
     return { text: `Jual otomatis ${e.symbol}: ${why} (${percent(e.pnl_pct)}), tombol tidak ditekan`, css: e.pnl_pct >= 0 ? 'good' : 'bad' };
   }
   if (e?.type === 'view') return { text: entry.message };  // "AI membaca grafik X", "Kembali ke Binance"
@@ -172,15 +182,18 @@ function activity(entry) {
   if (/^(Tidak masuk putaran ini|Berhenti memantau): /.test(m)) return { text: plain(m), css: 'warn' };
   if (/^Tidak ada koin dengan pola OK/.test(m)) return { text: 'Belum ada koin yang layak, pantau lagi nanti' };
   if (/tidak di depan/.test(m)) return { text: `${platform?.name || 'Binance'} tertutup jendela lain, dibawa ke depan lagi` };
-  if (/^Tombol Jual\/Short ditemukan/.test(m)) return { text: 'Tombol Short ditemukan di layar, tidak ditekan (uji kertas)' };
-  if (/^Tombol Jual\/Short tidak ditemukan/.test(m)) return { text: 'Tombol Short tidak terbaca di layar (uji kertas tetap jalan)', css: 'warn' };
-  if (/^\[DRY RUN\] Tombol Jual\/Short TIDAK ditekan/.test(m)) return { text: 'Uji kertas: order dicatat, tombol Short tidak ditekan', css: 'good' };
+  const button = m.match(/Tombol (?:Jual\/(Short)|Beli\/(Long))/);
+  const side = button ? button[1] || button[2] : '';
+  if (/^Tombol \S+ ditemukan/.test(m)) return { text: `Tombol ${side} ditemukan di layar, tidak ditekan (uji kertas)` };
+  if (/^Tombol \S+ tidak ditemukan/.test(m)) return { text: `Tombol ${side} tidak terbaca di layar (uji kertas tetap jalan)`, css: 'warn' };
+  if (/^\[DRY RUN\] Tombol \S+ TIDAK ditekan/.test(m)) return { text: `Uji kertas: order dicatat, tombol ${side} tidak ditekan`, css: 'good' };
   const waitingLeader = m.match(/^Menunggu leader menganalisis (Top \d+)/);
   if (waitingLeader) return { text: `Menunggu hasil AI dari pemimpin untuk ${waitingLeader[1]}` };
   const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
   if (leaderSays) {
-    const ok = leaderSays[3] === 'OK';
-    return { text: `Pemimpin: ${leaderSays[2]} ${ok ? 'layak short, ikut entry' : `${leaderSays[3].toLowerCase()}, tidak ada tindakan`}`, css: ok ? 'good' : '' };
+    const ok = ['OK', 'LONG'].includes(leaderSays[3]);
+    const fit = leaderSays[3] === 'LONG' ? 'layak long' : 'layak short';
+    return { text: `Pemimpin: ${leaderSays[2]} ${ok ? `${fit}, ikut entry` : `${leaderSays[3].toLowerCase()}, tidak ada tindakan`}`, css: ok ? 'good' : '' };
   }
   if (entry.level === 'WARNING') return { text: plain(m), css: 'warn' };
   if (entry.level === 'ERROR' || entry.level === 'CRITICAL') {
@@ -204,7 +217,14 @@ for (const item of document.querySelectorAll('.menu-item')) item.addEventListene
 
 // --------------------------------------------------------------------------- pengaturan putaran
 
-const form = { mode: 'single', modal: '', ranks: [...RANKS], rank: 1, interval: 0 };
+// Arah per Top (shortTops, longTops) dan aturan keluar: cutloss 10% dan batas waktu 2,5-3 jam
+// menyala sejak 23 Okt (bisa dimatikan).
+const form = {
+  mode: 'single', modal: '', shortTops: [...RANKS], longTops: [], rank: 1, interval: 0, cutloss: true, timeLimit: true,
+};
+
+/** Top yang dipantau Sendiri/Pemimpin: gabungan Top short dan Top long. */
+const watchedTops = () => TopChoice.watched(form);
 
 function loadForm() {
   try {
@@ -212,7 +232,10 @@ function loadForm() {
   } catch {
     // penyimpanan lokal tidak tersedia: pakai default
   }
-  if (!Array.isArray(form.ranks) || form.ranks.length === 0) form.ranks = [...RANKS];
+  // Pilihan lama (Top yang dipantau + satu arah untuk semua) diubah ke arah per Top.
+  Object.assign(form, TopChoice.restore(form));
+  delete form.ranks;
+  delete form.direction;
 }
 
 function saveForm() {
@@ -238,26 +261,27 @@ function followedRanks() {
 }
 
 function watchedCount() {
-  return form.mode !== 'follower' ? form.ranks.length : followedRanks().length;
+  return form.mode !== 'follower' ? watchedTops().length : followedRanks().length;
 }
 
 function render() {
   const multi = form.mode !== 'follower';
   mark($('mode'), (v) => v === form.mode);
   mark($('interval'), (v) => Number(v) === Number(form.interval));
-  const chosen = multi ? form.ranks : followedRanks();
-  mark($('ranks'), (v) => chosen.includes(Number(v)));
+  mark($('ranks'), (v) => followedRanks().includes(Number(v)));
+  mark($('tops-short'), (v) => form.shortTops.includes(Number(v)));
+  mark($('tops-long'), (v) => form.longTops.includes(Number(v)));
   for (const node of document.querySelectorAll('[data-modes]')) {
     node.hidden = !node.dataset.modes.split(' ').includes(form.mode);
   }
   $('mode-note').textContent = MODE_NOTE[form.mode];
   renderModal();
+  renderExits();
   updateLeaderLock();
-  $('ranks-title').textContent = multi ? 'Top gainers yang dipantau' : 'Top gainer untuk laptop ini';
+  $('ranks-title').textContent = multi ? 'Top gainers dan arahnya' : 'Top gainer untuk laptop ini';
   $('ranks-note').textContent = multi
-    ? `Bisa pilih lebih dari satu · ${form.ranks.length} dari 5 dipilih`
+    ? TopChoice.note(form)
     : form.rank === '*' ? 'Mengikuti semua Top yang dimainkan pemimpin' : `Ditugaskan: ${rankLabel(form.rank)}`;
-  $('ranks-all').hidden = !multi || form.ranks.length === RANKS.length;
   if (state === 'stopped') {
     $('seen-note').textContent = `dari ${watchedCount()} top gainers`;
     if (!flow.done && flow.step < 0) resetFlow(form.mode, 'Belum berjalan. Tekan Mulai memantau.');
@@ -268,10 +292,21 @@ function render() {
 }
 
 function setupForm() {
-  for (const r of RANKS) {
-    const btn = el('button', { type: 'button' }, el('small', { textContent: 'Top' }), el('strong', { textContent: String(r) }));
-    btn.dataset.value = String(r);
-    $('ranks').append(btn);
+  for (const id of ['ranks', 'tops-short', 'tops-long']) {
+    for (const r of RANKS) {
+      const btn = el('button', { type: 'button' }, el('small', { textContent: 'Top' }), el('strong', { textContent: String(r) }));
+      btn.dataset.value = String(r);
+      $(id).append(btn);
+    }
+  }
+  // Arah per Top: klik chip = Top itu boleh/tidak untuk arah tersebut. Klik label baris = semua
+  // atau kosong. Minimal satu Top tetap terpilih (di arah mana pun).
+  for (const side of ['short', 'long']) {
+    $(`tops-${side}`).addEventListener('click', (ev) => {
+      const r = Number(ev.target.closest('button')?.dataset.value);
+      if (r) setTops(TopChoice.toggle(form, side, r));
+    });
+    $(`tops-${side}-all`).addEventListener('click', () => setTops(TopChoice.toggleAll(form, side)));
   }
   $('mode').addEventListener('click', (ev) => {
     const value = ev.target.closest('button')?.dataset.value;
@@ -286,15 +321,17 @@ function setupForm() {
   $('ranks').addEventListener('click', (ev) => {
     const r = Number(ev.target.closest('button')?.dataset.value);
     if (!r) return;
-    if (form.mode === 'follower') form.rank = r;
-    else if (!form.ranks.includes(r)) form.ranks = [...form.ranks, r].sort((a, b) => a - b);
-    else if (form.ranks.length > 1) form.ranks = form.ranks.filter((x) => x !== r);
+    form.rank = r; // pengikut: Top tugasnya
     render();
   });
-  $('ranks-all').addEventListener('click', () => {
-    form.ranks = [...RANKS];
-    render();
-  });
+  // Seluruh kartu bisa diklik, bukan hanya saklarnya.
+  for (const card of document.querySelectorAll('.exit-option')) {
+    card.addEventListener('click', () => {
+      const key = EXIT_SWITCHES[card.dataset.switch];
+      form[key] = !form[key];
+      render();
+    });
+  }
   renderModal();
   $('modal').addEventListener('input', () => {
     form.modal = $('modal').value.trim();
@@ -347,6 +384,30 @@ function renderModal() {
     $(id).setAttribute('aria-pressed', String(kind === key));
   }
   $('modal-note').textContent = MODAL_NOTE[kind] || 'Tiap posisi memakai separuh modal, leverage 2x.';
+}
+
+const EXIT_SWITCHES = { cutloss: 'cutloss', 'time-limit': 'timeLimit' }; // id saklar -> isian form
+
+/** Pilihan Top baru; null = ditolak (minimal satu Top tetap dipantau). */
+function setTops(next) {
+  if (!next) return;
+  form.shortTops = next.shortTops;
+  form.longTops = next.longTops;
+  render();
+}
+
+/** Cutloss dan batas waktu (Binance dan Tebbit). */
+function renderExits() {
+  for (const [id, key] of Object.entries(EXIT_SWITCHES)) {
+    $(id).setAttribute('aria-checked', String(form[key]));
+    $(id).closest('.exit-option').classList.toggle('on', form[key]);
+  }
+  // Tanpa cutloss, satu-satunya batas rugi adalah batas waktu atau likuidasi: diingatkan.
+  const note = $('exit-note');
+  note.hidden = form.cutloss;
+  note.textContent = form.timeLimit
+    ? 'Tanpa cutloss: rugi hanya dibatasi batas waktu 3 jam.'
+    : 'Tanpa cutloss dan batas waktu: rugi bisa bertambah sampai likuidasi.';
 }
 
 // --------------------------------------------------------------------------- jalankan dan hentikan
@@ -406,7 +467,7 @@ function renderReal() {
   $('paper-tag').className = real ? 'tag danger' : 'tag outline';
   $('paper-tag').textContent = real ? 'Uang sungguhan' : 'Uji kertas';
   $('paper-text').textContent = real
-    ? 'Bot menekan tombol Jual/Short dan tutup posisi di Binance dengan uangmu. Tanpa stop-loss.'
+    ? `Bot menekan tombol order dan tutup posisi di Binance dengan uangmu. ${form.cutloss ? 'Cutloss 10%.' : 'Tanpa stop-loss.'}`
     : 'Bot tidak pernah menekan tombol beli atau jual. Setiap posisi hanya dicatat.';
 }
 
@@ -434,6 +495,13 @@ function askReal({ follower = false, leaderName = '', modal = '' } = {}) {
     $('real-notional').textContent = capital > 0 ? usdt(capital) : '–';
     $('real-margin').textContent = capital > 0 ? usdt(capital / 2) : '50% modal';
   }
+  const cutloss = follower ? undefined : form.cutloss;
+  $('real-risk-title').textContent = cutloss ? 'Cutloss 10%' : 'Tanpa stop-loss';
+  $('real-risk-text').textContent = cutloss === undefined
+    ? 'Cutloss dan batas waktu mengikuti pilihan pemimpin. Tanpa cutloss, rugi bisa bertambah sampai likuidasi.'
+    : cutloss
+      ? 'Bot menjual bila harga melawan posisi 10% (rugi sekitar 10% modal), bisa lebih jauh bila harga melompat.'
+      : 'Bila harga terus melawan posisi, rugi bertambah sampai likuidasi.';
   ack.checked = false;
   word.value = '';
   confirm.disabled = true;
@@ -490,7 +558,10 @@ async function toggleRun() {
     await window.bot.stop().catch(() => {});
     return;
   }
-  const params = { exchange: platform.id, modal: form.modal, ranks: form.ranks, rank: form.rank, interval: form.interval, real: realOn };
+  const params = {
+    exchange: platform.id, modal: form.modal, ranks: watchedTops(), rank: form.rank, interval: form.interval, real: realOn,
+    shortTops: form.shortTops, longTops: form.longTops, cutloss: form.cutloss, timeLimit: form.timeLimit,
+  };
   try {
     await window.bot.start(form.mode, params);
     runningReal = realOn;
@@ -556,7 +627,7 @@ function addPending(e) {
 function addCoin(e) {
   $('coins').querySelector(`tr[data-pending="${CSS.escape(e.symbol)}"]`)?.remove();
   counts.seen += 1;
-  if (e.verdict === 'ok') counts.ok += 1;
+  if (ENTER_VERDICTS.includes(e.verdict)) counts.ok += 1;
   if (e.status === 'open') counts.open += 1;
   setCounts();
 
@@ -664,17 +735,18 @@ function chartThumb(file, caption) {
 /** Akibat keputusan AI untuk satu koin (kolom Tindakan). */
 function actionOf(e) {
   if (e.status === 'open') {
-    return { text: e.real ? 'Short sungguhan dibuka' : 'Short uji kertas dibuka', css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · tanpa stop-loss` };
+    const cut = e.cutloss_price ? `cutloss di ${price(e.cutloss_price)}` : 'tanpa stop-loss';
+    return { text: `${sideOf(e)} ${e.real ? 'sungguhan' : 'uji kertas'} dibuka`, css: 'pos', note: `Masuk ${price(e.entry_price)} · jual otomatis di ${price(e.target_price)} · ${cut}` };
   }
   if (e.status === 'analyzed') {
-    return e.verdict === 'ok'
-      ? { text: 'Pengikut boleh short (uji)', css: 'pos', note: 'Hasil dibagikan; pengikut mengecek biaya lalu membuka posisi uji.' }
+    return ENTER_VERDICTS.includes(e.verdict)
+      ? { text: `Pengikut boleh ${e.verdict === 'long' ? 'long' : 'short'} (uji)`, css: 'pos', note: 'Hasil dibagikan; pengikut mengecek biaya lalu membuka posisi uji.' }
       : { text: 'Tidak ada tindakan', css: '', note: 'Hasil dibagikan; pengikut tidak masuk koin ini.' };
   }
-  if (e.verdict === 'tunggu' || e.verdict === 'jangan') {
+  if (['tunggu', 'jangan', 'konflik'].includes(e.verdict)) {
     return { text: 'Tidak ada tindakan', css: '', note: plain(e.reason) };
   }
-  if (e.verdict === 'ok') return { text: 'Batal masuk', css: 'warn', note: plain(e.reason) };
+  if (ENTER_VERDICTS.includes(e.verdict)) return { text: 'Batal masuk', css: 'warn', note: plain(e.reason) };
   return { text: 'Dilewati', css: 'warn', note: plain(e.reason) };
 }
 
@@ -723,7 +795,9 @@ function advanceFlow(entry) {
   const leaderSays = m.match(/^Hasil leader untuk Top (\d+): (\S+?), .*-> (\w+)/);
   if (leaderSays) {
     flow.symbol = leaderSays[2];
-    if (leaderSays[3] === 'OK') setFlow(1, `Pemimpin: ${leaderSays[2]} layak short · membuka koin yang sama`);
+    if (['OK', 'LONG'].includes(leaderSays[3])) {
+      setFlow(1, `Pemimpin: ${leaderSays[2]} layak ${leaderSays[3] === 'LONG' ? 'long' : 'short'} · membuka koin yang sama`);
+    }
     else setFlow(FLOW.follower.length, `Pemimpin: ${leaderSays[2]} ${leaderSays[3].toLowerCase()} · tidak ada tindakan`, true);
     return;
   }
@@ -1208,7 +1282,7 @@ function analysisItem(a) {
   const [label, css] = VERDICT[a.verdict] || ['Tidak dibaca', ''];
   const when = new Date(a.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const example = a.status === 'contoh';
-  const opened = a.real ? 'Short sungguhan dibuka' : 'Short uji kertas dibuka';
+  const opened = `${sideOf(a)} ${a.real ? 'sungguhan' : 'uji kertas'} dibuka`;
   const action = example ? a.reason : a.status === 'open' || STATUS[a.status] ? opened : plain(a.reason);
   const where = example ? 'Gambar contoh' : `${a.rank ? `Top ${a.rank}` : 'Dicek ulang setelah terjual'} · ${ROLE_NAME[a.role] || 'Sendiri'}`;
   return el('li', { class: 'hist-item' },
@@ -1352,6 +1426,7 @@ function renderOwnPositions(result, canSell = ownCanSell) {
   }
   const rows = result.positions.map((p) => el('tr', {},
     el('td', {}, el('strong', { class: 'sym', textContent: p.symbol }),
+      el('span', { class: `side-tag ${p.side === 'long' ? 'long' : 'short'}`, textContent: sideOf(p) }),
       p.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null,
       el('small', { class: 'sub-role', textContent: ROLE_NAME[p.role] || 'Sendiri' })),
     el('td', { class: 'num', textContent: price(p.entry_price) }),
@@ -1359,7 +1434,8 @@ function renderOwnPositions(result, canSell = ownCanSell) {
     el('td', { class: `num ${signClass(p.pnl_capital_pct)}` }, p.pnl_capital_pct === null || p.pnl_capital_pct === undefined ? '–' : `${percent(p.pnl_capital_pct)} modal`,
       typeof p.pnl_usdt === 'number' ? el('small', { class: 'price-age', textContent: usdtText(p.pnl_usdt) }) : null),
     el('td', { class: 'num' }, typeof p.worst_pnl_pct === 'number' && p.worst_pnl_pct < 0 ? `-${pctText(p.worst_pnl_pct)}` : '–'),
-    el('td', { class: 'num' }, price(p.target_price), el('small', { class: 'price-age', textContent: targetText(p) })),
+    el('td', { class: 'num' }, price(p.target_price), el('small', { class: 'price-age', textContent: targetText(p) }),
+      exitLimits(p) ? el('small', { class: 'price-age', textContent: exitLimits(p) }) : null),
     el('td', { class: 'num actions' },
       missingSet.has(p.symbol) ? el('small', { class: 'gone-note', textContent: 'Tidak ada lagi di Binance' }) : null,
       p.real && canSell ? el('button', { class: 'secondary small', textContent: 'Tutup manual?', title: 'Catat posisi yang sudah kamu tutup sendiri di bursa', onclick: () => askManual(p.symbol) }) : null,
@@ -1459,7 +1535,16 @@ function renderHealth() {
 /** Jarak harga sekarang ke harga jual otomatis, dalam kalimat. */
 function targetText(p) {
   if (typeof p.to_target_pct !== 'number') return '';
-  return p.to_target_pct <= 0 ? 'sudah di target' : `turun ${pctText(p.to_target_pct)} lagi`;
+  const move = p.side === 'long' ? 'naik' : 'turun';
+  return p.to_target_pct <= 0 ? 'sudah di target' : `${move} ${pctText(p.to_target_pct)} lagi`;
+}
+
+/** Cutloss dan batas waktu posisi ini (kosong bila keduanya mati). */
+function exitLimits(p) {
+  const parts = [];
+  if (p.cutloss_price) parts.push(`cutloss ${price(p.cutloss_price)}`);
+  if (p.time_exit_at) parts.push(`paling lama ${clock(p.time_exit_at)}`);
+  return parts.join(' · ');
 }
 
 /** Ringkasan posisi di Pantau (uang sungguhan dulu): satu baris per koin, detail di Posisi. */
@@ -1769,7 +1854,7 @@ const picks = new Map(); // id laptop -> { all: boolean, tops: Set<number> }
 const editing = new Set(); // id pengikut yang tugasnya sedang diubah
 
 /** Top yang sedang dipilih pemimpin di halaman Pantau, itulah yang bisa dibagikan ke pengikut. */
-const leaderTops = () => [...form.ranks].sort((a, b) => a - b);
+const leaderTops = watchedTops;
 
 function pickFor(p) {
   if (!picks.has(p.id)) picks.set(p.id, { all: true, tops: new Set() });

@@ -112,10 +112,32 @@
             <small>Tiap putaran membaca ulang daftar top gainers.</small>
           </div>
           <div class="field ranks-field">
-            <span class="label"><span id="ranks-title">Top gainers</span>
-              <button type="button" class="text-btn" id="ranks-all" data-modes="single leader">Pilih semua</button></span>
-            <div class="chips" id="ranks" role="group" aria-label="Top gainers"></div>
+            <span class="label" id="ranks-title">Top gainers</span>
+            <!-- Sendiri dan Pemimpin: arah per Top. Pengikut: Top tugasnya (arah mengikuti pemimpin). -->
+            <div class="top-matrix" data-modes="single leader">
+              <button type="button" class="tm-side short" id="tops-short-all" title="Pilih atau kosongkan semua Top untuk short">Short</button>
+              <div class="chips tm-row short" id="tops-short" role="group" aria-label="Top untuk short"></div>
+              <button type="button" class="tm-side long" id="tops-long-all" title="Pilih atau kosongkan semua Top untuk long">Long</button>
+              <div class="chips tm-row long" id="tops-long" role="group" aria-label="Top untuk long"></div>
+            </div>
+            <div class="chips" id="ranks" data-modes="follower" role="group" aria-label="Top gainers"></div>
             <small id="ranks-note"></small>
+          </div>
+          <div class="field exit-field" data-modes="single leader">
+            <span class="label">Jual saat rugi</span>
+            <div class="exit-options">
+              <div class="exit-option" data-switch="cutloss">
+                <span class="exit-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12h6"/></svg></span>
+                <div class="exit-copy"><strong>Cutloss 10%</strong><small>Jual bila harga melawan posisi 10%.</small></div>
+                <button type="button" class="switch exit-switch" id="cutloss" role="switch" aria-checked="false" aria-label="Cutloss 10%"><i></i></button>
+              </div>
+              <div class="exit-option" data-switch="time-limit">
+                <span class="exit-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+                <div class="exit-copy"><strong>Batas waktu 3 jam</strong><small>Dari jam 2,5 jual begitu untung; di jam ke-3 jual apa pun.</small></div>
+                <button type="button" class="switch exit-switch" id="time-limit" role="switch" aria-checked="false" aria-label="Batas waktu 3 jam"><i></i></button>
+              </div>
+            </div>
+            <small class="exit-warn" id="exit-note" hidden></small>
           </div>
           <div class="go-wrap">
             <div class="real-card" id="real-card" data-modes="single leader">
@@ -145,15 +167,15 @@
           <div class="meter"><i id="seen-bar"></i></div>
         </div>
         <div class="card kpi">
-          <span class="kpi-label">Layak short</span>
+          <span class="kpi-label">Layak masuk</span>
           <strong class="green" id="count-ok">0</strong>
-          <small>garis kuning sering turun</small>
+          <small>short atau long</small>
           <div class="meter green"><i id="ok-bar"></i></div>
         </div>
         <div class="card kpi">
           <span class="kpi-label">Posisi uji dibuka</span>
           <strong id="count-open">0</strong>
-          <small>dari koin yang layak short</small>
+          <small>dari koin yang layak masuk</small>
           <div class="meter accent"><i id="open-bar"></i></div>
         </div>
       </section>
@@ -393,8 +415,8 @@
       <div><span>Leverage</span><strong>2x</strong></div>
     </div>
     <div class="risk-grid">
-      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/><path d="M13 5l7 7-7 7"/></svg><div><b>Order sungguhan</b><span>Bot menekan Jual/Short untuk masuk dan Market untuk menjual.</span></div></div>
-      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M5 10l7-7 7 7"/></svg><div><b>Tanpa stop-loss</b><span>Bila harga terus naik, rugi bertambah sampai likuidasi.</span></div></div>
+      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/><path d="M13 5l7 7-7 7"/></svg><div><b>Order sungguhan</b><span>Bot menekan Jual/Short atau Beli/Long untuk masuk dan Market untuk menjual.</span></div></div>
+      <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M5 10l7-7 7 7"/></svg><div><b id="real-risk-title">Tanpa stop-loss</b><span id="real-risk-text">Bila harga terus melawan posisi, rugi bertambah sampai likuidasi.</span></div></div>
       <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16"/></svg><div><b>Margin Cross</b><span>Mode Binance (biasanya Cross): seluruh saldo futures jadi jaminan.</span></div></div>
       <div class="risk"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg><div><b>Laptop dipakai bot</b><span>Biarkan menyala, jangan pakai mouse selama bot bekerja.</span></div></div>
     </div>
@@ -428,6 +450,7 @@
   </div>
 </div>
 <script src="reasons.js"></script>
+<script src="tops.js"></script>
 <script src="worldclock.js"></script>
 <script src="history.js"></script>
 <script src="app.js"></script>

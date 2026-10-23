@@ -250,3 +250,30 @@ test('Real Fund Trading: pemimpin mengumumkan putaran uang sungguhan (bertanda t
   const txt = { id: LEADER, name: 'Palsu', role: 'leader', cycle: String(NOW), rf: '1' };
   assert.equal(teamFieldsFrom({ ...txt, sig: sign('token-lain', txt) }, TOKEN).real, false);
 });
+
+test('pengikut memakai arah per Top, cutloss, dan batas waktu pemimpin', () => {
+  const leader = new Team({ myId: LEADER, token: TOKEN, now: () => NOW });
+  leader.startCycle('binance', false, { shortTops: [2, 3, 4], longTops: [1, 5], cutloss: true, timeLimit: false });
+  assert.equal(leader.fields('leader').st, '234:15:1:0');
+  // Tanpa pembagian Top: short di semua Top (aturan lama).
+  leader.startCycle('binance', false, { cutloss: false, timeLimit: true });
+  assert.equal(leader.fields('leader').st, '12345::0:1');
+
+  const { team, events } = follower();
+  team.accept({ leaderId: LEADER, leaderName: 'MacBook Pemimpin', rank: 2, modal: '100' });
+  team.evaluate([leaderPeer({ inv: '11111111:2', cycle: String(NOW - 1000), st: '245:123:1:0' })]);
+  const [, start] = events.at(-1);
+  assert.deepEqual(
+    [start.shortTops, start.longTops, start.cutloss, start.timeLimit],
+    [[2, 4, 5], [1, 2, 3], true, false],
+  );
+  // Isi rusak atau kosong diabaikan: pengikut kembali ke aturan lama (short, tanpa cutloss).
+  for (const st of ['naik:9:9', '::1:1', '234:16:1:0', 'keduanya:1:0']) {
+    assert.equal(teamFieldsFrom({ ...leaderPeerTxt(), st }, TOKEN).strategy, null);
+  }
+});
+
+function leaderPeerTxt() {
+  const txt = { id: LEADER, name: 'MacBook Pemimpin', role: 'leader', state: 'idle', os: 'darwin' };
+  return { ...txt, sig: sign(TOKEN, txt) };
+}

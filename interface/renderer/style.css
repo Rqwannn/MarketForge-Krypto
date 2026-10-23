@@ -167,8 +167,24 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 /* ------------------------------------------------------------------ pengaturan */
 .setup.locked .setup-grid .field { opacity: 0.45; pointer-events: none; }
 .setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 22px; align-items: start; }
-.ranks-field { grid-row: 2; grid-column: 1 / span 2; }
-.go-wrap { grid-row: 2; grid-column: 3; display: grid; gap: 8px; align-self: end; }
+/* Baris 1: peran, modal, ulangi. Baris 2: Top dan arah (2 kolom), jual saat rugi. Baris 3: Real
+   Fund Trading dan tombol Mulai selebar kartu, sebagai penutup. */
+.ranks-field { grid-column: span 2; }
+.go-wrap { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 340px); gap: 6px 18px; align-items: center; padding-top: 16px; border-top: 1px solid var(--line); }
+.go-wrap .real-card { grid-column: 1; grid-row: 1; }
+.go-wrap #toggle { grid-column: 2; grid-row: 1; }
+.go-wrap .error { grid-column: 1 / -1; }
+.go-wrap > small { grid-column: 2; }
+/* Top dan arah: dua baris chip (short, long) x Top 1..5 */
+.top-matrix { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px 10px; align-items: stretch; }
+.tm-side { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--muted); font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; }
+.tm-side:hover { color: var(--text); border-color: var(--line-2); }
+.tm-side.short { color: var(--red); }
+.tm-side.long { color: var(--green); }
+.tm-row.short button.on { border-color: var(--red); background: var(--red-soft); box-shadow: 0 0 0 1px var(--red) inset; }
+.tm-row.short button.on small { color: var(--red); }
+.tm-row.long button.on { border-color: var(--green); background: var(--green-soft); box-shadow: 0 0 0 1px var(--green) inset; }
+.tm-row.long button.on small { color: var(--green); }
 .go-wrap small { text-align: center; }
 .field { display: grid; gap: 8px; min-width: 0; }
 .label { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 600; color: var(--muted); }
@@ -504,7 +520,9 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
   .peer { grid-template-columns: 40px minmax(0, 1fr); }
   .peer-tags, .peer-actions { grid-column: 2; justify-content: flex-start; padding-left: 0; border-left: 0; }
   .setup-grid { grid-template-columns: 1fr; }
-  .ranks-field, .go-wrap { grid-row: auto; grid-column: auto; }
+  .ranks-field, .go-wrap { grid-column: auto; }
+  .go-wrap { grid-template-columns: 1fr; }
+  .go-wrap .real-card, .go-wrap #toggle, .go-wrap > small { grid-column: 1; grid-row: auto; }
   .checks { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
@@ -651,6 +669,21 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
 .paper.real { border-color: var(--red); }
 .paper.real p { color: var(--red); }
 .badge-real { margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: var(--red-soft); color: var(--red); font-size: 11px; }
+/* Arah posisi di tabel Posisi, dan pilihan jual saat rugi di Pengaturan putaran */
+.side-tag { margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; background: var(--card-2); color: var(--muted); }
+.side-tag.long { background: var(--green-soft); color: var(--green); }
+.exit-options { display: grid; gap: 8px; }
+.exit-option { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.exit-option:hover { border-color: var(--line-2); }
+.exit-option.on { border-color: rgba(47, 208, 160, 0.45); background: var(--green-soft); }
+.exit-icon { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--bg); color: var(--muted); transition: color 0.15s, background 0.15s; }
+.exit-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.exit-option.on .exit-icon { background: rgba(47, 208, 160, 0.16); color: var(--green); }
+.exit-copy { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.exit-copy strong { font-size: 13px; }
+.field .exit-copy small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.exit-switch[aria-checked="true"] { background: var(--green); }
+.field small.exit-warn { color: var(--red); }
 
 /* Filter waktu Hasil uji */
 .range-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 4px 0 2px; }

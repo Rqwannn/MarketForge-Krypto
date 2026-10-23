@@ -260,3 +260,38 @@ test('catat tutup manual: pair, harga wajib, hasil opsional dan boleh minus', ()
     assert.throws(() => manualCloseArgs(symbol, priceText), InputError, `${symbol} ${priceText}`);
   }
 });
+
+test('arah per Top, cutloss, dan batas waktu diteruskan ke engine; tanpa pilihan tetap short saja', () => {
+  const plain = buildArgs('single', { ranks: [1], modal: '100' });
+  assert.ok(!plain.some((a) => a.startsWith('--top') || a === '--cutloss' || a === '--batas-waktu'));
+  // Short Top 2-3-4, Long Top 1-5: Top yang dipantau = gabungannya.
+  const custom = buildArgs('single', {
+    ranks: [1], modal: '100', shortTops: [4, 2, 3], longTops: [5, 1], cutloss: true, timeLimit: true,
+  });
+  assert.equal(custom[custom.indexOf('--ranks') + 1], '1,2,3,4,5');
+  assert.deepEqual(custom.slice(-7), ['--top-short', '2,3,4', '--top-long', '1,5', '--cutloss', '10', '--batas-waktu']);
+  // Long saja: tanpa --top-short (engine: Top lain tidak short).
+  const longOnly = buildArgs('single', { modal: '100', shortTops: [], longTops: [1, 2, 3] });
+  assert.equal(longOnly[longOnly.indexOf('--ranks') + 1], '1,2,3');
+  assert.ok(!longOnly.includes('--top-short') && longOnly.includes('--top-long'));
+  // Pemimpin hanya meneruskan pembagian Top (AI membaca tanda long di Top long).
+  assert.deepEqual(
+    buildArgs('leader', { shortTops: [2, 4, 5], longTops: [1, 2, 3], cutloss: true }).slice(-4),
+    ['--top-short', '2,4,5', '--top-long', '1,2,3'],
+  );
+  assert.deepEqual(
+    buildArgs('follower', { rank: 1, modal: '100', shortTops: [2], longTops: [1], cutloss: true }).slice(-6),
+    ['--top-short', '2', '--top-long', '1', '--cutloss', '10'],
+  );
+  assert.throws(() => buildArgs('single', { modal: '100', shortTops: [], longTops: [] }), /minimal satu Top/);
+  assert.throws(() => buildArgs('single', { modal: '100', shortTops: [6], longTops: [] }), InputError);
+  assert.throws(() => buildArgs('single', { modal: '100', shortTops: 'semua', longTops: [] }), InputError);
+  assert.deepEqual(
+    buildArgs('single', { modal: '100', shortTops: [1], longTops: [1], exchange: 'tebbit' }).slice(-4),
+    ['--top-short', '1', '--top-long', '1'],
+  );
+  assert.deepEqual(
+    buildArgs('follower', { rank: 1, modal: '100', stopFile: '/tmp/berhenti' }).slice(-2),
+    ['--berkas-berhenti', '/tmp/berhenti'],
+  );
+});

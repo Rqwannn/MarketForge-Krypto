@@ -125,3 +125,28 @@ test('limits dari engine menimpa angka bawaan', () => {
   assert.equal(step(explain(wide), 'spread').state, 'fail');
   assert.equal(step(explain({ ...wide, limits: { max_spread_pct: 0.5 } }), 'spread').state, 'pass');
 });
+
+test('koin long: pola short tidak menghentikan, tanda long menjelaskan masuknya', () => {
+  const card = explain({
+    status: 'open', verdict: 'long', side: 'long', real: false, change_pct: 30,
+    ai: { below_count: 1, below_now: false, below_recent: false },
+    long_ai: { reversal: true, flat: false, far_above: false, summary: 'Dua dasar lalu naik.' },
+    long_data: { ma7_above_ma25_pct: 1.5, ma7_above_ma99_pct: 12, ma_spread_pct: 4 },
+    entry_price: 0.021, target_price: 0.02184, cutloss_price: 0.0189,
+  });
+  assert.equal(card.headline, 'Bot masuk long (uji kertas)');
+  assert.equal(step(card, 'pola').state, 'info');
+  assert.equal(step(card, 'long').state, 'pass');
+  assert.match(step(card, 'long').title, /tanda 1/);
+  assert.match(step(card, 'order').text, /cutloss di 0.0189/);
+});
+
+test('grafik layak short dan long sekaligus: tidak masuk karena tanda long', () => {
+  const card = explain({
+    status: 'skipped', verdict: 'konflik', reason: 'grafik memenuhi syarat SHORT dan menunjukkan tanda 3',
+    ai: { below_count: 3, below_now: true, below_recent: true },
+    long_ai: { reversal: false, flat: false, far_above: true, summary: '' },
+  });
+  assert.equal(step(card, 'pola').state, 'pass');
+  assert.equal(card.stoppedAt, 'long');
+});

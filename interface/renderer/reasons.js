@@ -10,7 +10,11 @@
   const PERIODS = { binance: { fast: 7, mid: 25 }, tebbit: { fast: 5, mid: 10 } };
   // Cermin SopParams bawaan; bila engine mengirim `limits` (batas yang sedang dipakai), itu menang.
   const DEFAULT_LIMITS = { min_crosses: 2, max_spread_pct: 0.3, min_gain_pct: 0 };
-  const VERDICT_LABEL = { ok: 'Layak short', tunggu: 'Tunggu', jangan: 'Jangan short' };
+  const VERDICT_LABEL = {
+    ok: 'Layak short', tunggu: 'Tunggu', jangan: 'Jangan short', long: 'Layak long', konflik: 'Short dan long',
+  };
+  const ENTER = ['ok', 'long'];
+  const SIGN_TEXT = { 1: 'turun tajam lalu berbalik', 2: 'posisi datar', 3: 'garis cepat jauh di atas' };
   const IDENTITY = (text) => String(text || '');
 
   const comma = (n, digits) => n.toFixed(digits).replace('.', ',');
@@ -40,7 +44,11 @@
   }
 
   function patternStep(e, ai, data, limits, names) {
-    const verdict = e.verdict;
+    // Grafik yang cocok untuk short dan long sekaligus: bacaan short-nya sendiri "layak short".
+    const verdict = e.verdict === 'konflik' ? 'ok' : e.verdict;
+    if (verdict === 'long') {
+      return { id: 'pola', state: 'info', title: `Pola garis ${names.fast} / ${names.mid}: bukan short`, text: 'Koin ini dinilai dengan tanda long.' };
+    }
     if (!ai && !data) {
       return { id: 'pola', state: 'skip', title: `Pola garis ${names.fast} / ${names.mid}`, text: 'Belum ada bacaan grafik untuk koin ini.' };
     }
@@ -75,6 +83,27 @@
     };
   }
 
+  /** Tanda masuk long (SOP 23 Okt), bila arah long dipilih saat koin dinilai. */
+  function longStep(e) {
+    const signs = ['reversal', 'flat', 'far_above'].map((key, i) => (e.long_ai[key] ? i + 1 : 0)).filter(Boolean);
+    const found = signs.map((n) => `tanda ${n} (${SIGN_TEXT[n]})`).join(', ');
+    const details = [];
+    const d = e.long_data || {};
+    if (known(d.ma7_above_ma25_pct)) details.push(`MA7 ${comma(Number(d.ma7_above_ma25_pct), 2)}% terhadap MA25, ${comma(Number(d.ma7_above_ma99_pct), 2)}% terhadap MA99.`);
+    if (known(d.ma_spread_pct)) details.push(`Sebaran tiga garis ${comma(Number(d.ma_spread_pct), 2)}% dari harga.`);
+    if (e.long_ai.summary) details.push(e.long_ai.summary);
+    if (e.verdict === 'konflik') {
+      return { id: 'long', state: 'fail', title: `Tanda long: ${found}`, text: 'Grafik juga layak short. Koin yang cocok untuk keduanya tidak dimasuki.', details };
+    }
+    return {
+      id: 'long',
+      state: signs.length ? 'pass' : 'hold',
+      title: `Tanda long: ${found || 'tidak ada'}`,
+      text: signs.length ? 'Satu tanda cukup untuk masuk long.' : 'Belum ada tanda masuk long.',
+      details,
+    };
+  }
+
   /**
    * @param e kejadian koin dari engine atau satu baris riwayat (field sama).
    * @param opts { platform: 'binance'|'tebbit', plain: fn(teks alasan engine) -> kalimat sederhana,
@@ -103,7 +132,8 @@
     // 2. Pola garis
     const pattern = patternStep(e, ai, data, limits, names);
     steps.push(pattern);
-    const patternOk = e.verdict === 'ok';
+    if (e.long_ai) steps.push(longStep(e));
+    const patternOk = ENTER.includes(e.verdict);
 
     // 3. Spread (angka dari bursa, dibaca saat koin dinilai)
     if (leaderOnly) {
@@ -129,7 +159,7 @@
     }
 
     // 5. Posisi lain dan slot, 6. ukuran dan order: hanya dicapai bila langkah di atasnya lolos.
-    const stopped = steps.some((s) => s.state === 'fail' || s.state === 'hold');
+    const stopped = steps.some((s) => (s.state === 'fail' || s.state === 'hold') && !(patternOk && s.id === 'pola'));
     if (leaderOnly) {
       steps.push({ id: 'slot', state: 'skip', title: 'Posisi lain dan ukuran order', text: 'Ditentukan oleh tiap pengikut.' });
     } else if (stopped) {
@@ -141,14 +171,16 @@
       if (known(e.leverage)) parts.push(`leverage ${e.leverage}x`);
       if (known(e.notional)) parts.push(`nilai posisi ${comma(Number(e.notional), 2)} USDT`);
       steps.push({ id: 'order', state: 'pass', title: 'Order',
-        text: `${parts.length ? `${parts.join(', ')}. ` : ''}${known(e.entry_price) ? `Masuk di ${e.entry_price}` : ''}${known(e.target_price) ? `, jual otomatis di ${e.target_price}` : ''}${known(e.entry_price) ? ' (tanpa stop-loss).' : ''}`.trim() });
+        text: `${parts.length ? `${parts.join(', ')}. ` : ''}${known(e.entry_price) ? `Masuk di ${e.entry_price}` : ''}${known(e.target_price) ? `, jual otomatis di ${e.target_price}` : ''}${known(e.entry_price) ? (known(e.cutloss_price) ? `, cutloss di ${e.cutloss_price}.` : ' (tanpa stop-loss).') : ''}`.trim() });
     } else if (e.status === 'skipped' && reason) {
       const slot = /sudah ada posisi uji|sedang rugi|posisi terbuka \(maksimal/.test(reason);
       steps.push({ id: slot ? 'slot' : 'order', state: 'fail', title: slot ? 'Posisi lain dan slot' : 'Mengisi order di aplikasi', text: plain(reason) });
     }
 
     // Kesimpulan
-    const firstStop = steps.find((s) => s.state === 'fail' || s.state === 'hold');
+    // Bila long masuk, pola short yang "tunggu" tidak menghentikan koin ini.
+    const firstStop = steps.find((s) => (s.state === 'fail' || s.state === 'hold') && !(patternOk && s.id === 'pola'));
+    const side = e.side === 'long' || e.verdict === 'long' ? 'long' : 'short';
     let tone = 'neutral';
     let headline;
     let because;
@@ -156,17 +188,17 @@
       headline = 'Gambar contoh';
       because = plain(reason);
     } else if (leaderOnly) {
-      tone = e.verdict === 'ok' ? 'good' : 'neutral';
-      headline = e.verdict === 'ok' ? 'Dibagikan ke pengikut: layak short' : `Dibagikan ke pengikut: ${(VERDICT_LABEL[e.verdict] || 'dibaca').toLowerCase()}`;
-      because = e.verdict === 'ok' ? 'Pengikut mengecek biaya dan slot, lalu membuka posisi uji.' : 'Pengikut tidak membuka posisi untuk koin ini.';
+      tone = patternOk ? 'good' : 'neutral';
+      headline = `Dibagikan ke pengikut: ${(VERDICT_LABEL[e.verdict] || 'dibaca').toLowerCase()}`;
+      because = patternOk ? 'Pengikut mengecek biaya dan slot, lalu membuka posisi uji.' : 'Pengikut tidak membuka posisi untuk koin ini.';
     } else if (e.status === 'open') {
       tone = 'good';
-      headline = e.real ? 'Bot masuk short (uang sungguhan)' : 'Bot masuk short (uji kertas)';
+      headline = `Bot masuk ${side} (${e.real ? 'uang sungguhan' : 'uji kertas'})`;
       because = 'Semua saringan lolos.';
     } else if (opened) {
       tone = 'neutral';
       const label = opts.statusLabel ? opts.statusLabel(e.status) : e.status;
-      headline = `Bot sempat masuk short; posisi ${String(label).toLowerCase()}`;
+      headline = `Bot sempat masuk ${side}; posisi ${String(label).toLowerCase()}`;
       because = 'Semua saringan lolos saat koin ini dinilai.';
     } else {
       tone = firstStop?.state === 'hold' ? 'warn' : 'bad';

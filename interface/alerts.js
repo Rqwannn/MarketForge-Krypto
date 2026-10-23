@@ -76,7 +76,7 @@ function healthWarnings(h) {
 /**
  * Notifikasi rugi posisi sungguhan yang melewati batas `limitPct` (persen nilai posisi).
  * `alerted` (Set simbol) mencegah notifikasi berulang; dipasang lagi bila rugi membaik jauh.
- * Hanya pemberitahuan: bot tetap menahan posisi sampai target.
+ * Hanya pemberitahuan: bot tetap menahan posisi sampai target (atau cutloss/batas waktu bila menyala).
  */
 function lossAlerts(positions, limitPct, alerted) {
   const notices = [];
@@ -90,7 +90,7 @@ function lossAlerts(positions, limitPct, alerted) {
       notices.push({
         key: `loss:${p.symbol}`,
         title: `${p.symbol} rugi ${Math.abs(p.pnl_pct).toFixed(1).replace('.', ',')}%`,
-        body: `Melewati batas ${limitPct}% yang kamu pilih. Bot tetap menahan sampai harga turun ke target.`,
+        body: `Melewati batas ${limitPct}% yang kamu pilih. ${holdText(p)}`,
       });
     } else if (p.pnl_pct > -limitPct * 0.8) {
       alerted.delete(p.symbol);
@@ -98,6 +98,13 @@ function lossAlerts(positions, limitPct, alerted) {
   }
   for (const symbol of [...alerted]) if (!open.has(symbol)) alerted.delete(symbol);
   return notices;
+}
+
+/** Apa yang dilakukan bot selanjutnya dengan posisi yang sedang rugi. */
+function holdText(p) {
+  if (p.cutloss_price) return 'Bot menjual otomatis bila rugi mencapai cutloss 10%.';
+  if (p.time_exit_at) return 'Bot menjual otomatis paling lama 3 jam setelah masuk.';
+  return `Bot tetap menahan sampai harga ${p.side === 'long' ? 'naik' : 'turun'} ke target.`;
 }
 
 /** Baris log engine -> notifikasi (terjual, gagal jual, posisi hilang dari bursa), atau null. */
@@ -114,9 +121,10 @@ function logNotice(entry) {
   let m = message.match(/Posisi ditutup di bursa\. Jual otomatis (\S+) .*?\(([+-][\d.]+) USDT/);
   if (m) {
     const usdt = Number(m[2]);
+    const why = { stop: ' karena cutloss', timeout: ' karena batas waktu' }[message.match(/\((\w+)\) di /)?.[1]] || '';
     return {
       key: `sold:${m[1]}:${entry.ts || ''}`,
-      title: `${m[1]} terjual otomatis`,
+      title: `${m[1]} terjual otomatis${why}`,
       body: `Hasil ${usdt >= 0 ? '+' : ''}${usdt.toFixed(2).replace('.', ',')} USDT. Cek Riwayat Posisi di Binance.`,
     };
   }

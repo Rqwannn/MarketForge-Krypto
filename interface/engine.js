@@ -141,6 +141,45 @@ function modalOf(value) {
   return String(number(value, 'Modal', 1, 1e9));
 }
 
+const CUTLOSS_PCT = 10; // jual otomatis saat harga melawan posisi 10%
+
+/** Daftar Top untuk satu arah (boleh kosong): angka 1..5, tanpa duplikat, terurut. */
+function topsOf(value, label) {
+  if (!Array.isArray(value)) throw new InputError(`Top ${label} tidak valid`);
+  return [...new Set(value.map((r) => number(r, `Top ${label}`, 1, MAX_RANK, true)))].sort((a, b) => a - b);
+}
+
+/**
+ * Arah per Top: { short: [2, 3, 4], long: [1, 5] }, atau null bila tidak dipilih (engine: short di
+ * semua Top yang dipantau, aturan lama). Minimal satu Top untuk salah satu arah.
+ */
+function topsByDirection(p) {
+  if (p.shortTops === undefined && p.longTops === undefined) return null;
+  const tops = { short: topsOf(p.shortTops ?? [], 'short'), long: topsOf(p.longTops ?? [], 'long') };
+  if (!tops.short.length && !tops.long.length) throw new InputError('Pilih minimal satu Top untuk short atau long');
+  return tops;
+}
+
+/** Argumen engine untuk arah per Top. Bila salah satu diisi, yang lain tegas (kosong = tidak ada). */
+function topArgs(tops) {
+  if (!tops) return [];
+  return [
+    ...(tops.short.length ? ['--top-short', tops.short.join(',')] : []),
+    ...(tops.long.length ? ['--top-long', tops.long.join(',')] : []),
+  ];
+}
+
+/**
+ * Arah per Top, cutloss 10%, dan batas waktu 2,5-3 jam. Tanpa isian = perilaku lama (short saja,
+ * tanpa cutloss, tanpa batas waktu).
+ */
+function strategyArgs(p, tops) {
+  const args = topArgs(tops);
+  if (p.cutloss === true) args.push('--cutloss', String(CUTLOSS_PCT));
+  if (p.timeLimit === true) args.push('--batas-waktu');
+  return args;
+}
+
 /**
  * Argumen CLI untuk satu mode. Parameter SOP memakai default V2 di engine.
  * Melempar InputError bila isian tidak valid.
@@ -158,14 +197,25 @@ function buildArgs(mode, params = {}) {
     throw new InputError('Real Fund Trading baru tersedia untuk Binance. Tebbit menyusul.');
   }
   if (real) bursa.push('--uang-sungguhan');
+  const tops = topsByDirection(p);
+  const strategy = strategyArgs(p, tops);
   if (mode === 'follower') {
     // Tanpa hub: engine memakai BOT_HUB_URL dari .env. Dengan hub: dari laptop pemimpin (team.js).
     const hub = p.hub ? ['--hub', hubOf(p.hub)] : [];
-    return [...bursa, '--events', 'follower', ...followerTops(p.rank), ...hub, '--modal', modalOf(p.modal)];
+    // Berkas yang dibuat aplikasi untuk menghentikan pengawasan posisi pengikut dengan aman.
+    const stop = p.stopFile ? ['--berkas-berhenti', String(p.stopFile)] : [];
+    return [
+      ...bursa, '--events', 'follower', ...followerTops(p.rank), ...hub, '--modal', modalOf(p.modal), ...strategy,
+      ...stop,
+    ];
   }
   const interval = String(number(p.interval ?? 0, 'Frekuensi', 0, MAX_INTERVAL_MIN));
-  const args = [...bursa, '--events', mode, '--ranks', ranksOf(p.ranks).join(','), '--interval', interval];
-  return mode === 'single' ? [...args, '--modal', modalOf(p.modal)] : args;
+  // Dengan arah per Top, Top yang dipantau = gabungan Top short dan Top long.
+  const ranks = tops ? [...new Set([...tops.short, ...tops.long])].sort((a, b) => a - b) : ranksOf(p.ranks);
+  const args = [...bursa, '--events', mode, '--ranks', ranks.join(','), '--interval', interval];
+  if (mode === 'single') return [...args, '--modal', modalOf(p.modal), ...strategy];
+  // Pemimpin tidak membuka posisi: cukup pembagian Top-nya (AI membaca tanda LONG di Top long).
+  return [...args, ...topArgs(tops)];
 }
 
 /** Satu baris keluaran engine -> objek log. Baris bukan JSON tetap diteruskan apa adanya. */

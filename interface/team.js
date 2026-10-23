@@ -79,10 +79,32 @@ function decodeInvites(text) {
   return invites;
 }
 
+// Arah per Top dan aturan keluar pemimpin untuk satu putaran, di TXT sebagai
+// "<Top short>:<Top long>:<cutloss>:<waktu>" (mis. "234:15:1:0" = short Top 2-4, long Top 1 dan 5).
+// Pengikut memakai aturan yang sama dengan pemimpinnya.
+const STRATEGY = /^([1-5]{0,5}):([1-5]{0,5}):([01]):([01])$/;
+const digits = (text) => [...new Set(text.split('').map(Number))].sort((a, b) => a - b);
+
+function encodeStrategy({ shortTops, longTops = [], cutloss = false, timeLimit = false } = {}) {
+  const short = shortTops ?? [1, 2, 3, 4, 5]; // tanpa pembagian: short di semua Top (aturan lama)
+  return `${short.join('')}:${longTops.join('')}:${cutloss ? 1 : 0}:${timeLimit ? 1 : 0}`;
+}
+
+function decodeStrategy(text) {
+  const match = STRATEGY.exec(text || '');
+  if (!match || (!match[1] && !match[2])) return null;
+  return {
+    shortTops: digits(match[1]), longTops: digits(match[2]), cutloss: match[3] === '1', timeLimit: match[4] === '1',
+  };
+}
+
 /** Field kelompok dari TXT laptop lain; hanya bila tanda tangannya cocok dengan token kita. */
 function teamFieldsFrom(txt, token) {
   if (!isSigned(token, txt)) {
-    return { verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, exchange: '', real: false, close: null };
+    return {
+      verified: false, invites: new Map(), leader: '', rank: null, cycle: 0, exchange: '', real: false,
+      strategy: null, close: null,
+    };
   }
   const rank = normalizeRank(txt.rank);
   const close = CLOSE.exec(txt.cls || '');
@@ -94,6 +116,7 @@ function teamFieldsFrom(txt, token) {
     cycle: Number.isFinite(Number(txt.cycle)) ? Number(txt.cycle) : 0,
     exchange: EXCHANGES.includes(txt.ex) ? txt.ex : '',
     real: txt.rf === '1', // Real Fund Trading: pengikut wajib menyetujui di laptopnya sendiri
+    strategy: decodeStrategy(txt.st),
     close: close ? { seq: Number(close[1]), target: close[2], symbol: close[3] } : null,
   };
 }
@@ -109,6 +132,7 @@ class Team extends EventEmitter {
     this.cycle = 0; // pemimpin: waktu mulai putaran terakhir
     this.exchange = ''; // pemimpin: platform putaran itu (pengikut memakai platform yang sama)
     this.real = false; // pemimpin: putaran itu memakai uang sungguhan
+    this.strategy = null; // pemimpin: arah, cutloss, dan batas waktu putaran itu
     this.closeCommand = null; // pemimpin: perintah Sell terakhir { seq, target, symbol }
     this.membership = null; // pengikut: { leaderId, leaderName, rank, modal }
     this.answered = new Set(); // ajakan yang sudah dijawab atau sedang ditampilkan
@@ -131,6 +155,7 @@ class Team extends EventEmitter {
       fields.cycle = String(this.cycle);
       if (this.exchange) fields.ex = this.exchange;
       if (this.real) fields.rf = '1';
+      if (this.strategy) fields.st = encodeStrategy(this.strategy);
     }
     const c = this.closeCommand;
     if (c) fields.cls = `${c.seq}:${c.target}:${c.symbol}`;
@@ -159,10 +184,11 @@ class Team extends EventEmitter {
     this.closeCommand = { seq: this.now(), target: target === '*' ? '*' : shortId(target), symbol };
   }
 
-  startCycle(exchange = '', real = false) {
+  startCycle(exchange = '', real = false, strategy = null) {
     this.cycle = this.now();
     this.exchange = EXCHANGES.includes(exchange) ? exchange : '';
     this.real = real === true;
+    this.strategy = strategy ? decodeStrategy(encodeStrategy(strategy)) : null;
   }
 
   accept({ leaderId, leaderName, rank, modal }) {
@@ -226,6 +252,7 @@ class Team extends EventEmitter {
             hub: `http://${peer.address}:${HUB_PORT}`,
             ...(peer.team.exchange ? { exchange: peer.team.exchange } : {}),
             ...(peer.team.real ? { real: true } : {}),
+            ...(peer.team.strategy ?? {}),
           });
         }
         const close = peer.team.close;
