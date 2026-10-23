@@ -15,7 +15,8 @@ mengubah apa pun yang menyentuh keputusan masuk atau keluar posisi.
 
 - **Algoritma AI tidak diubah**: `engine/src/binance_bot/analysis/`, `binance_desktop/pattern_rules.py`,
   ambang pola (minimal 2 kali di bawah MA25, aturan garis berdekatan). Rumus SOP juga tetap:
-  margin 50% modal, leverage 2x, jual di −3%, tanpa stop-loss, tanpa batas waktu.
+  margin 50% modal, leverage 2x, jual short di −3% dan long di +4%. Cutloss 10% dan batas waktu
+  hanya aktif bila dipilih pengguna (lihat Tambahan 23 Okt).
 - **Uji kertas dulu**: tanpa `--uang-sungguhan`, dan jangan pernah menekan tombol Short saat uji.
   Pakai jurnal, foto, dan log sementara lewat `BOT_JOURNAL_PATH`, `BOT_SCREENSHOT_DIR`,
   `BOT_LOG_DIR`, supaya jurnal asli tidak tersentuh. Pakai `--no-fill` bila tidak perlu mengisi
@@ -76,6 +77,40 @@ mengubah apa pun yang menyentuh keputusan masuk atau keluar posisi.
    - tidak ada baris jurnal yang hilang.
 6. **Penahan layar.** Pastikan layar Windows tidak mati atau terkunci selama jeda putaran 30 menit
    saat bot berjalan dari aplikasi.
+
+## Tambahan 23 Okt: LONG, cutloss 10%, batas waktu 2,5–3 jam (SOP V4)
+
+Algoritma short **tidak berubah**: prompt dan aturan short di `pattern_rules.py` tetap sama, dan tanpa
+opsi baru bot berperilaku persis seperti dulu. Yang baru:
+
+- **Arah per Top** `--top-short 2,3,4 --top-long 1,5` (aplikasi: Pengaturan putaran → tabel Top
+  gainers dan arahnya). Top yang dipantau = gabungan keduanya; tiap Top hanya membuka arahnya
+  sendiri. Tanpa kedua opsi: short di semua Top (aturan lama). LONG memakai prompt AI terpisah
+  (`LONG_PROMPT`, tiga tanda: berbalik dari dasar, datar dengan tiga garis menyatu, garis cepat
+  jauh di atas), dibaca hanya untuk Top yang boleh long, dan satu tanda cukup. Grafik yang layak
+  short sekaligus menunjukkan tanda long **tidak dimasuki**. Target long minimal 4% (harga naik),
+  masuk di ask. Momentum (cek ulang setelah terjual di target) masuk ulang searah posisi yang
+  terjual. Tebbit memakai padanan garis MA 5/10/30.
+- **Cutloss** `--cutloss 10` dan **batas waktu** `--batas-waktu`: sesudah 2,5 jam jual bila untung
+  bersih, di jam ke-3 jual apa pun kondisinya. Keduanya dijalankan bot (cek tiap 60 detik, lalu
+  Market), bukan order di bursa, jadi hanya bekerja selama bot atau `posisi --pantau` berjalan.
+  Status jurnal: `stop` (cutloss) dan `timeout` (batas waktu).
+- Jurnal: field baru `side`, `cutloss_price`, `green_exit_at`, `time_exit_at`, `long_ai`,
+  `long_data`, `long_signs`. Baris lama tanpa `side` dibaca sebagai short.
+- Pemimpin mengumumkan pembagian Top dan aturan keluar lewat field TXT `st`
+  (`<Top short>:<Top long>:<cutloss>:<waktu>`, mis. `234:15:1:1`), dan pengikut memakainya.
+- Pengikut tetap mengawasi posisinya sesudah putaran (uang sungguhan; uji kertas Tebbit) sampai
+  terjual, sampai putaran pemimpin berikutnya, atau sampai aplikasi membuat `--berkas-berhenti`
+  (Sell dari pemimpin). Uji ini juga di Windows: berkas dibuat di folder sementara.
+
+Tugas Windows:
+
+1. **Tombol Beli/Long**: uji kertas dengan `--top-long 1,2,3,4,5` pada koin yang menunjukkan tanda long; log
+   harus berisi "Tombol Beli/Long ditemukan di (…); TIDAK ditekan". Cadangan teks memakai
+   `_LONG_BUTTON = (Beli|Buy)/Long`.
+2. **Toast order Beli**: teks toast sesudah order Long belum pernah terlihat langsung. Pola sekarang
+   `Order Beli … Terisi | Buy … Order … Filled` (`_ORDER_FILLED["LONG"]`). Cocokkan dengan foto layar
+   asli sebelum LONG dipakai dengan uang sungguhan.
 
 ## Resep uji kertas fitur momentum (dipakai di Mac)
 
