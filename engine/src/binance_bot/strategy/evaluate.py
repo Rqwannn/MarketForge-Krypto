@@ -5,33 +5,78 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from binance_bot.market import Candle, MarketData
+from binance_bot.market import Candle, MarketData, Quote
 from binance_bot.strategy.journal import JournalEntry
 from binance_bot.strategy.params import PASS_MARGIN, REQUIRED_TEST_TRADES, SopParams
 
 _MINUTE_MS = 60_000
 
 
-def liquidation_price(entry: JournalEntry) -> float:
-    """Harga likuidasi short (Isolated): margin habis saat harga naik 100%/leverage (2x: +50%).
+def is_long(entry: JournalEntry) -> bool:
+    return entry.side == "long"
 
-    Tanpa stop-loss (V3), inilah batas rugi terakhir yang dipakai uji kertas.
+
+def entry_price_of(side: str, quote: Quote) -> float:
+    """Harga masuk: short menjual ke bid, long membeli di ask."""
+    return quote.ask if side == "long" else quote.bid
+
+
+def exit_price(entry: JournalEntry, quote: Quote) -> float:
+    """Harga tutup posisi: short membeli kembali di ask, long menjual di bid."""
+    return quote.bid if is_long(entry) else quote.ask
+
+
+def gain_pct(entry: JournalEntry, price: float) -> float:
+    """Gerak harga yang menguntungkan posisi, dalam persen harga masuk (negatif = melawan)."""
+    assert entry.entry_price
+    move = (price - entry.entry_price) / entry.entry_price
+    return 100 * (move if is_long(entry) else -move)
+
+
+def liquidation_price(entry: JournalEntry) -> float:
+    """Harga likuidasi (Isolated): margin habis saat harga melawan 100%/leverage (2x: 50%).
+
+    Tanpa cutloss, inilah batas rugi terakhir yang dipakai uji kertas.
     """
     assert entry.entry_price
-    return entry.entry_price * (1 + 1 / (entry.leverage or 1))
+    against = 1 / (entry.leverage or 1)
+    return entry.entry_price * (1 - against if is_long(entry) else 1 + against)
 
 
-def evaluate_short(
+def _beyond(entry: JournalEntry, price: float, level: float) -> bool:
+    """Harga sudah melewati `level` ke arah yang melawan posisi."""
+    return price <= level if is_long(entry) else price >= level
+
+
+def _reached(entry: JournalEntry, price: float, level: float) -> bool:
+    """Harga sudah mencapai `level` ke arah yang menguntungkan posisi (target)."""
+    return price >= level if is_long(entry) else price <= level
+
+
+def _time_exit(entry: JournalEntry, price: float, now_s: float, fee_pct: float) -> bool:
+    """Batas waktu V4: sesudah `green_exit_at` jual bila untung bersih (setelah fee), di
+    `time_exit_at` jual apa pun kondisinya."""
+    if entry.time_exit_at is not None and now_s >= entry.time_exit_at:
+        return True
+    return (
+        entry.green_exit_at is not None
+        and now_s >= entry.green_exit_at
+        and gain_pct(entry, price) - fee_pct > 0
+    )
+
+
+def evaluate_candles(
     entry: JournalEntry,
     candles: Sequence[Candle],
     funding: Sequence[tuple[int, float]],
     fee_pct: float,
 ) -> JournalEntry:
-    """Jual otomatis uji kertas (Aturan SELL V3) dari candle 1 menit setelah waktu masuk.
+    """Jual otomatis uji kertas dari candle 1 menit setelah waktu masuk.
 
-    Begitu harga turun ke target, seluruh posisi ditutup di harga target. Tidak ada stop-loss dan
-    tidak ada batas waktu: posisi baru berakhir rugi bila harga mencapai likuidasi. Bila target
-    dan likuidasi tersentuh di candle yang sama, dianggap likuidasi (asumsi terburuk). Harga
+    Begitu harga mencapai target, seluruh posisi ditutup di harga target. Bila cutloss menyala
+    (`cutloss_price`), posisi ditutup di harga cutloss begitu harga melewatinya; tanpa cutloss
+    posisi baru berakhir rugi di likuidasi. Bila batas rugi dan target tersentuh di candle yang
+    sama, dianggap rugi (asumsi terburuk). Batas waktu dinilai di harga tutup candle. Harga
     tertinggi dan terendah setelah masuk dicatat sampai posisi selesai.
     """
     if entry.status != "open":
@@ -44,64 +89,70 @@ def evaluate_short(
         max_price = max(max_price, candle.high)
         min_price = min(min_price, candle.low)
         closed_at = candle.close_time / 1000
-        if candle.high >= liquidation:
-            return _close(
-                entry, "likuidasi", liquidation, closed_at, max_price, min_price, funding, fee_pct
-            )
-        if candle.low <= entry.target_price:
-            return _close(
-                entry,
-                "target",
-                entry.target_price,
-                closed_at,
-                max_price,
-                min_price,
-                funding,
-                fee_pct,
-            )
+        worst, best = (candle.low, candle.high) if is_long(entry) else (candle.high, candle.low)
+        exit_ = None
+        if entry.cutloss_price is not None and _beyond(entry, worst, entry.cutloss_price):
+            exit_ = ("stop", entry.cutloss_price)
+        elif _beyond(entry, worst, liquidation):
+            exit_ = ("likuidasi", liquidation)
+        elif _reached(entry, best, entry.target_price):
+            exit_ = ("target", entry.target_price)
+        elif _time_exit(entry, candle.close, closed_at, fee_pct):
+            exit_ = ("timeout", candle.close)
+        if exit_:
+            status, price = exit_
+            return _close(entry, status, price, closed_at, max_price, min_price, funding, fee_pct)
     checked = candles[-1].close_time if candles else entry.checked_ms
     return replace(entry, max_price=max_price, min_price=min_price, checked_ms=checked)
 
 
 def evaluate_by_price(
-    entry: JournalEntry, ask: float, now_s: float, fee_pct: float
+    entry: JournalEntry, price: float, now_s: float, fee_pct: float
 ) -> JournalEntry:
-    """Jual otomatis untuk bursa tanpa candle (Tebbit): harga terkini dibaca dari layar.
+    """Jual otomatis dari harga terkini (posisi sungguhan, dan bursa tanpa candle seperti Tebbit).
 
-    Short ditutup dengan membeli kembali di harga ask. Target tercapai bila ask sudah di target
-    atau lebih rendah; di antara dua pengecekan pergerakan harga tidak terlihat.
+    `price` = harga tutup posisi (`exit_price`: ask untuk short, bid untuk long). Di antara dua
+    pengecekan pergerakan harga tidak terlihat.
 
-    Posisi sungguhan (`real`) hanya dijual di target. Batas likuidasi kertas (1/leverage) tidak
-    berlaku: likuidasi sungguhan diatur bursa (Cross jauh lebih jauh), dan menutup posisi di batas
-    kertas akan menjadi stop-loss tersembunyi.
+    Posisi sungguhan (`real`) dijual di target, dan di cutloss serta batas waktu bila pengguna
+    menyalakannya. Batas likuidasi kertas (1/leverage) tidak berlaku untuk posisi sungguhan:
+    likuidasi sungguhan diatur bursa, dan menutup posisi di batas kertas akan menjadi stop-loss
+    tersembunyi yang tidak dipilih pengguna.
     """
     if entry.status != "open":
         return entry
     assert entry.entry_price and entry.target_price
-    max_price = max(entry.max_price or entry.entry_price, ask)
-    min_price = min(entry.min_price or entry.entry_price, ask)
-    if not entry.real and ask >= liquidation_price(entry):
-        return _close(entry, "likuidasi", ask, now_s, max_price, min_price, (), fee_pct)
-    if ask <= entry.target_price:
-        return _close(entry, "target", ask, now_s, max_price, min_price, (), fee_pct)
+    max_price = max(entry.max_price or entry.entry_price, price)
+    min_price = min(entry.min_price or entry.entry_price, price)
+    status = None
+    if entry.cutloss_price is not None and _beyond(entry, price, entry.cutloss_price):
+        status = "stop"
+    elif not entry.real and _beyond(entry, price, liquidation_price(entry)):
+        status = "likuidasi"
+    elif _reached(entry, price, entry.target_price):
+        status = "target"
+    elif _time_exit(entry, price, now_s, fee_pct):
+        status = "timeout"
+    if status:
+        return _close(entry, status, price, now_s, max_price, min_price, (), fee_pct)
     return replace(
-        entry, max_price=max_price, min_price=min_price, last_price=ask, last_price_at=now_s
+        entry, max_price=max_price, min_price=min_price, last_price=price, last_price_at=now_s
     )
 
 
-def close_short_now(
+def close_now(
     entry: JournalEntry,
-    ask: float,
+    price: float,
     now_s: float,
     funding: Sequence[tuple[int, float]],
     fee_pct: float,
 ) -> JournalEntry:
-    """Tutup short uji kertas sekarang (menu Sell): beli kembali di harga ask saat ini."""
+    """Tutup posisi uji kertas sekarang (menu Sell) di harga tutup saat ini (`exit_price`)."""
     if entry.status != "open":
         return entry
-    max_price = max(entry.max_price or entry.entry_price or ask, ask)
-    min_price = min(entry.min_price or entry.entry_price or ask, ask)
-    return _close(entry, "manual", ask, now_s, max_price, min_price, funding, fee_pct)
+    max_price = max(entry.max_price or entry.entry_price or price, price)
+    min_price = min(entry.min_price or entry.entry_price or price, price)
+    return _close(entry, "manual", price, now_s, max_price, min_price, funding, fee_pct)
 
 
 def _close(
@@ -115,11 +166,13 @@ def _close(
     fee_pct: float,
 ) -> JournalEntry:
     assert entry.entry_price and entry.notional is not None
-    # Short menerima funding bila rate positif dan membayar bila negatif.
+    # Short menerima funding bila rate positif dan membayar bila negatif; long sebaliknya.
     funding_pct = 100 * sum(
         rate for time_ms, rate in funding if entry.created_at * 1000 <= time_ms <= closed_at * 1000
     )
-    pnl_pct = 100 * (entry.entry_price - exit_price) / entry.entry_price - fee_pct + funding_pct
+    if is_long(entry):
+        funding_pct = -funding_pct
+    pnl_pct = gain_pct(entry, exit_price) - fee_pct + funding_pct
     return replace(
         entry,
         status=status,
@@ -160,7 +213,7 @@ def evaluate_open_trades(
                 if not candles:
                     break
                 funding = market.funding_history(entry.symbol, first_ms, end_ms)
-                entry = evaluate_short(entry, candles, funding, fee_pct)
+                entry = evaluate_candles(entry, candles, funding, fee_pct)
                 start_ms = candles[-1].close_time + 1
         updated.append(entry)
     return updated
@@ -172,8 +225,8 @@ class Stats:
     wins: int
     targets: int
     liquidations: int
-    stops: int  # catatan lama (SOP V2)
-    timeouts: int  # catatan lama (SOP V2)
+    stops: int  # kena cutloss
+    timeouts: int  # dijual karena batas waktu
     manual: int  # ditutup lewat menu Sell
     open: int
     needs_review: int  # posisi terbuka lebih dari batas tinjau (V3: lebih dari satu hari)
@@ -182,7 +235,7 @@ class Stats:
     breakeven: float
     net_capital_pct: float  # jumlah hasil bersih dalam persen modal
     net_usdt: float
-    worst_against_pct: float | None  # kenaikan terbesar melawan posisi setelah masuk
+    worst_against_pct: float | None  # gerak harga terbesar melawan posisi setelah masuk
     signal_agreement: tuple[int, int]  # (AI dan data sepakat, jumlah yang bisa dibandingkan)
 
     @property
@@ -214,9 +267,9 @@ def summarize(entries: Sequence[JournalEntry], params: SopParams, now_s: float) 
     opened = [e for e in entries if e.status == "open"]
     wins = sum(1 for e in closed if (e.pnl_pct or 0) > 0)
     against = [
-        100 * (e.max_price - e.entry_price) / e.entry_price
+        -gain_pct(e, worst)
         for e in entries
-        if e.max_price is not None and e.entry_price
+        if e.entry_price and (worst := e.min_price if is_long(e) else e.max_price) is not None
     ]
     verdicts = [
         (_is_ok(e.pattern_ai, params.min_crosses), _is_ok(e.pattern_data, params.min_crosses))

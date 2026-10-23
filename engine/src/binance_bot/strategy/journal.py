@@ -20,7 +20,7 @@ from binance_bot.filelock import exclusive
 
 _T = TypeVar("_T")
 
-# stop dan timeout hanya ada di catatan lama (SOP V2); V3 tanpa stop-loss dan batas waktu.
+# stop = kena cutloss, timeout = dijual karena batas waktu (V4; juga ada di catatan lama SOP V2).
 CLOSED_STATUSES = ("target", "likuidasi", "manual", "stop", "timeout")
 
 
@@ -30,8 +30,10 @@ class JournalEntry:
     created_at: float  # epoch detik; juga waktu masuk uji kertas
     symbol: str
     rank: int
-    # skipped | open | target | likuidasi | manual (Sell) | contoh (gambar contoh)
+    # skipped | open | target | stop (cutloss) | timeout (batas waktu) | likuidasi | manual (Sell)
+    # | contoh (gambar contoh)
     status: str = "skipped"
+    side: str = "short"  # arah posisi: short | long (catatan sebelum 23 Okt semuanya short)
     role: str = "single"  # single (Sendiri) | follower (Pengikut) | contoh (gambar contoh)
     reason: str = ""
     change_pct: float | None = None
@@ -39,7 +41,11 @@ class JournalEntry:
     spread_pct: float | None = None
     pattern_ai: dict[str, Any] | None = None  # {"below_count", "below_now"} dari AI
     pattern_data: dict[str, Any] | None = None  # sama, dihitung dari candle
-    verdict: str = ""  # jangan | tunggu | ok (dari sumber penentu)
+    # Bacaan LONG dari AI: tanda 1-3 dan ringkasannya, serta angka MA dari candle saat dinilai.
+    long_ai: dict[str, Any] | None = None
+    long_data: dict[str, Any] | None = None
+    long_signs: list[int] = field(default_factory=list)  # tanda LONG yang dipakai saat masuk
+    verdict: str = ""  # jangan | tunggu | ok (short) | long (dari sumber penentu)
     ai_summary: str = ""
     margin: str = ""  # mode margin dan leverage yang terbaca di aplikasi
     capital_usdt: float | None = None
@@ -49,11 +55,16 @@ class JournalEntry:
     quantity: float | None = None
     notional: float | None = None
     target_price: float | None = None
-    stop_price: float | None = None  # catatan lama (SOP V2)
-    deadline: float | None = None  # catatan lama (SOP V2)
-    max_price: float | None = None  # harga tertinggi setelah masuk (melawan posisi short)
-    min_price: float | None = None  # harga terendah setelah masuk (seberapa jauh harga turun)
-    # Harga ask terakhir yang terbaca untuk posisi ini dan kapan (detik epoch). Tebbit membaca
+    stop_price: float | None = None  # catatan lama (SOP V2), tidak dipakai lagi
+    deadline: float | None = None  # catatan lama (SOP V2), tidak dipakai lagi
+    cutloss_price: float | None = None  # cutloss (V4); kosong = tanpa cutloss
+    # Batas waktu (V4, detik epoch): sesudah green_exit_at jual begitu untung bersih, di
+    # time_exit_at jual apa pun kondisinya. Kosong = tanpa batas waktu.
+    green_exit_at: float | None = None
+    time_exit_at: float | None = None
+    max_price: float | None = None  # harga tertinggi setelah masuk (melawan short)
+    min_price: float | None = None  # harga terendah setelah masuk (melawan long)
+    # Harga tutup terakhir yang terbaca untuk posisi ini dan kapan (detik epoch). Tebbit membaca
     # harga dari layar, jadi daftar Posisi memakai angka ini saat layar tidak dibuka.
     last_price: float | None = None
     last_price_at: float | None = None
