@@ -1208,7 +1208,7 @@ async function loadJournal() {
     const s = report.stats;
     $('range-note').textContent = rangeNote(report);
     $('trades-note').textContent = activeRange().from || activeRange().to
-      ? 'Semua posisi uji pada rentang waktu ini.' : '20 posisi uji terbaru.';
+      ? 'Semua posisi pada rentang waktu ini.' : '20 posisi terbaru.';
     notice.hidden = !report.warning;
     notice.className = 'notice';
     notice.textContent = platform?.id === 'tebbit'
@@ -1236,12 +1236,18 @@ async function loadJournal() {
       const [label, css] = STATUS[t.status] || [t.status, ''];
       return el('tr', {},
         el('td', { textContent: new Date(t.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
-        el('td', { class: 'sym', textContent: t.symbol }),
+        el('td', {}, el('strong', { class: 'sym', textContent: t.symbol }),
+          el('span', { class: `side-tag ${t.side === 'long' ? 'long' : 'short'}`, textContent: sideOf(t) }),
+          t.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null),
         el('td', { textContent: ROLE_NAME[t.role] || 'Sendiri' }),
         el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
         el('td', { class: 'num', textContent: price(t.entry_price) }),
         el('td', { class: 'num', textContent: price(t.exit_price) }),
-        el('td', { class: `num ${signClass(t.pnl_capital_pct)}`, textContent: percent(t.pnl_capital_pct) }));
+        // Hasil dalam USDT (seperti PNL Terealisasi di Binance) dan persen modal di bawahnya.
+        el('td', { class: `num ${signClass(t.pnl_usdt ?? t.pnl_capital_pct)}` },
+          typeof t.pnl_usdt === 'number' ? usdtText(t.pnl_usdt) : percent(t.pnl_capital_pct),
+          typeof t.pnl_usdt === 'number' && typeof t.pnl_capital_pct === 'number'
+            ? el('small', { class: 'price-age', textContent: `${percent(t.pnl_capital_pct)} modal` }) : null));
     });
     HIST.all = [...(report.analyses || [])].reverse();
     HIST.total = report.analyses_total ?? HIST.all.length;
