@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from binance_bot.analysis.pattern import PatternReading, pattern_from_dict
+from binance_bot.analysis.pattern import (
+    PatternReading,
+    long_pattern_from_dict,
+    long_to_dict,
+    pattern_from_dict,
+)
 from binance_bot.exceptions import AnalysisError
 from binance_bot.market import is_futures_symbol
 
@@ -35,6 +40,8 @@ class AnalysisRecord:
             "ma7_below_ma25_recent": pattern.below_recent,
             **({} if pattern.lines_close is None else {"ma7_ma25_close": pattern.lines_close}),
             "summary": self.reading.summary,
+            # Tanda LONG hanya bila pemimpin memilih arah LONG (SOP 23 Okt).
+            **({} if self.reading.long is None else {"long": long_to_dict(self.reading.long)}),
         }
 
     @classmethod
@@ -53,5 +60,8 @@ class AnalysisRecord:
             symbol=data["symbol"],
             rank=data["rank"],
             analyzed_at=float(data["analyzed_at"]),
-            reading=pattern_from_dict(data),
+            reading=replace(
+                pattern_from_dict(data),
+                long=None if data.get("long") is None else long_pattern_from_dict(data["long"]),
+            ),
         )

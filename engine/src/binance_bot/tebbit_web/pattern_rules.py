@@ -46,6 +46,36 @@ garis cepat MA 5 di bawah garis pembanding MA 10):
 }"""
 
 
+# Tanda masuk LONG (SOP 23 Okt). SOP hanya memberi contoh Binance (MA 7/25/99) dan belum menetapkan
+# Tebbit; sampai ditetapkan dipakai padanannya: garis cepat MA 5, pembanding MA 10, lambat MA 30.
+LONG_PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Tebbit Futures (tema gelap atau
+terang). Di kiri atas ada legenda "MA 5", "MA 10", "MA 30"; tiap label berwarna sama dengan
+garisnya. Cocokkan garis di grafik dengan warna di legenda: GARIS CEPAT = MA 5,
+GARIS PEMBANDING = MA 10, GARIS LAMBAT = MA 30. Abaikan panel volume dan tombol atau tulisan
+yang melayang.
+
+Koin ini termasuk top gainers. Nilai apakah UJUNG KANAN grafik (beberapa lilin terakhir)
+menunjukkan salah satu dari tiga tanda masuk LONG berikut. Nilai tiap tanda sendiri-sendiri.
+
+Tanda 1, TURUN TAJAM LALU BERBALIK: harga turun panjang dengan lilin terus di bawah garis cepat
+dan garis pembanding sampai membentuk dasar (bisa dua dasar berdekatan), lalu lilin TERAKHIR yang
+sudah tutup berbalik naik dari dasar itu. Bila harga masih turun dan belum ada lilin naik dari
+dasar, jawab false.
+Tanda 2, POSISI DATAR: harga bergerak mendatar cukup lama (puluhan lilin) dalam rentang sempit,
+dan ketiga garis (MA 5, MA 10, MA 30) saling berdekatan atau menyatu di ujung kanan.
+Tanda 3, GARIS CEPAT JAUH DI ATAS: di ujung kanan garis cepat berada di atas garis pembanding DAN
+garis lambat dengan celah yang jelas, setelah lonjakan harga yang hanya turun sebentar.
+
+Jawab HANYA dengan JSON valid, tanpa teks lain:
+{
+ "long_reversal": true jika tanda 1 terlihat di ujung kanan,
+ "long_flat": true jika tanda 2 terlihat di ujung kanan,
+ "long_far_above": true jika tanda 3 terlihat di ujung kanan,
+ "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia (sebut tanda yang
+   terlihat atau mengapa tidak ada)
+}"""
+
+
 def verdict(pattern: MaPattern, min_crosses: int) -> str:
     # Pemahaman yang sama dengan Binance untuk saat ini; diubah sendiri bila SOP V3 membedakan.
     if pattern.below_count == 0:
@@ -65,4 +95,5 @@ TEBBIT = PatternProfile(
     recent_candles=RECENT_CANDLES,
     prompt=PROMPT,
     verdict=verdict,
+    long_prompt=LONG_PROMPT,
 )

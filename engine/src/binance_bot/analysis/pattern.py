@@ -8,27 +8,42 @@ prompt dan keputusan AI bisa dibandingkan dengan hitungan data.
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
 
 from binance_bot.analysis.vision import PostJson, VisionClient, _post_json, extract_json
 from binance_bot.config import Settings
 from binance_bot.exceptions import AnalysisError
-from binance_bot.strategy.pattern import MaPattern
+from binance_bot.strategy.pattern import LongPattern, MaPattern
+
+logger = logging.getLogger(__name__)
 
 _MAX_COUNT = 50  # hitungan di atas ini tidak masuk akal untuk satu layar grafik
+_LONG_KEYS = ("long_reversal", "long_flat", "long_far_above")
+
+
+@dataclass(frozen=True, slots=True)
+class LongReading:
+    pattern: LongPattern
+    summary: str
 
 
 @dataclass(frozen=True, slots=True)
 class PatternReading:
-    pattern: MaPattern
+    pattern: MaPattern  # bacaan short (garis kuning terhadap MA25)
     summary: str
+    long: LongReading | None = None  # tanda masuk LONG, hanya bila arah LONG dipilih
 
 
 class PatternAnalyzer(Protocol):
     def analyze(self, image: Path) -> PatternReading: ...
+
+
+class LongAnalyzer(Protocol):
+    def analyze(self, image: Path) -> LongReading: ...
 
 
 def pattern_from_dict(data: Any) -> PatternReading:
@@ -51,6 +66,25 @@ def pattern_from_dict(data: Any) -> PatternReading:
         raise AnalysisError(f"Jawaban 'garis berdekatan' bukan true/false: {str(data)[:200]}")
     pattern = MaPattern(count, data["ma7_below_ma25_now"], data["ma7_below_ma25_recent"], close)
     return PatternReading(pattern, summary)
+
+
+def long_pattern_from_dict(data: Any) -> LongReading:
+    """Validasi jawaban tanda LONG. Isinya tidak dipercaya: wajib sesuai skema."""
+    summary = data.get("summary") if isinstance(data, dict) else None
+    if (
+        not isinstance(data, dict)
+        or any(not isinstance(data.get(key), bool) for key in _LONG_KEYS)
+        or not isinstance(summary, str)
+        or not summary
+    ):
+        raise AnalysisError(f"Jawaban tanda LONG tidak sesuai skema: {str(data)[:200]}")
+    return LongReading(LongPattern(*(data[key] for key in _LONG_KEYS)), summary)
+
+
+def long_to_dict(reading: LongReading) -> dict[str, Any]:
+    pattern = reading.pattern
+    values = (pattern.reversal, pattern.flat, pattern.far_above)
+    return {**dict(zip(_LONG_KEYS, values, strict=True)), "summary": reading.summary}
 
 
 class VikeyPatternAnalyzer:
@@ -98,3 +132,66 @@ class ConsensusAnalyzer:
             return self._inner.analyze(image)
         except AnalysisError as exc:
             return exc
+
+
+class VikeyLongAnalyzer:
+    def __init__(self, settings: Settings, prompt: str, *, post: PostJson = _post_json) -> None:
+        self._client = VisionClient(settings, post=post)
+        self._prompt = prompt
+
+    def analyze(self, image: Path) -> LongReading:
+        return long_pattern_from_dict(extract_json(self._client.ask(image, self._prompt)))
+
+
+class LongConsensusAnalyzer:
+    """Tanda LONG dibaca beberapa kali sekaligus; tiap tanda diambil suara terbanyak."""
+
+    def __init__(self, analyzer: LongAnalyzer, reads: int = 5) -> None:
+        self._inner = analyzer
+        self._reads = reads
+
+    def analyze(self, image: Path) -> LongReading:
+        with ThreadPoolExecutor(self._reads) as pool:
+            results = list(pool.map(self._try, [image] * self._reads))
+        readings = [r for r in results if isinstance(r, LongReading)]
+        if len(readings) * 2 <= self._reads:
+            error = next(r for r in results if isinstance(r, AnalysisError))
+            raise AnalysisError(f"Mayoritas bacaan AI tanda LONG gagal: {error}")
+
+        def majority(seen: list[bool]) -> bool:
+            return sum(seen) * 2 > len(seen)
+
+        pattern = LongPattern(
+            majority([r.pattern.reversal for r in readings]),
+            majority([r.pattern.flat for r in readings]),
+            majority([r.pattern.far_above for r in readings]),
+        )
+        summary = next((r.summary for r in readings if r.pattern == pattern), readings[0].summary)
+        votes = ", ".join("".join(map(str, r.pattern.signs)) or "-" for r in readings)
+        return LongReading(pattern, f"{summary} ({len(readings)} bacaan AI tanda: {votes})")
+
+    def _try(self, image: Path) -> LongReading | AnalysisError:
+        try:
+            return self._inner.analyze(image)
+        except AnalysisError as exc:
+            return exc
+
+
+def read_chart(
+    short: PatternAnalyzer, long: LongAnalyzer | None, image: Path, *, with_long: bool
+) -> PatternReading:
+    """Baca grafik untuk short (prompt dan aturan tetap), ditambah tanda LONG bila Top ini boleh
+    long (`with_long`).
+
+    Bacaan short tetap dibutuhkan walau Top ini hanya long: koin yang juga memenuhi syarat short
+    tidak dimasuki (SOP 23 Okt). Bacaan LONG yang gagal tidak menggagalkan bacaan short.
+    """
+    reading = short.analyze(image)
+    if not with_long or long is None:
+        return reading
+    try:
+        found = long.analyze(image)
+    except AnalysisError as exc:
+        logger.warning("Tanda LONG tidak terbaca: %s", exc)
+        return reading
+    return replace(reading, long=found)

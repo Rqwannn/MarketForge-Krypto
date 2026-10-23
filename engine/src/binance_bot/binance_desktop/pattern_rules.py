@@ -45,6 +45,37 @@ Jawab HANYA dengan JSON valid, tanpa teks lain:
 }"""
 
 
+# Tanda masuk LONG (SOP 23 Okt). Prompt terpisah dari PROMPT short di atas, yang tidak diubah.
+# Angka tiap tanda belum ditetapkan beliau, jadi AI menilai dari contoh di SOP; angka MA dari
+# candle dicatat di jurnal sebagai bahan menetapkan ambangnya.
+LONG_PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Binance Futures.
+Garis KUNING = MA7. Garis MAGENTA (merah muda) = MA25. Garis UNGU = MA99. Panel bawah = volume.
+Abaikan kotak tombol Beli/Long dan Jual/Short yang melayang di atas grafik.
+
+Koin ini termasuk top gainers. Nilai apakah UJUNG KANAN grafik (beberapa lilin terakhir)
+menunjukkan salah satu dari tiga tanda masuk LONG berikut. Nilai tiap tanda sendiri-sendiri.
+
+Tanda 1, TURUN TAJAM LALU BERBALIK: harga turun panjang dengan lilin terus di bawah garis kuning
+dan garis magenta sampai membentuk dasar (bisa dua dasar berdekatan), lalu lilin TERAKHIR yang
+sudah tutup berbalik naik dari dasar itu. Bila harga masih turun dan belum ada lilin naik dari
+dasar, jawab false (dasarnya belum terlihat). Contoh: turun sekitar 40%, dua dasar berdekatan,
+lalu naik.
+Tanda 2, POSISI DATAR: harga bergerak mendatar cukup lama (puluhan lilin) dalam rentang sempit,
+dan ketiga garis (kuning, magenta, ungu) saling berdekatan atau menyatu di ujung kanan.
+Tanda 3, GARIS KUNING JAUH DI ATAS: di ujung kanan garis kuning berada di atas garis magenta DAN
+garis ungu dengan celah yang jelas (contoh: kuning sekitar 4% di atas magenta dan sekitar 30% di
+atas ungu setelah lonjakan, lalu harga hanya turun sebentar dan naik lagi).
+
+Jawab HANYA dengan JSON valid, tanpa teks lain:
+{
+ "long_reversal": true jika tanda 1 terlihat di ujung kanan,
+ "long_flat": true jika tanda 2 terlihat di ujung kanan,
+ "long_far_above": true jika tanda 3 terlihat di ujung kanan,
+ "summary": satu kalimat pendek, maksimal 20 kata, dalam Bahasa Indonesia (sebut tanda yang
+   terlihat atau mengapa tidak ada)
+}"""
+
+
 def verdict(pattern: MaPattern, min_crosses: int) -> str:
     if pattern.below_count == 0:
         return "jangan"  # selalu di atas: harga naik terus
@@ -65,4 +96,5 @@ BINANCE = PatternProfile(
     recent_candles=RECENT_CANDLES,
     prompt=PROMPT,
     verdict=verdict,
+    long_prompt=LONG_PROMPT,
 )

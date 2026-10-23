@@ -23,8 +23,9 @@ class PatternProfile:
     mid: int  # periode garis pembanding
     slow: int  # periode garis acuan lambat (terlihat di grafik, tidak dihitung)
     recent_candles: int  # lilin 15 menit yang disebut "baru-baru ini" (24 = 6 jam)
-    prompt: str  # instruksi untuk AI pembaca grafik
+    prompt: str  # instruksi untuk AI pembaca grafik (short)
     verdict: Verdict
+    long_prompt: str  # instruksi AI untuk tanda masuk LONG (SOP 23 Okt)
 
     def legend_ready(self, periods: set[int]) -> bool:
         """Legenda grafik memuat garis cepat dan garis pembanding platform ini."""

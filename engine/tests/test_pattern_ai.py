@@ -175,3 +175,87 @@ def test_consensus_takes_the_majority_on_lines_close() -> None:
     assert reading.analyze(Path("x.png")).pattern.lines_close is True
     unjudged = ConsensusAnalyzer(_Scripted([(3, True, True)] * 5), reads=5)
     assert unjudged.analyze(Path("x.png")).pattern.lines_close is None
+
+
+# ---------------------------------------------------------------- tanda LONG (SOP 23 Okt)
+
+LONG_VALID = {
+    "long_reversal": False,
+    "long_flat": True,
+    "long_far_above": False,
+    "summary": "Harga mendatar lama, tiga garis menyatu.",
+}
+
+
+def test_long_answer_becomes_signs() -> None:
+    from binance_bot.analysis.pattern import long_pattern_from_dict
+
+    reading = long_pattern_from_dict(LONG_VALID)
+    assert reading.pattern.signs == [2]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{**LONG_VALID, "long_flat": "ya"}, {**LONG_VALID, "summary": ""}, {"long_flat": True}, []],
+)
+def test_long_answer_outside_the_schema_is_rejected(data: Any) -> None:
+    from binance_bot.analysis.pattern import long_pattern_from_dict
+
+    with pytest.raises(AnalysisError):
+        long_pattern_from_dict(data)
+
+
+def test_long_signs_take_the_majority_of_five_reads() -> None:
+    from binance_bot.analysis import LongConsensusAnalyzer, LongReading
+    from binance_bot.strategy import LongPattern
+
+    answers = iter([LongPattern(True, False, False)] * 3 + [LongPattern(False, False, True)] * 2)
+
+    class Reader:
+        def analyze(self, image: Path) -> LongReading:
+            return LongReading(next(answers), "bacaan")
+
+    got = LongConsensusAnalyzer(Reader(), reads=5).analyze(Path("x.png"))
+    assert got.pattern == LongPattern(True, False, False)
+
+
+def test_a_failed_long_read_keeps_the_short_reading() -> None:
+    from binance_bot.analysis import LongReading, read_chart
+
+    class Short:
+        def analyze(self, image: Path) -> PatternReading:
+            return PatternReading(MaPattern(3, True, True), "short")
+
+    class Broken:
+        def analyze(self, image: Path) -> LongReading:
+            raise AnalysisError("rusak")
+
+    got = read_chart(Short(), Broken(), Path("x.png"), with_long=True)
+    assert got.pattern == MaPattern(3, True, True) and got.long is None
+
+
+def test_long_signs_are_read_only_for_tops_that_may_go_long() -> None:
+    from binance_bot.analysis import LongReading, read_chart
+    from binance_bot.strategy import LongPattern
+
+    calls: list[Path] = []
+
+    class Short:
+        def analyze(self, image: Path) -> PatternReading:
+            return PatternReading(MaPattern(1, False, False), "short")
+
+    class Long:
+        def analyze(self, image: Path) -> LongReading:
+            calls.append(image)
+            return LongReading(LongPattern(True, False, False), "berbalik")
+
+    assert read_chart(Short(), Long(), Path("a.png"), with_long=False).long is None
+    assert calls == []  # Top short saja: tanpa panggilan AI tambahan
+    assert read_chart(Short(), Long(), Path("b.png"), with_long=True).long is not None
+
+
+def test_the_short_prompt_is_separate_from_the_long_prompt() -> None:
+    assert BINANCE.long_prompt is not None and "long_reversal" in BINANCE.long_prompt
+    assert "long_" not in BINANCE.prompt  # prompt short tidak berubah
+    assert "MA 5" in TEBBIT.long_prompt and "long_reversal" in TEBBIT.long_prompt
+    assert "long_" not in TEBBIT.prompt
