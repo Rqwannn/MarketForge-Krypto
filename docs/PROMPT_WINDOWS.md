@@ -17,6 +17,11 @@ mengubah apa pun yang menyentuh keputusan masuk atau keluar posisi.
   ambang pola (minimal 2 kali di bawah MA25, aturan garis berdekatan). Rumus SOP juga tetap:
   margin 50% modal, leverage 2x, jual short di −3% dan long di +4%. Cutloss 10% dan batas waktu
   hanya aktif bila dipilih pengguna (lihat Tambahan 23 Okt).
+- **Kode SHORT dikunci** (win rate 100%): prompt dan `verdict` SHORT Binance/Tebbit, `MaPattern`,
+  `data_ma_pattern`, pembaca AI SHORT, dan `short_reason` dijaga `engine/tests/test_short_frozen.py`.
+  Fitur baru ditambahkan di fungsi baru. Bila tes itu gagal, kembalikan kodenya; jangan perbarui
+  sidik jarinya. Bila SHORT tampaknya perlu diubah, berhenti dan diskusikan dulu dengan pemilik;
+  ubah hanya setelah pemilik setuju.
 - **Uji kertas dulu**: tanpa `--uang-sungguhan`, dan jangan pernah menekan tombol Short saat uji.
   Pakai jurnal, foto, dan log sementara lewat `BOT_JOURNAL_PATH`, `BOT_SCREENSHOT_DIR`,
   `BOT_LOG_DIR`, supaya jurnal asli tidak tersentuh. Pakai `--no-fill` bila tidak perlu mengisi

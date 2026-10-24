@@ -11,6 +11,7 @@ from __future__ import annotations
 from binance_bot.strategy.pattern import RECENT_CANDLES, MaPattern
 from binance_bot.strategy.profile import PatternProfile
 
+# SHORT dikunci (tests/test_short_frozen.py): PROMPT dan verdict jangan diubah; tambah fungsi baru.
 PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Tebbit Futures (tema gelap atau terang).
 Di kiri atas ada legenda "MA 5", "MA 10", "MA 30"; tiap label berwarna sama dengan garisnya.
 Cocokkan garis di grafik dengan warna di legenda.

@@ -8,6 +8,7 @@ from __future__ import annotations
 from binance_bot.strategy.pattern import RECENT_CANDLES, MaPattern
 from binance_bot.strategy.profile import PatternProfile
 
+# SHORT dikunci (tests/test_short_frozen.py): PROMPT dan verdict jangan diubah; tambah fungsi baru.
 PROMPT = """Ini screenshot grafik candlestick 15 MENIT dari Binance Futures.
 Garis KUNING = MA7. Garis MAGENTA (merah muda) = MA25. Garis UNGU = MA99. Panel bawah = volume.
 Abaikan kotak tombol Beli/Long dan Jual/Short yang melayang di atas grafik, dan abaikan lilin.
