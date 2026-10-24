@@ -55,3 +55,28 @@ test('penghitung menjelaskan rentang yang tampil', () => {
   assert.equal(countText(1, 0, 184, true), 'Tidak ada yang cocok dari 184 analisis');
   assert.equal(countText(1, 0, 0, false), '');
 });
+
+test('Trade terakhir disaring menurut koin, arah, status, dan jenis posisi', () => {
+  const { filterTrades, TRADE_PAGE } = require('../renderer/history');
+  const trades = [
+    { symbol: 'IOSTUSDT', side: 'short', status: 'target', real: true },
+    { symbol: 'PHAUSDT', side: 'long', status: 'manual', real: true },
+    { symbol: 'IRYSUSDT', side: 'long', status: 'open', real: false },
+    { symbol: 'GTCUSDT', status: 'stop', real: false }, // catatan lama tanpa side = short
+  ];
+  const names = (filter) => filterTrades(trades, filter).map((t) => t.symbol);
+  assert.deepEqual(names({}), ['IOSTUSDT', 'PHAUSDT', 'IRYSUSDT', 'GTCUSDT']);
+  assert.deepEqual(names({ side: 'long' }), ['PHAUSDT', 'IRYSUSDT']);
+  assert.deepEqual(names({ side: 'short' }), ['IOSTUSDT', 'GTCUSDT']);
+  assert.deepEqual(names({ status: 'stop' }), ['GTCUSDT']);
+  assert.deepEqual(names({ kind: 'real' }), ['IOSTUSDT', 'PHAUSDT']);
+  assert.deepEqual(names({ kind: 'paper', side: 'long' }), ['IRYSUSDT']);
+  assert.deepEqual(names({ search: ' ios ' }), ['IOSTUSDT']);
+  assert.equal(TRADE_PAGE, 20);
+});
+
+test('penghitung menyebut trade untuk tabel trade', () => {
+  assert.equal(countText(2, 45, 45, false, 20, 'trade'), 'Menampilkan 21–40 dari 45 trade');
+  assert.equal(countText(1, 0, 12, true, 20, 'trade'), 'Tidak ada yang cocok dari 12 trade');
+  assert.equal(countText(1, 3, 12, true, 20, 'trade'), 'Menampilkan 1–3 dari 3 cocok dari 12 trade');
+});

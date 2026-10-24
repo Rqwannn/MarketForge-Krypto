@@ -16,10 +16,10 @@ from binance_bot.workflows.sop import chart_of, decision_fields, refresh_journal
 
 logger = logging.getLogger(__name__)
 
-_RECENT_TRADES = 20
+_RECENT_TRADES = 20  # tabel di log (perintah jurnal tanpa --json)
 # Riwayat analisis untuk aplikasi: dikirim banyak, aplikasi menampilkannya 30 demi 30.
 _RECENT_ANALYSES = 1000
-_RANGE_TRADES = 500  # dengan filter tanggal, semua trade dalam rentang tampil (dibatasi wajar)
+_APP_TRADES = 1000  # trade untuk aplikasi (Trade terakhir punya saringan dan halaman sendiri)
 _RANGE_ANALYSES = 1000
 _ROW = "%-11s %-13s %-8s %-10s %-10s %-10s %-9s %-9s %s"
 
@@ -137,7 +137,8 @@ class JournalWorkflow:
         self, entries: list[JournalEntry], trades: list[JournalEntry], now: float, warning: str
     ) -> dict[str, Any]:
         stats = summarize(entries, self._params, now)
-        trade_limit = _RANGE_TRADES if self._filtered else _RECENT_TRADES
+        # Aplikasi menyaring dan membagi trade per halaman sendiri, jadi semua trade dikirim.
+        trade_limit = _APP_TRADES
         analysis_limit = _RANGE_ANALYSES if self._filtered else _RECENT_ANALYSES
         analysed = [e for e in entries if e.verdict]
         return {

@@ -1,6 +1,6 @@
 'use strict';
 
-// Riwayat analisis AI di halaman Hasil uji: saringan (nama koin, keputusan) dan halaman bernomor.
+// Riwayat analisis AI dan Trade terakhir di halaman Hasil uji: saringan dan halaman bernomor.
 // Engine mengirim sampai ribuan analisis terbaru; aplikasi menampilkan 30 per halaman
 // (< 1 2 3 4 5 ... 12 >) supaya gambar grafik tidak dimuat sekaligus. Murni fungsi tanpa DOM supaya
 // bisa diuji di Node; app.js yang menggambarnya.
@@ -16,7 +16,20 @@
       && (!verdict || a.verdict === verdict));
   }
 
-  /** Jumlah halaman untuk `count` analisis (minimal 1). */
+  /**
+   * Trade (terbaru dulu) yang cocok dengan pencarian koin, arah ('short' | 'long'), status
+   * ('open', 'target', 'stop', ...), dan jenis ('real' | 'paper'). '' = semua.
+   */
+  function filterTrades(list, { search = '', side = '', status = '', kind = '' } = {}) {
+    const term = search.trim().toUpperCase().replace(/\s+/g, '');
+    return list.filter((t) =>
+      (!term || String(t.symbol || '').toUpperCase().includes(term))
+      && (!side || (t.side || 'short') === side)
+      && (!status || t.status === status)
+      && (!kind || (kind === 'real') === (t.real === true)));
+  }
+
+  /** Jumlah halaman untuk `count` baris (minimal 1). */
   function pageCount(count, size = PAGE) {
     return Math.max(1, Math.ceil(count / size));
   }
@@ -47,16 +60,17 @@
   }
 
   /** Teks penghitung, mis. "Menampilkan 31-60 dari 184 analisis". */
-  function countText(page, matched, total, filtered, size = PAGE) {
+  function countText(page, matched, total, filtered, size = PAGE, noun = 'analisis') {
     if (!total) return '';
-    if (!matched) return `Tidak ada yang cocok dari ${total} analisis`;
+    if (!matched) return `Tidak ada yang cocok dari ${total} ${noun}`;
     const start = (page - 1) * size + 1;
     const end = Math.min(page * size, matched);
     const of = filtered && matched !== total ? `${matched} cocok dari ${total}` : `${matched}`;
-    return `Menampilkan ${start}–${end} dari ${of} analisis`;
+    return `Menampilkan ${start}–${end} dari ${of} ${noun}`;
   }
 
-  const api = { PAGE, filterAnalyses, pageCount, pageSlice, pageItems, countText };
+  const TRADE_PAGE = 20;
+  const api = { PAGE, TRADE_PAGE, filterAnalyses, filterTrades, pageCount, pageSlice, pageItems, countText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.History = api;
 })(typeof window !== 'undefined' ? window : globalThis);

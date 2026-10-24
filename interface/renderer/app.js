@@ -1208,7 +1208,7 @@ async function loadJournal() {
     const s = report.stats;
     $('range-note').textContent = rangeNote(report);
     $('trades-note').textContent = activeRange().from || activeRange().to
-      ? 'Semua posisi pada rentang waktu ini.' : '20 posisi terbaru.';
+      ? 'Semua posisi pada rentang waktu ini, terbaru di atas.' : 'Semua posisi, terbaru di atas.';
     notice.hidden = !report.warning;
     notice.className = 'notice';
     notice.textContent = platform?.id === 'tebbit'
@@ -1229,35 +1229,19 @@ async function loadJournal() {
         { css: s.needs_review > 0 ? 'neg' : '' }),
     );
 
-    $('pnl-chart').replaceChildren(pnlChart(report.trades));
+    // Grafik: 20 trade terakhir (dengan filter tanggal: semua dalam rentang itu).
+    const ranged = activeRange().from || activeRange().to;
+    $('pnl-chart').replaceChildren(pnlChart(ranged ? report.trades : report.trades.slice(-RECENT_CHART)));
     $('donut').replaceChildren(...donut(s));
 
-    const rows = [...report.trades].reverse().map((t) => {
-      const [label, css] = STATUS[t.status] || [t.status, ''];
-      return el('tr', {},
-        el('td', { textContent: new Date(t.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
-        el('td', {}, el('strong', { class: 'sym', textContent: t.symbol }),
-          el('span', { class: `side-tag ${t.side === 'long' ? 'long' : 'short'}`, textContent: sideOf(t) }),
-          t.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null),
-        el('td', { textContent: ROLE_NAME[t.role] || 'Sendiri' }),
-        el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
-        el('td', { class: 'num', textContent: price(t.entry_price) }),
-        el('td', { class: 'num', textContent: price(t.exit_price) }),
-        // Hasil dalam USDT (seperti PNL Terealisasi di Binance) dan persen modal di bawahnya.
-        el('td', { class: `num ${signClass(t.pnl_usdt ?? t.pnl_capital_pct)}` },
-          typeof t.pnl_usdt === 'number' ? usdtText(t.pnl_usdt) : percent(t.pnl_capital_pct),
-          typeof t.pnl_usdt === 'number' && typeof t.pnl_capital_pct === 'number'
-            ? el('small', { class: 'price-age', textContent: `${percent(t.pnl_capital_pct)} modal` }) : null));
-    });
+    TRADES.all = [...report.trades].reverse(); // terbaru dulu
+    TRADES.page = 1;
+    renderTrades();
     HIST.all = [...(report.analyses || [])].reverse();
     HIST.total = report.analyses_total ?? HIST.all.length;
     HIST.page = 1;
     renderHistory();
 
-    $('trades').replaceChildren(...(rows.length ? rows
-      : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: activeRange().from || activeRange().to
-        ? 'Tidak ada posisi pada rentang waktu ini. Ubah filter waktu di atas.'
-        : 'Belum ada posisi uji. Mulai memantau untuk mengisi catatan.' }))]));
   } catch (err) {
     notice.hidden = false;
     notice.className = 'notice bad';
@@ -1267,6 +1251,61 @@ async function loadJournal() {
   }
 }
 loaders.journal = loadJournal;
+
+// Trade terakhir: semua trade dari engine (terbaru dulu), 20 per halaman, bisa disaring.
+const TRADES = { all: [], page: 1 };
+const RECENT_CHART = 20; // batang grafik Hasil per trade tanpa filter tanggal
+
+function tradesFilter() {
+  return {
+    search: $('trades-search').value, side: $('trades-side').value,
+    status: $('trades-status').value, kind: $('trades-kind').value,
+  };
+}
+
+function tradeRow(t) {
+  const [label, css] = STATUS[t.status] || [t.status, ''];
+  return el('tr', {},
+    el('td', { textContent: new Date(t.created_at * 1000).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
+    el('td', {}, el('strong', { class: 'sym', textContent: t.symbol }),
+      el('span', { class: `side-tag ${t.side === 'long' ? 'long' : 'short'}`, textContent: sideOf(t) }),
+      t.real ? el('span', { class: 'badge-real', textContent: 'Uang sungguhan' }) : null),
+    el('td', { textContent: ROLE_NAME[t.role] || 'Sendiri' }),
+    el('td', {}, el('span', { class: `tag ${css}`, textContent: label })),
+    el('td', { class: 'num', textContent: price(t.entry_price) }),
+    el('td', { class: 'num', textContent: price(t.exit_price) }),
+    // Hasil dalam USDT (seperti PNL Terealisasi di Binance) dan persen modal di bawahnya.
+    el('td', { class: `num ${signClass(t.pnl_usdt ?? t.pnl_capital_pct)}` },
+      typeof t.pnl_usdt === 'number' ? usdtText(t.pnl_usdt) : percent(t.pnl_capital_pct),
+      typeof t.pnl_usdt === 'number' && typeof t.pnl_capital_pct === 'number'
+        ? el('small', { class: 'price-age', textContent: `${percent(t.pnl_capital_pct)} modal` }) : null));
+}
+
+function renderTrades() {
+  const { filterTrades, pageSlice, pageCount, countText, TRADE_PAGE } = window.History;
+  const filter = tradesFilter();
+  const filtered = Boolean(filter.search.trim() || filter.side || filter.status || filter.kind);
+  const matched = filterTrades(TRADES.all, filter);
+  const { page, items } = pageSlice(matched, TRADES.page, TRADE_PAGE);
+  TRADES.page = page;
+  let empty = 'Belum ada posisi. Mulai memantau untuk mengisi catatan.';
+  if (filtered) empty = 'Tidak ada trade yang cocok. Ubah pencarian atau saringan.';
+  else if (activeRange().from || activeRange().to) empty = 'Tidak ada posisi pada rentang waktu ini. Ubah filter waktu di atas.';
+  $('trades').replaceChildren(...(matched.length
+    ? items.map(tradeRow)
+    : [el('tr', { class: 'empty-row' }, el('td', { colSpan: 7, textContent: empty }))]));
+  $('trades-count').textContent = countText(page, matched.length, TRADES.all.length, filtered, TRADE_PAGE, 'trade');
+  renderPager($('trades-pager'), page, pageCount(matched.length, TRADE_PAGE), (n) => {
+    TRADES.page = n;
+    renderTrades();
+    $('trades-search').closest('.card').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+}
+
+$('trades-search').addEventListener('input', () => { TRADES.page = 1; renderTrades(); });
+for (const id of ['trades-side', 'trades-status', 'trades-kind']) {
+  $(id).addEventListener('change', () => { TRADES.page = 1; renderTrades(); });
+}
 
 // Riwayat analisis AI: semua yang dikirim engine (terbaru dulu), 30 per halaman, bisa disaring.
 const HIST = { all: [], total: 0, page: 1 };
@@ -1293,19 +1332,17 @@ function renderHistory() {
     note += ` (${HIST.all.length} terbaru dari ${HIST.total}; pakai filter tanggal untuk yang lebih lama)`;
   }
   $('history-count').textContent = note;
-  renderPager(page, pageCount(matched.length));
-}
-
-/** Navigasi halaman: < 1 2 3 4 5 … 12 >. Tersembunyi bila hanya satu halaman. */
-function renderPager(page, pages) {
-  const pager = $('history-pager');
-  pager.hidden = pages <= 1;
-  if (pager.hidden) { pager.replaceChildren(); return; }
-  const go = (n) => {
+  renderPager($('history-pager'), page, pageCount(matched.length), (n) => {
     HIST.page = n;
     renderHistory();
     $('history-search').closest('.card').scrollIntoView({ block: 'start', behavior: 'smooth' });
-  };
+  });
+}
+
+/** Navigasi halaman: < 1 2 3 4 5 … 12 >. Tersembunyi bila hanya satu halaman. */
+function renderPager(pager, page, pages, go) {
+  pager.hidden = pages <= 1;
+  if (pager.hidden) { pager.replaceChildren(); return; }
   const arrow = (label, n, disabled, path) => {
     const b = el('button', { type: 'button', class: 'pg-arrow', title: label, disabled },
       svg('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' }, svg('path', { d: path })));

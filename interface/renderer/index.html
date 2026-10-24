@@ -308,11 +308,47 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><div><h2>Trade terakhir</h2><p id="trades-note">20 posisi terbaru.</p></div></div>
+        <div class="card-head"><div><h2>Trade terakhir</h2><p id="trades-note">Semua posisi, terbaru di atas.</p></div></div>
+        <div class="hist-tools">
+          <label class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+            <input type="search" id="trades-search" placeholder="Cari koin" aria-label="Cari koin di trade" autocomplete="off" spellcheck="false">
+          </label>
+          <span class="select-box">
+            <select id="trades-side" aria-label="Saring arah">
+              <option value="">Semua arah</option>
+              <option value="short">Short</option>
+              <option value="long">Long</option>
+            </select>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+          <span class="select-box">
+            <select id="trades-status" aria-label="Saring status">
+              <option value="">Semua status</option>
+              <option value="open">Berjalan</option>
+              <option value="target">Target tercapai</option>
+              <option value="stop">Kena cutloss</option>
+              <option value="timeout">Batas waktu</option>
+              <option value="manual">Ditutup (Sell)</option>
+              <option value="likuidasi">Likuidasi</option>
+            </select>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+          <span class="select-box">
+            <select id="trades-kind" aria-label="Saring jenis posisi">
+              <option value="">Sungguhan dan uji</option>
+              <option value="real">Uang sungguhan</option>
+              <option value="paper">Uji kertas</option>
+            </select>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+          <span class="hist-count" id="trades-count"></span>
+        </div>
         <table class="table">
           <thead><tr><th>Waktu</th><th>Koin</th><th>Peran</th><th>Status</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Hasil</th></tr></thead>
           <tbody id="trades"></tbody>
         </table>
+        <nav class="pager" id="trades-pager" aria-label="Halaman trade" hidden></nav>
       </section>
 
       <section class="card">

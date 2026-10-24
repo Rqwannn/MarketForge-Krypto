@@ -607,6 +607,20 @@ def test_journal_report_json_for_the_desktop_app(tmp_path: Path) -> None:
     assert [t["symbol"] for t in report["trades"]] == ["STRKUSDT"]  # yang dilewati tidak ikut
 
 
+def test_journal_report_sends_every_trade_for_the_apps_filter_and_pages(tmp_path: Path) -> None:
+    # Dulu hanya 20 terbaru; Trade terakhir sekarang punya saringan dan halaman sendiri.
+    journal = Journal(tmp_path / "sop.jsonl")
+    for i in range(25):
+        trade = _entered(f"C{i}USDT", NOW.replace(hour=1 + i % 20))
+        trade.id = f"t{i}"
+        journal.append(trade)
+    out: list[str] = []
+    JournalWorkflow(
+        SopParams(), journal, FakeMarket(), as_json=True, output=out.append, wall_clock=lambda: 60.0
+    ).run()  # type: ignore[arg-type]
+    assert len(json.loads(out[0])["trades"]) == 25
+
+
 def test_journal_report_lists_ai_analyses_with_their_chart(tmp_path: Path) -> None:
     journal = Journal(tmp_path / "sop.jsonl")
     shots = ["screenshots/a_rank2.png", "screenshots/a_rank2_15m.png"]
